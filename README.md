@@ -2,118 +2,91 @@
 
 ## Objective
 
-Build a private app that can control the existing Control4 smart-home system without relying on Alexa or the standard Control4 interface.
+Build a private, phone-friendly web application that controls the existing Control4 smart-home system through Home Assistant Green.
 
-## Current home setup
+## Confirmed environment
 
 - Control4 controller: Core 3
 - Control4 OS: 3.4.3.727848-res
 - Existing interfaces: Control4 app and Alexa
 - Homeowner Control4 credentials work with Control4 cloud authentication
-- Home Assistant Green has been selected as the likely local bridge device
+- Home Assistant Green selected as the local bridge
 
-## What we established
+## What has been established
 
-### 1. Homeowner credentials are sufficient for local API authentication
+### Local control path
 
-The open-source `pyControl4` library can authenticate using the same Control4 username and password used by the homeowner app. It retrieves:
-
-- the Control4 account token
-- the registered controller record
-- a Director bearer token intended for controller access
-
-No dealer or Composer Pro credentials are required for ordinary local API control.
-
-### 2. The relevant Control4 API is local
-
-`pyControl4` and Home Assistant use the controller's built-in REST API over the home network.
+The open-source `pyControl4` library and Home Assistant's Control4 integration use the Control4 controller's built-in local REST API. Ordinary homeowner credentials are sufficient to obtain the required Control4 authentication; dealer or Composer Pro credentials are not required for normal supported-device control.
 
 Expected architecture:
 
 ```text
-Custom app / cloud service
-        ↓
-Home Assistant Green on the home network
-        ↓
-Control4 Core 3 local REST API
-        ↓
+Phone / browser PWA
+        |
+        v
+Private application backend
+        |
+        v
+Home Assistant Green
+        |
+        v
+Control4 Core 3 local API
+        |
+        v
 Lights, shades, climate, media, scenes
 ```
 
-### 3. Cloud-only access was investigated
+### Cloud-only investigation
 
-Several tests were run against Control4's cloud account APIs. They exposed:
+Several tests were run against Control4's cloud APIs. They exposed controller identity, OS version, registration status, 4Sight licence, account users, dealer metadata, and Director authorization capability.
 
-- controller identity
-- OS version
-- registration status
-- 4Sight licence information
-- users and dealer metadata
-- Director authorization capability
+They did not expose a reusable remote controller hostname, relay URL, proxy address, WebSocket endpoint, tunnel information, or public cloud command API. The cloud channel used by Alexa and the official Control4 application appears to be private. The practical route is therefore Home Assistant Green on the home network, or a dealer-installed custom Control4 driver.
 
-They did **not** expose:
+## Implementation decision
 
-- a remote controller hostname
-- a relay URL
-- a proxy address
-- a WebSocket endpoint
-- a tunnel address
-- a public cloud-control endpoint
+The MVP will use Home Assistant as the only direct Control4 client. A custom backend will expose a deliberately narrow API to a responsive progressive web app. The Home Assistant token and Control4 credentials will never be stored in browser code.
 
-Conclusion: the Control4 cloud can authenticate the homeowner and identify the controller, but the remote-control path used by Alexa and the official Control4 app appears to be a separate private relay service. The same local REST API cannot simply be pointed at a public cloud address.
+Initial remote access should use Home Assistant Cloud or another outbound secure route, never direct router port-forwarding to Home Assistant.
 
-### 4. Alternative architecture considered
+## Documentation
 
-A dealer-installed custom Control4 driver could run directly on the Core 3 and open an outbound HTTPS or WebSocket connection to a private cloud service. This would avoid a separate local device, but would require dealer support and custom DriverWorks development.
+- [Product specification](docs/PRODUCT_SPEC.md)
+- [Implementation specification](docs/IMPLEMENTATION_SPEC.md)
+- [Application API contract](docs/API_CONTRACT.md)
+- [Installation and commissioning runbook](docs/INSTALLATION_RUNBOOK.md)
+- [Design and delivery loop](docs/DESIGN_AND_DELIVERY_LOOP.md)
+- [Test plan](docs/TEST_PLAN.md)
+- [Security and operations](docs/SECURITY_AND_OPERATIONS.md)
 
-Dealer: Kahane, Herzliya.
+## Likely MVP capabilities
 
-### 5. Why Home Assistant Green was chosen
+- Lights and dimmers
+- Shades/covers
+- Climate set-points
+- Home Assistant scenes and scripts
+- Basic room media where reliably exposed
+- Favorites and rooms
+- Secure sign-in
+- Command confirmation and audit history
+- Installable iPhone/web PWA
 
-Home Assistant Green is preferred over a Raspberry Pi because it is preassembled, has Home Assistant installed, and requires little setup. It includes Ethernet, power supply, 4 GB RAM and 32 GB storage. No Zigbee, Thread or Z-Wave dongles are required for this Control4 project.
+Security-sensitive controls such as alarms, locks, gates, and garage doors are excluded from the initial release.
 
-An Apple TV or Aqara Hub M3 cannot serve as the bridge because neither permits a general-purpose always-on local service such as Home Assistant, Python or Docker.
+## Exact next step when Home Assistant Green arrives
 
-## Expected supported Control4 device classes
+Follow [the installation runbook](docs/INSTALLATION_RUNBOOK.md). The first technical objective is a complete vertical slice:
 
-Likely to work through Home Assistant's Control4 integration:
+```text
+One browser button
+→ application backend
+→ Home Assistant REST API
+→ Control4
+→ one physical light
+→ confirmed state in the browser
+```
 
-- lights and dimmers
-- shades, blinds and covers
-- thermostats and climate
-- room media controls
-- standard scenes or exposed actions
+Once that works locally and remotely, export the entity inventory, approve mappings, and generate the full MVP dashboard.
 
-Potential gaps:
+## Resume prompt for another chat
 
-- bespoke Composer programming
-- custom keypad events
-- complex AV routing
-- security functions
-- dealer-installed proprietary drivers
-- scenes not exposed as standard Control4 entities
-
-Those gaps may require the dealer to expose actions as scenes, virtual switches or experience buttons.
-
-## Next steps when Home Assistant Green arrives
-
-1. Connect Home Assistant Green to power and Ethernet on the same network as the Control4 Core 3.
-2. Open Home Assistant in a browser and complete initial setup.
-3. Add the official Control4 integration.
-4. Enter the Control4 controller's local IP address plus the ordinary homeowner username and password.
-5. Confirm which lights, shades, thermostats, rooms and media devices appear.
-6. Test read-only state first, then a harmless device command such as toggling one light.
-7. Record any Alexa-visible actions that do not appear in Home Assistant.
-8. Decide whether to build the custom app against Home Assistant's REST/WebSocket API or connect more directly with `pyControl4`.
-9. For remote access, use Home Assistant Cloud, Tailscale, a VPN or a private outbound relay. Do not expose the Control4 controller directly to the public internet.
-
-## Security notes
-
-- Do not commit Control4 passwords, bearer tokens or registration codes to GitHub.
-- Store credentials in Home Assistant's secrets/configuration mechanisms.
-- Prefer outbound encrypted connections from the home network.
-- Avoid public port forwarding to the Control4 controller.
-
-## Resume prompt for a future chat
-
-> Continue the Control4 smart-home project in `daschreiber/smarthome`. Read the README first. The Home Assistant Green has now arrived; guide me step by step through connecting it to my Control4 Core 3 and testing the official Home Assistant Control4 integration.
+> Open `daschreiber/smarthome`, read the README and all files under `docs/`, and continue from the installation runbook. The goal is a private PWA controlling Control4 through Home Assistant Green. Do not expose Home Assistant or Control4 credentials in browser code or GitHub.

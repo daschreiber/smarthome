@@ -78,6 +78,7 @@ Run against selected reversible devices only.
 8. Restart Home Assistant Green and verify recovery without manual reconfiguration.
 9. Restart the Control4 controller and verify recovery.
 10. Rotate the Home Assistant token and verify the old token stops working.
+11. Restart the Control4 integration (or Home Assistant) while the internet connection is up but note the dependency: integration re-authentication requires the Control4 cloud. If a controlled test is possible, block outbound access from Home Assistant to Control4 cloud endpoints and confirm that already-authenticated local control keeps working and that the failure mode after a restart is visible and understandable.
 
 ## 4. Performance targets
 

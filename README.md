@@ -18,6 +18,11 @@ Build a private, phone-friendly web application that controls the existing Contr
 
 The open-source `pyControl4` library and Home Assistant's Control4 integration use the Control4 controller's built-in local REST API. Ordinary homeowner credentials are sufficient to obtain the required Control4 authentication; dealer or Composer Pro credentials are not required for normal supported-device control.
 
+Two verified constraints (from the Home Assistant core source):
+
+1. The official Control4 integration exposes exactly four platforms: `light`, `cover`, `climate`, and `media_player` (room media). Control4 scenes, switches, locks, and alarm functions are **not** exposed. Household scenes will be recreated as Home Assistant scenes/scripts acting on those four domains.
+2. Authentication is cloud-then-local: homeowner credentials go to the Control4 cloud for an account token, which is exchanged for a local Director token. Day-to-day control is local, but setup and token refresh need Control4 cloud reachability.
+
 Expected architecture:
 
 ```text
@@ -57,6 +62,7 @@ Initial remote access should use Home Assistant Cloud or another outbound secure
 - [Design and delivery loop](docs/DESIGN_AND_DELIVERY_LOOP.md)
 - [Test plan](docs/TEST_PLAN.md)
 - [Security and operations](docs/SECURITY_AND_OPERATIONS.md)
+- [Plan review and corrections](docs/PLAN_REVIEW.md)
 
 ## Likely MVP capabilities
 
@@ -71,6 +77,8 @@ Initial remote access should use Home Assistant Cloud or another outbound secure
 - Installable iPhone/web PWA
 
 Security-sensitive controls such as alarms, locks, gates, and garage doors are excluded from the initial release.
+
+Post-MVP, non-Control4 devices join through their own Home Assistant integrations: the sauna (currently on its manufacturer's app) and the Yale door locks. See the implementation specification, Phase F.
 
 ## Exact next step when Home Assistant Green arrives
 

@@ -23,6 +23,8 @@ Lights, shades, climate, media, scenes
 
 For the MVP, the backend should use Home Assistant's REST API for commands and state reads. Polling every 2–5 seconds while a control screen is open is sufficient initially. A WebSocket state stream can be added later.
 
+Note on end-to-end staleness: the Control4 integration itself polls the Director (default every 5 seconds, configurable down to 1). App polling stacks on top of that, so worst-case observed staleness is app interval + integration interval. If the 5-second confirmed-state target is missed during commissioning, lower the integration scan interval before redesigning the app.
+
 ## 2. Why this architecture
 
 - No Control4 credential is stored in the browser.
@@ -49,7 +51,7 @@ For the MVP, the backend should use Home Assistant's REST API for commands and s
 MVP options, in preference order:
 
 1. A conventional Node host that supports an always-on process, suitable for later WebSocket support.
-2. A serverless host using REST polling only.
+2. A serverless host using REST polling only. Note: SQLite is not usable on serverless hosts; this option requires the managed Postgres path from day one.
 3. Local hosting on Home Assistant Green only if remote access is unnecessary.
 
 ### Remote route to Home Assistant
@@ -62,14 +64,13 @@ Preferred initial route: Home Assistant Cloud remote URL. Alternatives are a VPN
 2. Complete Home Assistant onboarding.
 3. Install/configure the official Control4 integration.
 4. Enter the Control4 controller IP and homeowner credentials.
-5. Verify entities under these domains:
+5. Verify entities under the domains the official Control4 integration actually creates:
    - `light`
    - `cover`
    - `climate`
-   - `media_player`
-   - `scene`
-   - `switch`
-   - `script`
+   - `media_player` (room-based media)
+
+   The official integration does **not** create `scene`, `switch`, `script`, or `lock` entities from Control4. Control4 lighting scenes and programming are not exposed. Any `scene` or `script` entities in this project are created inside Home Assistant (step 8) and act on the four exposed domains. If relays, contact sensors, locks, or the alarm panel are needed later, the community `lawtancool/hass-control4` custom integration is the fallback (with its stability caveats), or dealer work.
 6. Assign entities to Home Assistant Areas.
 7. Rename unclear entities in Home Assistant.
 8. Create Home Assistant scenes/scripts for compound actions.
@@ -178,6 +179,7 @@ The backend accepts only typed, pre-approved commands. It must not provide a gen
 
 ## 10. Resilience
 
+- Understand the Control4 authentication chain: the Home Assistant integration first authenticates against the Control4 **cloud** with the homeowner credentials to obtain an account bearer token, then exchanges it for a local Director token. Commands and state reads are local, but initial setup and token refresh require Control4 cloud reachability. A prolonged Control4 cloud outage or a homeowner password change can break re-authentication even while local control still works on the current token.
 - 5-second upstream timeout
 - One retry only for idempotent reads, not blind retries for commands
 - Explicit `unavailable` and `unknown` UI states
@@ -205,4 +207,11 @@ Home Assistant Cloud or equivalent secure route; deploy backend; verify away fro
 
 ### Phase E — refinements
 
-Real-time WebSocket state, Siri shortcut, voice input, richer automations, dealer-created scenes for missing functions.
+Real-time WebSocket state, Siri shortcut, voice input, richer automations. If Control4 functions are missing from the four exposed domains, evaluate the `lawtancool/hass-control4` custom integration or dealer work — note that dealer-created Control4 scenes and virtual switches will still not appear through the official integration.
+
+### Phase F — non-Control4 devices (post-MVP)
+
+Fold in devices that bypass Control4 entirely, each via its own Home Assistant integration:
+
+- **Sauna**: currently controlled by the manufacturer's own app. Integrate via that brand's Home Assistant integration if one exists (confirm brand/model first). Treat heater control as safety-sensitive: confirmation required, server-side temperature and duration bounds, and never included in broad scenes like All Off/Away without explicit design.
+- **Yale door locks**: excluded from MVP by policy. Integration path depends on how they are connected — if they are paired to the Control4 Zigbee mesh they will not appear in Home Assistant at all (a lock can join only one mesh); if they have Yale Access/August Wi-Fi modules, the Yale/August Home Assistant integration works independently of Control4. Determine the model and connection before designing lock support and its separate permission tier.

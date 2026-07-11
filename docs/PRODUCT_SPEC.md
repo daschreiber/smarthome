@@ -43,7 +43,8 @@ The first version should make common household controls faster and clearer than 
 ### Excluded from MVP
 
 - Alarm disarming
-- Door-lock control
+- Door-lock control (Yale locks planned for a later phase)
+- Sauna control (remains on the manufacturer's app until a later phase)
 - Garage or gate control
 - Camera streaming
 - Intercom
@@ -109,9 +110,11 @@ The MVP is successful when:
 
 ## 9. Open questions to resolve after installation
 
-- Exact entities exposed by Control4
-- Whether Control4 scenes appear as Home Assistant entities or services
+- Exact entities exposed by Control4 within the four supported domains (`light`, `cover`, `climate`, `media_player`)
+- ~~Whether Control4 scenes appear as Home Assistant entities or services~~ Resolved: they do not. The official integration exposes no scene, switch, script, or lock entities; household scenes will be built as Home Assistant scenes/scripts.
 - Quality of room-media support
+- Sauna brand/model and its controlling app, to identify the matching Home Assistant integration for a later phase
+- Yale lock model and connection type (Control4 Zigbee mesh vs. Yale Access/August Wi-Fi module), which determines whether a Home Assistant path exists at all
 - Whether Home Assistant Cloud remote access will be used
 - Whether any custom dealer-created virtual switches or scenes are needed
 - Which actions merit confirmation

@@ -65,7 +65,7 @@ The browser API exposes only named application commands. It does not expose:
 - token creation
 - add-on or supervisor management
 
-The Home Assistant application user should have the least privilege available in the installed Home Assistant version.
+The Home Assistant application user should be a non-administrator user. Be aware of the real limit: Home Assistant has no per-entity or per-service permissions for regular users, so the application's long-lived token can still call services on any entity. Non-admin status protects configuration, add-ons, and user management — the effective control boundary for device commands is the backend's server-side allow-list, which is why no generic service-call endpoint may ever exist.
 
 ## 7. Command safety
 

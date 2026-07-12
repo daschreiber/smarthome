@@ -114,7 +114,7 @@ The MVP is successful when:
 - ~~Whether Control4 scenes appear as Home Assistant entities or services~~ Resolved: they do not. The official integration exposes no scene, switch, script, or lock entities; household scenes will be built as Home Assistant scenes/scripts.
 - Quality of room-media support
 - Sauna brand/model and its controlling app, to identify the matching Home Assistant integration for a later phase
-- Yale lock model and connection type (Control4 Zigbee mesh vs. Yale Access/August Wi-Fi module), which determines whether a Home Assistant path exists at all
+- ~~Yale lock model and connection type~~ Resolved from photos: Yale Linus retrofit lock + Smart Keypad + Smart Video Doorbell, all in the Yale Home ecosystem (not Control4 Zigbee). The Yale Home integration in Home Assistant covers them, with the doorbell acting as the bridge. Confirmed: the lock is a Linus L2 with Matter enabled, adding a local-control option alongside the cloud integration (see implementation spec, Phase F, for the Thread/commissioning prerequisites).
 - Whether Home Assistant Cloud remote access will be used
 - Whether any custom dealer-created virtual switches or scenes are needed
 - Which actions merit confirmation

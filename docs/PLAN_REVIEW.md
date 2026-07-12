@@ -40,15 +40,15 @@ The plan described the path as purely local. In fact the integration authenticat
 Both are deliberately out of MVP and both bypass Control4, joining later through their own Home Assistant integrations (this is exactly the payoff of putting Home Assistant in the middle). A new Phase F in the implementation spec covers them:
 
 - **Sauna** — stays on the manufacturer's app for now. To design the later phase, the brand/model and app name are needed to identify the matching Home Assistant integration (several sauna controllers have official or community integrations; some have none). When integrated, heater control must be treated as safety-sensitive: confirmation required, server-side temperature/duration bounds, and excluded from broad scenes such as All Off/Away unless explicitly designed in.
-- **Yale door locks** — the integration path depends entirely on how they are connected today, so establish that first:
-  - If they are paired to the **Control4 Zigbee mesh** (common in Control4 installs), they cannot also join a Home Assistant Zigbee/Z-Wave network, and the official integration exposes no lock platform — so there is no Home Assistant path without either re-pairing them away from Control4 or the custom-integration/dealer route.
-  - If they have **Yale Access / August Wi-Fi modules**, the Yale/August Home Assistant integration works independently of Control4.
-  - Either way, locks get their own permission tier, confirmation flow, and audit treatment before any exposure in the app.
+- **Yale door locks** — identified from homeowner photos: a Yale **Linus** retrofit cylinder lock with a Yale Smart Keypad and a Yale Smart Video Doorbell. This is the Yale Home ecosystem, not Control4 Zigbee, so the earlier worst case (no Home Assistant path) does not apply:
+  - Primary path: the official **Yale Home** integration (`yale`, cloud push), which requires a Yale Connect Bridge *or* a Yale doorbell as bridge — the doorbell on site satisfies this. It exposes the lock plus doorbell camera snapshots and doorbell/motion events. The keypad works through the lock and needs nothing extra.
+  - Confirmed Linus **L2** with Matter enabled by the homeowner. Matter over Thread offers local control, but Home Assistant Green has no Thread radio or Bluetooth: commissioning needs a Thread border router (dongle or credentials shared from an existing Apple/Google one) and the companion app on a phone. Cloud integration first, Matter later if local control matters. The Matter setup code stays in the homeowner's password manager, never in this repository.
+  - Locks get their own permission tier, confirmation flow, and audit treatment before any exposure in the app, and stay out of all scenes.
 
 ## 5. Open items for the homeowner
 
 1. Sauna brand/model and the name of its app (needed to scope Phase F).
-2. Yale lock model and connection type (Control4 Zigbee vs. Wi-Fi module).
+2. ~~Yale lock model and connection type~~ Resolved: Yale Linus L2 (Matter enabled) + Smart Keypad + Smart Video Doorbell, Yale Home ecosystem.
 3. During commissioning, an inventory of which household scenes exist today in Control4/Alexa, so equivalents can be rebuilt as Home Assistant scenes.
 
 ## 6. Sources

@@ -33,21 +33,33 @@ network-scoped, only the login restriction was.
      branch merges)
    - Build/start commands: leave auto-detected (Next.js; start script
      already binds Railway's `PORT`).
-3. **Variables** tab — add:
+3. **Add a Volume** (service → right-click/Settings → Attach Volume), mount
+   path `/data`. This keeps users, favorites, and the audit log across
+   deploys.
+4. **Variables** tab — add:
 
    | Variable | Value |
    | --- | --- |
    | `HA_BASE_URL` | the `https://….ui.nabu.casa` URL from Part 1 |
    | `HA_TOKEN` | the smarthome-app long-lived token (password manager) |
-   | `APP_USERS` | `daniel@…:<password>,daniella@…:<password>` |
+   | `APP_USERS` | `daniel@…:<password>,daniella@…:<password>` — seeds the user store ONCE (first entry = admin); afterwards manage users in the app |
    | `APP_SESSION_SECRET` | output of `openssl rand -hex 32` |
+   | `USERS_PATH` | `/data/users.json` |
+   | `FAVORITES_PATH` | `/data/favorites.json` |
+   | `AUDIT_LOG_PATH` | `/data/audit.log` |
+   | `APP_BASE_URL` | the Railway URL (fill in after step 5; used in reset links) |
    | `SAUNA_BASE_URL` | the sauna app's URL (optional, enables the sauna card) |
    | `SAUNA_API_TOKEN` | the sauna app's API token (optional) |
+   | `RESEND_API_KEY` | optional — enables password-reset emails (resend.com) |
+   | `EMAIL_FROM` | optional — sender for reset emails, needs a verified domain on Resend |
 
-   The app refuses all requests in production if `APP_USERS`/`APP_KEY` are
-   both unset — misconfiguration fails closed, not open.
-4. Deploy. Railway assigns `https://<something>.up.railway.app` (Settings →
-   Networking → Generate Domain if none is shown).
+   The app refuses all requests in production if no auth is configured —
+   misconfiguration fails closed, not open. Without `RESEND_API_KEY`,
+   password resets still work: an admin generates a one-hour reset link
+   from the Users screen and sends it manually.
+5. Deploy. Railway assigns `https://<something>.up.railway.app` (Settings →
+   Networking → Generate Domain if none is shown). Put that URL into
+   `APP_BASE_URL` (step 4) so emailed reset links point at the right place.
 
 ## Part 3 — Verify (owner + Claude)
 

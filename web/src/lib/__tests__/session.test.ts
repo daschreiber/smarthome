@@ -1,7 +1,12 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { checkCredentials, createSessionToken, verifySessionToken } from "../session";
 
 beforeEach(() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "session-test-"));
+  process.env.USERS_PATH = path.join(dir, "users.json");
   process.env.APP_SESSION_SECRET = "test-secret";
   process.env.APP_USERS = "daniel@example.com:pw-one,daniella@example.com:pw-two";
 });

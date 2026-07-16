@@ -1,0 +1,80 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  addUser, createResetToken, ensureSeeded, getUser, hashPassword, listUsers,
+  removeUser, setPassword, verifyPassword, verifyResetToken,
+} from "../users";
+
+let dir: string;
+
+beforeEach(() => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "users-test-"));
+  process.env.USERS_PATH = path.join(dir, "users.json");
+  process.env.APP_SESSION_SECRET = "test-secret";
+  delete process.env.APP_USERS;
+});
+
+describe("password hashing", () => {
+  it("verifies a correct password and rejects a wrong one", () => {
+    const h = hashPassword("correct horse");
+    expect(verifyPassword("correct horse", h)).toBe(true);
+    expect(verifyPassword("wrong pony", h)).toBe(false);
+  });
+});
+
+describe("store and seeding", () => {
+  it("seeds once from APP_USERS with the first entry as admin", () => {
+    process.env.APP_USERS = "a@x.com:password-a,b@x.com:password-b";
+    ensureSeeded();
+    const users = listUsers();
+    expect(users.map((u) => [u.email, u.role])).toEqual([
+      ["a@x.com", "admin"],
+      ["b@x.com", "member"],
+    ]);
+    expect(verifyPassword("password-a", getUser("a@x.com")!.passwordHash)).toBe(true);
+  });
+
+  it("adds and removes users, protecting the last admin", () => {
+    addUser("admin@x.com", "adminpass1", "admin");
+    addUser("kid@x.com", "kidpass123");
+    expect(listUsers()).toHaveLength(2);
+    expect(() => removeUser("admin@x.com")).toThrow(/last admin/);
+    removeUser("kid@x.com");
+    expect(listUsers()).toHaveLength(1);
+  });
+
+  it("rejects duplicates, bad emails, and short passwords", () => {
+    addUser("a@x.com", "longenough", "admin");
+    expect(() => addUser("a@x.com", "longenough")).toThrow(/exists/);
+    expect(() => addUser("not-an-email", "longenough")).toThrow(/invalid email/);
+    expect(() => addUser("b@x.com", "short")).toThrow(/at least 8/);
+  });
+});
+
+describe("reset tokens", () => {
+  beforeEach(() => {
+    addUser("a@x.com", "original-pass", "admin");
+  });
+
+  it("round-trips and allows a password change", () => {
+    const t = createResetToken("a@x.com");
+    expect(verifyResetToken(t)).toBe("a@x.com");
+    setPassword("a@x.com", "brand-new-pass");
+    expect(verifyPassword("brand-new-pass", getUser("a@x.com")!.passwordHash)).toBe(true);
+  });
+
+  it("is single-use: changing the password invalidates outstanding tokens", () => {
+    const t = createResetToken("a@x.com");
+    setPassword("a@x.com", "changed-already");
+    expect(verifyResetToken(t)).toBeNull();
+  });
+
+  it("rejects tampered and expired tokens", () => {
+    const t = createResetToken("a@x.com");
+    expect(verifyResetToken(t.slice(0, -3) + "abc")).toBeNull();
+    const old = createResetToken("a@x.com", Date.now() - 2 * 3600_000);
+    expect(verifyResetToken(old)).toBeNull();
+  });
+});

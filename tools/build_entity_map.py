@@ -62,6 +62,17 @@ LIGHT_RULES = [
     (r"טוחן|מדיח|תנור|ברז", "kitchen_appliance"),
 ]
 
+# Categories that are behind-the-scenes plumbing: kept in the map but hidden
+# from the app's default view (and hidden in HA). Flip here to resurface.
+HIDDEN_CATEGORIES = {
+    "floor_heating", "kitchen_appliance", "controlled_socket",
+    "hvac_master_switch", "infrastructure_climate",
+}
+VISIBILITY_OVERRIDES = {
+    "light.knx_switch_stir_pump": False,
+    "light.knx_switch_electricity_board_lightstrip": False,
+}
+
 GROUPS = {
     "light_dimmer": "Lighting", "light_switch": "Lighting",
     "shade": "Shades",
@@ -165,6 +176,8 @@ def main():
             "room": room,
             "category": category,
             "group": GROUPS.get(category, "Utilities"),
+            "visible": VISIBILITY_OVERRIDES.get(
+                e["entity_id"], category not in HIDDEN_CATEGORIES),
         }
         out.append(row)
         categories.setdefault(category, []).append(row)
@@ -188,8 +201,10 @@ def main():
              f"Controllable entities mapped: **{len(out)}**", ""]
     for grp in sorted(groups):
         rows = sorted(groups[grp], key=lambda r: (r["room"], r["display_name"]))
-        lines += [f"## {grp} ({len(rows)})", ""]
-        lines += [f"- [{r['room'] or 'NO ROOM'}] {r['display_name']} ({r['category']})  `{r['entity_id']}`"
+        hidden = sum(1 for r in rows if not r["visible"])
+        lines += [f"## {grp} ({len(rows)}{f', {hidden} hidden' if hidden else ''})", ""]
+        lines += [f"- {'[hidden] ' if not r['visible'] else ''}[{r['room'] or 'NO ROOM'}] "
+                  f"{r['display_name']} ({r['category']})  `{r['entity_id']}`"
                   for r in rows]
         lines.append("")
     with open(os.path.join(ROOT, "data", "MAPPING_REVIEW.md"), "w") as f:
@@ -197,7 +212,9 @@ def main():
 
     print(f"{len(out)} entities mapped into {len(categories)} categories, {len(groups)} app groups")
     for grp in sorted(groups, key=lambda g: -len(groups[g])):
-        print(f"  {grp:20} {len(groups[grp]):3}")
+        hid = sum(1 for r in groups[grp] if not r["visible"])
+        print(f"  {grp:20} {len(groups[grp]):3}  hidden={hid}")
+    print(f"visible={sum(1 for r in out if r['visible'])} hidden={sum(1 for r in out if not r['visible'])}")
     missing = [r for r in out if not r["room"]]
     print(f"entities with no inferred room: {len(missing)}")
     for r in missing:

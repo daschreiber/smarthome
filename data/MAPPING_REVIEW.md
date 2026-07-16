@@ -10,57 +10,57 @@ candidates for a confirm-before-run tap in the UI.
 
 Controllable entities mapped: **184**
 
-## Appliances (7)
+## Appliances (7, 7 hidden)
 
-- [Kitchen] Dishwasher (Dairy) (kitchen_appliance)  `light.knx_switch_mdykh_khlby`
-- [Kitchen] Garbage Disposal (Dairy) (kitchen_appliance)  `light.knx_switch_tvkhn_khlby`
-- [Kitchen] Garbage Disposal (Meat) (kitchen_appliance)  `light.knx_switch_tvkhn_bshry`
-- [Kitchen] Hot/Cold Water Tap (kitchen_appliance)  `light.knx_switch_brz_mym_khmym_qrym`
-- [Kitchen] Oven (Center) (kitchen_appliance)  `light.knx_switch_tnvr_mrkz`
-- [Kitchen] Oven (Lower) (kitchen_appliance)  `light.knx_switch_tnvr_tkhtvn`
-- [Kitchen] Oven (Upper) (kitchen_appliance)  `light.knx_switch_tnvr_lyvn`
+- [hidden] [Kitchen] Dishwasher (Dairy) (kitchen_appliance)  `light.knx_switch_mdykh_khlby`
+- [hidden] [Kitchen] Garbage Disposal (Dairy) (kitchen_appliance)  `light.knx_switch_tvkhn_khlby`
+- [hidden] [Kitchen] Garbage Disposal (Meat) (kitchen_appliance)  `light.knx_switch_tvkhn_bshry`
+- [hidden] [Kitchen] Hot/Cold Water Tap (kitchen_appliance)  `light.knx_switch_brz_mym_khmym_qrym`
+- [hidden] [Kitchen] Oven (Center) (kitchen_appliance)  `light.knx_switch_tnvr_mrkz`
+- [hidden] [Kitchen] Oven (Lower) (kitchen_appliance)  `light.knx_switch_tnvr_tkhtvn`
+- [hidden] [Kitchen] Oven (Upper) (kitchen_appliance)  `light.knx_switch_tnvr_lyvn`
 
-## Climate & Comfort (39)
+## Climate & Comfort (39, 16 hidden)
 
 - [Daniel's Study] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_daniel_s_study`
-- [Daniel's Study] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_daniel_s_study`
+- [hidden] [Daniel's Study] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_daniel_s_study`
 - [Daniella's Study] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_daniella_s_study`
-- [Daniella's Study] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_daniella_s_study`
+- [hidden] [Daniella's Study] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_daniella_s_study`
 - [Den] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_den`
-- [Den] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_den`
+- [hidden] [Den] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_den`
 - [Downstairs Toilet] Downstairs Toilet Defog (ventilation)  `light.knx_switch_downstairs_toilet_defog`
 - [Downstairs Toilet] Downstairs Toilet Vent (ventilation)  `light.knx_switch_downstairs_toilet_vent`
-- [Downstairs Toilet] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_downstairs_toilet`
+- [hidden] [Downstairs Toilet] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_downstairs_toilet`
 - [Downstairs Toilet] Restroom Vent (ventilation)  `light.knx_switch_restroom_vent`
-- [Entrance] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_entrance_kitchen`
-- [Guest Bathroom] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_guest_bathroom_small_guest_room`
+- [hidden] [Entrance] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_entrance_kitchen`
+- [hidden] [Guest Bathroom] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_guest_bathroom_small_guest_room`
 - [Guest Bathroom] Guest Bathroom Towel Rail (towel_rail)  `light.knx_switch_guest_bathroom_towel_rail`
 - [Guest Bathroom] Guest Bathroom Vent (ventilation)  `light.knx_switch_guest_bathroom_vent`
 - [Gym] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_gym`
-- [Gym] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_gym`
+- [hidden] [Gym] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_gym`
 - [Kitchen] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_kitchen`
 - [Large Guest Room] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_large_guest_room`
-- [Large Guest Room] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_large_guest_room`
+- [hidden] [Large Guest Room] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_large_guest_room`
 - [Large Guest Room] Large Guest Room Fan (fan)  `light.knx_switch_large_guest_room_fan`
 - [Lounge] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_lounge`
-- [Lounge] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_lounge_dining`
-- [Master Bathroom] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_master_bathroom`
+- [hidden] [Lounge] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_lounge_dining`
+- [hidden] [Master Bathroom] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_master_bathroom`
 - [Master Bathroom] Master Bathroom Towel Rail (towel_rail)  `light.knx_switch_master_bathroom_towel_rail`
 - [Master Bathroom] Master Bathroom Vent (ventilation)  `light.knx_switch_master_bathroom_vent`
 - [Master Bedroom] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_master_bedroom`
-- [Master Bedroom] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_mbr`
+- [hidden] [Master Bedroom] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_mbr`
 - [Medium Guest Room] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_medium_guest_room`
-- [Medium Guest Room] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_medium_guest_room`
+- [hidden] [Medium Guest Room] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_medium_guest_room`
 - [Medium Guest Room] Medium Guest Room Fan (fan)  `light.knx_switch_medium_guest_room_fan`
 - [Sauna] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_sauna`
-- [Sauna] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_sauna`
+- [hidden] [Sauna] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_sauna`
 - [Small Guest Room] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_small_guset_room`
 - [Small Guest Room] Small Guest Room Fan (fan)  `light.knx_switch_small_guest_room_fan`
 - [Terrace] Terrace Fan (fan)  `light.knx_switch_terrace_fan`
 - [Utility Room] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_utility_room`
-- [Utility Room] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_utility`
-- [Whole House] AC\ HEAT 5TH (hvac_master_switch)  `light.knx_switch_ac_heat_5th`
-- [Whole House] AC\HEAT 6TH (hvac_master_switch)  `light.knx_switch_ac_heat_6th`
+- [hidden] [Utility Room] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_utility`
+- [hidden] [Whole House] AC\ HEAT 5TH (hvac_master_switch)  `light.knx_switch_ac_heat_5th`
+- [hidden] [Whole House] AC\HEAT 6TH (hvac_master_switch)  `light.knx_switch_ac_heat_6th`
 
 ## Lighting (97)
 
@@ -204,13 +204,13 @@ Controllable entities mapped: **184**
 - [Master Bedroom] Master Bedroom Window (shade)  `cover.master_bedroom_master_bedroom_window`
 - [Medium Guest Room] Medium Guest Room Blinds (shade)  `cover.medium_guest_room_medium_guest_room_blinds`
 
-## Utilities (8)
+## Utilities (8, 4 hidden)
 
 - [Master Bedroom] MBR TV Lift (motorized_furniture)  `light.knx_switch_mbr_tv_lift`
-- [Rack] Rack UNIT 109 (infrastructure_climate)  `climate.rack_unit_109`
+- [hidden] [Rack] Rack UNIT 109 (infrastructure_climate)  `climate.rack_unit_109`
 - [Roof] Boiler Roof (infrastructure)  `light.knx_switch_boiler_roof`
 - [Utility Room] Boiler 6th Floor (infrastructure)  `light.knx_switch_boiler_6th_floor`
-- [Utility Room] Controlled Socket (controlled_socket)  `light.knx_switch_5th_controlled_socket`
+- [hidden] [Utility Room] Controlled Socket (controlled_socket)  `light.knx_switch_5th_controlled_socket`
 - [Utility Room] Contrroled Sockets near Boiler (infrastructure)  `light.knx_switch_contrroled_sockets_near_boiler`
-- [Utility Room] Electricity board lightstrip (infrastructure)  `light.knx_switch_electricity_board_lightstrip`
-- [Utility Room] Stir pump (infrastructure)  `light.knx_switch_stir_pump`
+- [hidden] [Utility Room] Electricity board lightstrip (infrastructure)  `light.knx_switch_electricity_board_lightstrip`
+- [hidden] [Utility Room] Stir pump (infrastructure)  `light.knx_switch_stir_pump`

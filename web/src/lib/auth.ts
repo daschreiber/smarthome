@@ -23,6 +23,9 @@ export function authenticate(req: NextRequest): { ok: boolean; user: string } {
     return { ok: false, user: "" };
   }
   if (usersConfigured()) return { ok: false, user: "" };
+  // Never run open on a public host: outside local dev, no configured auth
+  // means no access at all.
+  if (process.env.NODE_ENV === "production") return { ok: false, user: "" };
   return { ok: true, user: "dev" };
 }
 

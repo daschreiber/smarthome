@@ -1,6 +1,6 @@
 /**
- * Adapter for the KLAFS sauna app (github.com/daschreiber/sauna, deployed on
- * Vercel). The sauna joins the registry as a virtual device; this module is
+ * Adapter for the KLAFS sauna app (github.com/daschreiber/sauna, deployed as
+ * its own service). The sauna joins the registry as a virtual device; this module is
  * the only code that talks to the sauna service. All KLAFS complexity
  * (session management, preselection recovery, heating watchdog) lives in the
  * sauna app — we deliberately consume its verified /api/quick endpoints

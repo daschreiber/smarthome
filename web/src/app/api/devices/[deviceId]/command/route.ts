@@ -3,7 +3,7 @@ import { CommandSchema, assertCommandAllowed, buildServiceCall, expectedStates }
 import { callService, getState } from "@/lib/ha";
 import { getDevice } from "@/lib/registry";
 import { audit } from "@/lib/audit";
-import { authorized } from "@/lib/auth";
+import { authenticate } from "@/lib/auth";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
 
 /**
@@ -15,7 +15,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ deviceId: string }> },
 ) {
-  if (!authorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const auth = authenticate(req);
+  if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { deviceId } = await params;
   const device = getDevice(deviceId);
@@ -56,7 +57,7 @@ export async function POST(
       const after = await saunaStatus().catch(() => null);
       const durationMs = Date.now() - started;
       audit({
-        ts: new Date().toISOString(), deviceId, entityId: device.entityId,
+        ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
         command, args, ok: true, durationMs,
         resultState: after ? (after.poweredOn ? "on" : "off") : undefined,
       });
@@ -70,7 +71,7 @@ export async function POST(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       audit({
-        ts: new Date().toISOString(), deviceId, entityId: device.entityId,
+        ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
         command, args, ok: false, durationMs: Date.now() - started, error: message,
       });
       const clientError = /does not support|out of range/.test(message);
@@ -106,6 +107,7 @@ export async function POST(
     const durationMs = Date.now() - started;
     audit({
       ts: new Date().toISOString(),
+      user: auth.user,
       deviceId,
       entityId: device.entityId,
       command,
@@ -127,6 +129,7 @@ export async function POST(
     const message = err instanceof Error ? err.message : String(err);
     audit({
       ts: new Date().toISOString(),
+      user: auth.user,
       deviceId,
       entityId: device.entityId,
       command,

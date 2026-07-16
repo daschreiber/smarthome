@@ -5,6 +5,7 @@ import path from "node:path";
 
 export interface AuditEvent {
   ts: string;
+  user?: string;
   deviceId: string;
   entityId: string;
   command: string;

@@ -40,6 +40,8 @@ export default function Page() {
   const [floor, setFloor] = useState<6 | 5>(6);
   const [flash, setFlash] = useState<Record<string, Flash>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [favs, setFavs] = useState<string[]>([]);
+  const [authNeeded, setAuthNeeded] = useState(false);
   const [appKey, setAppKey] = useState("");
   const [mounted, setMounted] = useState(false);
   const keyRef = useRef("");
@@ -56,10 +58,23 @@ export default function Page() {
     [],
   );
 
+  const loadFavs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/favorites", { headers: headers() });
+      if (res.ok) setFavs(((await res.json()) as { favorites: string[] }).favorites);
+    } catch { /* favorites are non-critical */ }
+  }, [headers]);
+
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/home", { headers: headers() });
+      if (res.status === 401) {
+        setAuthNeeded(true);
+        setError(null);
+        return;
+      }
       if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
+      setAuthNeeded(false);
       setDevices(((await res.json()) as { devices: UiDevice[] }).devices);
       setError(null);
     } catch (err) {
@@ -69,9 +84,24 @@ export default function Page() {
 
   useEffect(() => {
     refresh();
+    loadFavs();
     const t = setInterval(refresh, 3000);
     return () => clearInterval(t);
-  }, [refresh]);
+  }, [refresh, loadFavs]);
+
+  const toggleFav = useCallback(
+    async (deviceId: string) => {
+      try {
+        const res = await fetch("/api/favorites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers() },
+          body: JSON.stringify({ deviceId }),
+        });
+        if (res.ok) setFavs(((await res.json()) as { favorites: string[] }).favorites);
+      } catch { /* non-critical */ }
+    },
+    [headers],
+  );
 
   const send = useCallback(
     async (id: string, body: Record<string, unknown>) => {
@@ -136,6 +166,16 @@ export default function Page() {
     );
   }, [roomDevices]);
 
+  if (authNeeded) {
+    return (
+      <main className="shell">
+        <Login onDone={() => { setAuthNeeded(false); refresh(); loadFavs(); }} />
+      </main>
+    );
+  }
+
+  const favDevices = devices.filter((d) => favs.includes(d.id));
+
   return (
     <main className="shell">
       {view.t === "home" ? (
@@ -145,9 +185,27 @@ export default function Page() {
             {devices.length === 0 && !error
               ? "Connecting…"
               : `${lightsOnTotal} light${lightsOnTotal === 1 ? "" : "s"} on`}
+            {" · "}
+            <a href="/activity" style={{ color: "var(--dim)" }}>activity</a>
+            {" · "}
+            <button
+              onClick={() => fetch("/api/auth/logout", { method: "POST" }).then(() => location.reload())}
+              style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+            >
+              sign out
+            </button>
           </p>
 
           {error && <div className="error-banner">{error}</div>}
+
+          {favDevices.length > 0 && (
+            <>
+              <div className="section-label">Favorites</div>
+              {favDevices.map((d) => (
+                <Device key={d.id} d={d} flash={flash[d.id]} busy={!!busy[d.id]} send={send} fav={true} onFav={toggleFav} />
+              ))}
+            </>
+          )}
 
           <div className="floors" role="tablist" aria-label="Floors">
             {[6, 5].map((f) => (
@@ -218,6 +276,8 @@ export default function Page() {
           flash={flash}
           busy={busy}
           send={send}
+          favs={favs}
+          onFav={toggleFav}
           back={() => setView({ t: "home" })}
         />
       )}
@@ -225,14 +285,70 @@ export default function Page() {
   );
 }
 
+function Login({ onDone }: { onDone: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "sign-in failed");
+      onDone();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "sign-in failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} style={{ marginTop: "18vh" }}>
+      <h1 className="h-title">Home</h1>
+      <p className="h-sub">Sign in to control the house.</p>
+      {err && <div className="error-banner">{err}</div>}
+      <div className="appkey" style={{ margin: 0 }}>
+        <input
+          type="email"
+          value={email}
+          placeholder="email"
+          autoComplete="username"
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ marginBottom: 8 }}
+        />
+        <input
+          type="password"
+          value={password}
+          placeholder="password"
+          autoComplete="current-password"
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </div>
+      <button className="scene-pill" disabled={busy} style={{ width: "100%", marginTop: 14, padding: 12 }}>
+        {busy ? "Signing in…" : "Sign in"}
+      </button>
+    </form>
+  );
+}
+
 function RoomView({
-  room, groups, flash, busy, send, back,
+  room, groups, flash, busy, send, favs, onFav, back,
 }: {
   room: string;
   groups: [string, UiDevice[]][];
   flash: Record<string, Flash>;
   busy: Record<string, boolean>;
   send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
+  favs: string[];
+  onFav: (id: string) => void;
   back: () => void;
 }) {
   return (
@@ -244,11 +360,34 @@ function RoomView({
         <section key={group}>
           <div className="section-label">{group}</div>
           {ds.map((d) => (
-            <Device key={d.id} d={d} flash={flash[d.id]} busy={!!busy[d.id]} send={send} />
+            <Device
+              key={d.id}
+              d={d}
+              flash={flash[d.id]}
+              busy={!!busy[d.id]}
+              send={send}
+              fav={favs.includes(d.id)}
+              onFav={onFav}
+            />
           ))}
         </section>
       ))}
     </>
+  );
+}
+
+function Star({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      aria-label={`${on ? "Remove" : "Add"} ${label} ${on ? "from" : "to"} favorites`}
+      style={{
+        background: "none", border: "none", cursor: "pointer", padding: "0 2px",
+        fontSize: 16, color: on ? "var(--active)" : "var(--dim)", opacity: on ? 1 : 0.55,
+      }}
+    >
+      {on ? "★" : "☆"}
+    </button>
   );
 }
 
@@ -257,21 +396,27 @@ function flashClass(f?: Flash) {
 }
 
 function Device({
-  d, flash, busy, send,
+  d, flash, busy, send, fav, onFav,
 }: {
   d: UiDevice;
   flash?: Flash;
   busy: boolean;
   send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
+  fav?: boolean;
+  onFav?: (id: string) => void;
 }) {
+  const star = onFav ? <Star on={!!fav} onClick={() => onFav(d.id)} label={d.label} /> : null;
   if (d.kind === "sauna") return <SaunaCard d={d} busy={busy} send={send} />;
-  if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} />;
+  if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} star={star} />;
   if (d.kind === "cover") {
     return (
       <div className={`dev ${d.available ? "" : "unavailable"} ${flashClass(flash)}`}>
-        <div>
-          <div className="nm">{d.label}</div>
-          <div className="st">{busy ? "…" : d.available ? d.state : "unavailable"}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {star}
+          <div>
+            <div className="nm">{d.label}</div>
+            <div className="st">{busy ? "…" : d.available ? d.state : "unavailable"}</div>
+          </div>
         </div>
         <div className="btn-row">
           <button className="mini-btn" disabled={busy} onClick={() => send(d.id, { command: "open" })}>Open</button>
@@ -287,10 +432,13 @@ function Device({
   const hasDimmer = d.capabilities.includes("brightness");
   const row = (
     <div className={`dev ${on ? "on" : ""} ${d.available ? "" : "unavailable"} ${hasDimmer ? "" : flashClass(flash)}`}>
-      <div>
-        <div className="nm">{d.label}</div>
-        <div className="st">
-          {busy ? "…" : d.available ? `${d.state}${on && d.brightnessPct != null ? ` · ${d.brightnessPct}%` : ""}` : "unavailable"}
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {star}
+        <div>
+          <div className="nm">{d.label}</div>
+          <div className="st">
+            {busy ? "…" : d.available ? `${d.state}${on && d.brightnessPct != null ? ` · ${d.brightnessPct}%` : ""}` : "unavailable"}
+          </div>
         </div>
       </div>
       <button
@@ -329,12 +477,13 @@ function Device({
 }
 
 function ClimateCard({
-  d, flash, busy, send,
+  d, flash, busy, send, star,
 }: {
   d: UiDevice;
   flash?: Flash;
   busy: boolean;
   send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
+  star?: React.ReactNode;
 }) {
   const [target, setTarget] = useState<number | null>(null);
   const shown = target ?? d.targetTemperature ?? 24;
@@ -352,10 +501,13 @@ function ClimateCard({
   const active = d.hvacMode != null && d.hvacMode !== "off";
   return (
     <div className={`climate-card ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
-      <div>
-        <div className="now">{d.currentTemperature != null ? `${d.currentTemperature}°` : "—"}</div>
-        <div className={`mode ${active ? "active" : ""}`}>
-          {d.available ? (d.hvacMode ?? "unknown") : "unavailable"}
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {star}
+        <div>
+          <div className="now">{d.currentTemperature != null ? `${d.currentTemperature}°` : "—"}</div>
+          <div className={`mode ${active ? "active" : ""}`}>
+            {d.available ? (d.hvacMode ?? "unknown") : "unavailable"}
+          </div>
         </div>
       </div>
       <div className="climate-set">

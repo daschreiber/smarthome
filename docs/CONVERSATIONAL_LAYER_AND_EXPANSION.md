@@ -31,6 +31,12 @@ order in `DESIGN_AND_DELIVERY_LOOP.md`.
 - The LLM's vocabulary IS `data/entity_map.json`: rooms, floors, groups,
   display names. Entities with `visible: false` are excluded from its tool
   schema entirely.
+- **Room synonyms** (owner requirement, 2026-07-16): rooms have canonical
+  names plus an owner-editable alias list in `data/room_aliases.json`
+  ("living room" -> Lounge, "MBR" -> Master Bedroom). The conversational
+  layer resolves aliases before acting and asks for clarification on
+  ambiguity instead of guessing. Aliases the owner uses naturally in chat
+  should be suggested as additions over time.
 - Security-tier actions (locks, later) are never creatable conversationally
   in the first iteration.
 - The LLM API key is a backend secret beside the HA token; nothing
@@ -60,7 +66,7 @@ model when they land:
 | --- | --- | --- |
 | Samsung Smart TVs | Samsung TV / SmartThings (55" QLED already discovered) | power, volume, source |
 | Yale Linus lock | Yale Home cloud or Matter (see Phase F prerequisites) | lock/unlock — security tier: PIN + confirm + audit, excluded from conversation initially |
-| Sauna | wrap the existing custom app's API as a small custom HA integration | on/off, target temp — then schedulable like anything else |
+| Sauna | **integrated 2026-07-16** as a virtual device in the app backend, consuming the existing sauna service's `/api/quick/*` endpoints (all KLAFS session/watchdog logic stays in that service). **Committed next step (owner decision):** promote to Home Assistant entities (switch + temperature sensors wrapping the same endpoints) so HA automations and scenes can target it; the backend then reads it via HA like every other device. | on/off, target temp (40-100°C server-side bounds), `confirm:true` required on every command |
 | Roborock ×2 | official Roborock integration | start/stop/dock, per-floor/room cleaning |
 
 ## UI consequences (for the design brainstorm)

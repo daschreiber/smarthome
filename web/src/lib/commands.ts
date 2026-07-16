@@ -23,8 +23,8 @@ export const CommandSchema = z.discriminatedUnion("command", [
   }),
   z.object({
     command: z.literal("set_temperature"),
-    // Server-side sanity bounds; refined per-zone later.
-    temperature: z.number().min(10).max(32),
+    // Outer sanity range; per-kind bounds enforced by temperatureBounds().
+    temperature: z.number().min(5).max(110),
   }),
   z.object({
     command: z.literal("set_volume"),
@@ -52,13 +52,40 @@ const CAPABILITY_FOR_COMMAND: Record<Command["command"], string> = {
   set_volume: "volume",
 };
 
-/** Pure mapping: (device, command) -> HA service call, or throws. */
-export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
+/** Per-kind safe set-point ranges (°C), enforced server-side. */
+export function temperatureBounds(kind: Device["kind"]): { min: number; max: number } {
+  switch (kind) {
+    case "climate":
+      return { min: 10, max: 32 };
+    case "sauna":
+      return { min: 40, max: 100 }; // matches the KLAFS app's own clamp
+    default:
+      return { min: 10, max: 32 };
+  }
+}
+
+export function assertCommandAllowed(device: Device, cmd: Command): void {
   const needed = CAPABILITY_FOR_COMMAND[cmd.command];
   if (!device.capabilities.includes(needed as Device["capabilities"][number])) {
     throw new Error(
       `device ${device.id} (${device.kind}) does not support ${cmd.command}`,
     );
+  }
+  if (cmd.command === "set_temperature") {
+    const { min, max } = temperatureBounds(device.kind);
+    if (cmd.temperature < min || cmd.temperature > max) {
+      throw new Error(
+        `temperature ${cmd.temperature} out of range ${min}-${max} for ${device.kind}`,
+      );
+    }
+  }
+}
+
+/** Pure mapping: (device, command) -> HA service call, or throws. */
+export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
+  assertCommandAllowed(device, cmd);
+  if (device.kind === "sauna") {
+    throw new Error("sauna commands are executed by the sauna adapter, not Home Assistant");
   }
   const target = { entity_id: device.entityId };
   switch (cmd.command) {

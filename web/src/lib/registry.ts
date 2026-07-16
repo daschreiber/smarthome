@@ -32,7 +32,7 @@ export interface MapRow {
 export interface Device {
   id: string;
   entityId: string;
-  kind: MapRow["domain"];
+  kind: MapRow["domain"] | "sauna";
   label: string;
   room: string;
   floor: 5 | 6 | null;
@@ -40,6 +40,8 @@ export interface Device {
   category: string;
   visible: boolean;
   capabilities: Capability[];
+  /** Safety-sensitive devices require an explicit confirm on every command. */
+  requiresConfirmation?: boolean;
 }
 
 function slug(s: string): string {
@@ -104,11 +106,35 @@ export function buildDevices(rows: MapRow[]): Device[] {
   });
 }
 
+/**
+ * Virtual devices live outside Home Assistant. The KLAFS sauna is driven by
+ * its own service (see lib/sauna.ts); it appears here so the UI, command
+ * layer, audit log, and later the conversational layer treat it uniformly.
+ */
+function virtualDevices(): Device[] {
+  if (!process.env.SAUNA_BASE_URL || !process.env.SAUNA_API_TOKEN) return [];
+  return [
+    {
+      id: "sauna__klafs_sauna",
+      entityId: "virtual.sauna",
+      kind: "sauna",
+      label: "Sauna",
+      room: "Sauna",
+      floor: 5,
+      group: "Climate & Comfort",
+      category: "sauna_heater",
+      visible: true,
+      capabilities: ["on_off", "set_temperature"],
+      requiresConfirmation: true,
+    },
+  ];
+}
+
 let cache: { devices: Device[]; byId: Map<string, Device> } | null = null;
 
 export function registry() {
   if (!cache) {
-    const devices = buildDevices(loadRows());
+    const devices = [...buildDevices(loadRows()), ...virtualDevices()];
     cache = { devices, byId: new Map(devices.map((d) => [d.id, d])) };
   }
   return cache;

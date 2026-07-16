@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CommandSchema, buildServiceCall } from "../commands";
+import { CommandSchema, assertCommandAllowed, buildServiceCall } from "../commands";
 import type { Device } from "../registry";
 
 const dimmer: Device = {
@@ -42,10 +42,58 @@ describe("CommandSchema", () => {
   it("rejects unknown commands", () => {
     expect(CommandSchema.safeParse({ command: "self_destruct" }).success).toBe(false);
   });
-  it("rejects unsafe temperatures", () => {
+  it("rejects absurd temperatures at the schema boundary", () => {
     expect(
-      CommandSchema.safeParse({ command: "set_temperature", temperature: 45 }).success,
+      CommandSchema.safeParse({ command: "set_temperature", temperature: 200 }).success,
     ).toBe(false);
+  });
+});
+
+describe("temperature bounds per kind", () => {
+  const sauna: Device = {
+    id: "sauna__klafs_sauna",
+    entityId: "virtual.sauna",
+    kind: "sauna",
+    label: "Sauna",
+    room: "Sauna",
+    floor: 5,
+    group: "Climate & Comfort",
+    category: "sauna_heater",
+    visible: true,
+    capabilities: ["on_off", "set_temperature"],
+    requiresConfirmation: true,
+  };
+  const climate: Device = {
+    ...sauna,
+    id: "kitchen__a_c_heating",
+    entityId: "climate.ac_heating_a_c_kitchen",
+    kind: "climate",
+    category: "climate_zone",
+    requiresConfirmation: false,
+  };
+
+  it("allows 85C for the sauna but not for room climate", () => {
+    expect(() =>
+      assertCommandAllowed(sauna, { command: "set_temperature", temperature: 85 }),
+    ).not.toThrow();
+    expect(() =>
+      assertCommandAllowed(climate, { command: "set_temperature", temperature: 85 }),
+    ).toThrow(/out of range/);
+  });
+
+  it("allows 22C for room climate but not for the sauna", () => {
+    expect(() =>
+      assertCommandAllowed(climate, { command: "set_temperature", temperature: 22 }),
+    ).not.toThrow();
+    expect(() =>
+      assertCommandAllowed(sauna, { command: "set_temperature", temperature: 22 }),
+    ).toThrow(/out of range/);
+  });
+
+  it("routes sauna execution away from Home Assistant", () => {
+    expect(() => buildServiceCall(sauna, { command: "turn_on" })).toThrow(
+      /sauna adapter/,
+    );
   });
 });
 

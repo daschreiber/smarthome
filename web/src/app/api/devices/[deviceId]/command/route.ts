@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CommandSchema, buildServiceCall } from "@/lib/commands";
+import { CommandSchema, assertCommandAllowed, buildServiceCall } from "@/lib/commands";
 import { callService, getState } from "@/lib/ha";
 import { getDevice } from "@/lib/registry";
 import { audit } from "@/lib/audit";
 import { authorized } from "@/lib/auth";
+import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
 
 /**
  * Command execution flow per IMPLEMENTATION_SPEC §9:
@@ -20,7 +21,8 @@ export async function POST(
   const device = getDevice(deviceId);
   if (!device) return NextResponse.json({ error: "unknown device" }, { status: 404 });
 
-  const parsed = CommandSchema.safeParse(await req.json().catch(() => null));
+  const raw = await req.json().catch(() => null);
+  const parsed = CommandSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "invalid command", detail: parsed.error.flatten() },
@@ -29,7 +31,55 @@ export async function POST(
   }
   const cmd = parsed.data;
   const { command, ...args } = cmd;
+
+  // Safety-sensitive devices (the sauna heater) demand explicit confirmation
+  // on every command — IMPLEMENTATION_SPEC Phase F.
+  if (device.requiresConfirmation && (raw as { confirm?: unknown })?.confirm !== true) {
+    return NextResponse.json(
+      { error: "confirmation required", detail: `re-send with "confirm": true to command ${device.label}` },
+      { status: 428 },
+    );
+  }
+
   const started = Date.now();
+
+  if (device.kind === "sauna") {
+    try {
+      assertCommandAllowed(device, cmd);
+      let message = "ok";
+      if (cmd.command === "turn_on") message = await saunaStart();
+      else if (cmd.command === "turn_off") message = await saunaStop();
+      else if (cmd.command === "set_temperature") {
+        await saunaSetTemperature(cmd.temperature);
+        message = `target ${cmd.temperature}°C`;
+      }
+      const after = await saunaStatus().catch(() => null);
+      const durationMs = Date.now() - started;
+      audit({
+        ts: new Date().toISOString(), deviceId, entityId: device.entityId,
+        command, args, ok: true, durationMs,
+        resultState: after ? (after.poweredOn ? "on" : "off") : undefined,
+      });
+      return NextResponse.json({
+        status: "confirmed",
+        state: after ? (after.poweredOn ? "on" : "off") : "unknown",
+        message,
+        currentTemperature: after?.currentTemperature ?? null,
+        durationMs,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      audit({
+        ts: new Date().toISOString(), deviceId, entityId: device.entityId,
+        command, args, ok: false, durationMs: Date.now() - started, error: message,
+      });
+      const clientError = /does not support|out of range/.test(message);
+      return NextResponse.json(
+        { status: "failed", error: message },
+        { status: clientError ? 400 : 502 },
+      );
+    }
+  }
 
   try {
     const call = buildServiceCall(device, cmd);
@@ -70,7 +120,7 @@ export async function POST(
       durationMs: Date.now() - started,
       error: message,
     });
-    const clientError = message.includes("does not support");
+    const clientError = /does not support|out of range/.test(message);
     return NextResponse.json(
       { status: "failed", error: message },
       { status: clientError ? 400 : 502 },

@@ -43,6 +43,14 @@ npm run typecheck
   conversational layer calls this same surface.
 - `src/lib/audit.ts` — append-only JSONL audit of every command.
 
+- `src/lib/sauna.ts` — adapter for the KLAFS sauna service
+  (github.com/daschreiber/sauna on Vercel). With `SAUNA_BASE_URL` +
+  `SAUNA_API_TOKEN` set, the sauna joins the registry as a virtual device
+  (room "Sauna", on_off + set_temperature 40–100°C). Sauna commands are
+  safety-tiered: every command must include `"confirm": true` or the API
+  answers 428. The KLAFS heating-verification/watchdog logic stays in the
+  sauna app; this backend only consumes its `/api/quick/*` endpoints.
+
 Deployment target (Phase D): an always-on Node host (e.g. Railway), with
 `HA_BASE_URL` switched to the Home Assistant Cloud remote URL and secrets in
 the host's environment settings.

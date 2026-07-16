@@ -1,0 +1,232 @@
+# Home Assistant Entity Inventory
+
+Generated: 2026-07-16 13:37 UTC  
+Source: GET /api/states (read-only)  
+Total entities exported: **239** (242 fetched, 3 skipped: person/device_tracker/zone)
+
+## Entities per domain
+
+| Domain | Count |
+|---|---|
+| light | 144 |
+| sensor | 26 |
+| media_player | 14 |
+| climate | 13 |
+| cover | 13 |
+| switch | 9 |
+| number | 7 |
+| update | 3 |
+| binary_sensor | 2 |
+| conversation | 1 |
+| event | 1 |
+| notify | 1 |
+| select | 1 |
+| sun | 1 |
+| todo | 1 |
+| tts | 1 |
+| weather | 1 |
+| **Total** | **239** |
+
+## Controllable entities without an area
+
+Areas defined in HA: Bedroom, Gym, Kitchen, Living Room. With entities assigned: Gym. Empty: Bedroom, Kitchen, Living Room.
+
+183 of 184 controllable entities (light/cover/climate/media_player) have no area assigned.
+
+- `climate.ac_heating_a_c_daniel_s_study` (AC - Heating A/C Daniel's Study)
+- `climate.ac_heating_a_c_daniella_s_study` (AC - Heating A/C Daniella's Study)
+- `climate.ac_heating_a_c_den` (AC - Heating A/C Den)
+- `climate.ac_heating_a_c_gym` (AC - Heating A/C Gym)
+- `climate.ac_heating_a_c_kitchen` (AC - Heating A/C Kitchen)
+- `climate.ac_heating_a_c_large_guest_room` (AC - Heating A/C Large Guest Room)
+- `climate.ac_heating_a_c_lounge` (AC - Heating A/C Lounge)
+- `climate.ac_heating_a_c_master_bedroom` (AC - Heating A/C Master Bedroom)
+- `climate.ac_heating_a_c_medium_guest_room` (AC - Heating A/C Medium Guest Room)
+- `climate.ac_heating_a_c_sauna` (AC - Heating A/C Sauna)
+- `climate.ac_heating_a_c_small_guset_room` (AC - Heating A/C Small Guset Room)
+- `climate.ac_heating_a_c_utility_room` (AC - Heating A/C Utility Room)
+- `climate.rack_unit_109` (Rack UNIT 109)
+- `cover.daniel_s_study_daniel_study_blinds` (Daniel's Study Daniel Study Blinds)
+- `cover.daniella_s_study_daniella_study_blinds` (Daniella's Study Daniella Study Blinds)
+- `cover.den_den_blinds` (Den Den Blinds)
+- `cover.guest_bathroom_guest_bathroom_blinds` (Guest Bathroom Guest Bathroom Blinds)
+- `cover.kitchen_kitchen_left` (Kitchen Kitchen Left)
+- `cover.kitchen_kitchen_right` (Kitchen Kitchen Right)
+- `cover.large_guest_room_large_guest_room_blinds` (Large Guest Room Large Guest Room Blinds)
+- `cover.lounge_lounge_left` (Lounge Lounge Left)
+- `cover.lounge_lounge_right` (Lounge Lounge Right)
+- `cover.master_bedroom_master_bedroom_balcony_left` (Master Bedroom Master Bedroom Balcony Left)
+- `cover.master_bedroom_master_bedroom_balcony_right` (Master Bedroom Master Bedroom Balcony Right)
+- `cover.master_bedroom_master_bedroom_window` (Master Bedroom Master Bedroom Window)
+- `cover.medium_guest_room_medium_guest_room_blinds` (Medium Guest Room Medium Guest Room Blinds)
+- `light.knx_dimmer_daniel_study_lights` (KNX Dimmer Daniel Study lights)
+- `light.knx_dimmer_daniel_study_strip_1` (KNX Dimmer Daniel Study Strip 1)
+- `light.knx_dimmer_daniel_study_strip_2` (KNX Dimmer Daniel Study Strip 2)
+- `light.knx_dimmer_daniella_study_spots` (KNX Dimmer Daniella Study Spots)
+- `light.knx_dimmer_den_center_spots` (KNX Dimmer Den Center Spots)
+- `light.knx_dimmer_den_lights` (KNX Dimmer Den lights)
+- `light.knx_dimmer_den_sides_spots` (KNX Dimmer Den Sides Spots)
+- `light.knx_dimmer_den_strip` (KNX Dimmer Den Strip)
+- `light.knx_dimmer_entrance_strip` (KNX Dimmer Entrance Strip)
+- `light.knx_dimmer_gym_lights` (KNX Dimmer Gym lights)
+- `light.knx_dimmer_hall_spots` (KNX Dimmer Hall Spots)
+- `light.knx_dimmer_kitchen_ceiling` (KNX Dimmer Kitchen Ceiling)
+- `light.knx_dimmer_kitchen_island` (KNX Dimmer Kitchen Island)
+- `light.knx_dimmer_kitchen_strip_1` (KNX Dimmer Kitchen Strip 1)
+- `light.knx_dimmer_kitchen_strip_2` (KNX Dimmer Kitchen Strip 2)
+- `light.knx_dimmer_landing_lights` (KNX Dimmer Landing lights)
+- `light.knx_dimmer_large_guest_room_lights` (KNX Dimmer Large Guest Room  lights)
+- `light.knx_dimmer_large_guest_room_reading_right` (KNX Dimmer Large Guest Room Reading Right)
+- `light.knx_dimmer_large_guest_room_spots` (KNX Dimmer Large Guest Room Spots)
+- `light.knx_dimmer_large_guest_room_strip` (KNX Dimmer Large Guest Room Strip)
+- `light.knx_dimmer_left_corridor_lights` (KNX Dimmer Left Corridor lights)
+- `light.knx_dimmer_lounge_cove` (KNX Dimmer Lounge Cove)
+- `light.knx_dimmer_lounge_spots` (KNX Dimmer Lounge Spots)
+- `light.knx_dimmer_lounge_strip` (KNX Dimmer Lounge Strip)
+- `light.knx_dimmer_master_bathroom_strip` (KNX Dimmer Master Bathroom Strip)
+- `light.knx_dimmer_master_bedroom_lights` (KNX Dimmer Master Bedroom Lights)
+- `light.knx_dimmer_master_bedroom_spots` (KNX Dimmer Master Bedroom Spots)
+- `light.knx_dimmer_master_bedroom_strip` (KNX Dimmer Master Bedroom Strip)
+- `light.knx_dimmer_master_corridor_lights` (KNX Dimmer Master Corridor Lights)
+- `light.knx_dimmer_medium_guest_room_spots` (KNX Dimmer Medium Guest Room Spots)
+- `light.knx_dimmer_medium_guest_room_strip` (KNX Dimmer Medium Guest Room Strip)
+- `light.knx_dimmer_restroom_spots` (KNX Dimmer Restroom Spots)
+- `light.knx_dimmer_right_corridor_lights` (KNX Dimmer Right Corridor lights)
+- `light.knx_dimmer_sauna_spots` (KNX Dimmer Sauna Spots)
+- `light.knx_dimmer_small_guest_room_lights` (KNX Dimmer Small Guest Room  lights)
+- `light.knx_dimmer_small_guest_room_spots` (KNX Dimmer Small Guest Room Spots)
+- `light.knx_dimmer_small_guest_room_strip` (KNX Dimmer Small Guest Room Strip)
+- `light.knx_dimmer_stairs` (KNX Dimmer Stairs)
+- `light.knx_switch_5th_fh_daniel_s_study` (KNX Switch 5th - FH - Daniel's Study)
+- `light.knx_switch_5th_fh_daniella_s_study` (KNX Switch 5th - FH - Daniella's Study)
+- `light.knx_switch_5th_fh_den` (KNX Switch 5th - FH - Den)
+- `light.knx_switch_5th_fh_downstairs_toilet` (KNX Switch 5th - FH - Downstairs toilet)
+- `light.knx_switch_5th_fh_guest_bathroom_small_guest_room` (KNX Switch 5th - FH - Guest Bathroom+Small Guest room)
+- `light.knx_switch_5th_fh_gym` (KNX Switch 5th - FH - Gym)
+- `light.knx_switch_5th_fh_large_guest_room` (KNX Switch 5th - FH - Large Guest room)
+- `light.knx_switch_5th_fh_medium_guest_room` (KNX Switch 5th - FH - Medium Guest room)
+- `light.knx_switch_5th_fh_sauna` (KNX Switch 5th - FH - Sauna)
+- `light.knx_switch_5th_balcony_lights` (KNX Switch 5th Balcony lights)
+- `light.knx_switch_5th_controlled_socket` (KNX Switch 5th Controlled Socket)
+- `light.knx_switch_6th_fh_entrance_kitchen` (KNX Switch 6th - FH - Entrance+Kitchen)
+- `light.knx_switch_6th_fh_lounge_dining` (KNX Switch 6th - FH - Lounge+Dining)
+- `light.knx_switch_6th_fh_master_bathroom` (KNX Switch 6th - FH - Master Bathroom)
+- `light.knx_switch_6th_fh_mbr` (KNX Switch 6th - FH - MBR)
+- `light.knx_switch_6th_fh_utility` (KNX Switch 6th - FH - Utility)
+- `light.knx_switch_6th_balcony_plants` (KNX Switch 6th Balcony Plants)
+- `light.knx_switch_6th_balcony_wall` (KNX Switch 6th Balcony Wall)
+- `light.knx_switch_ac_heat_5th` (KNX Switch AC\ HEAT 5TH)
+- `light.knx_switch_ac_heat_6th` (KNX Switch AC\HEAT 6TH)
+- `light.knx_switch_all_house_exit` (KNX Switch All House Exit)
+- `light.knx_switch_all_house_morning` (KNX Switch All House Morning)
+- `light.knx_switch_all_house_night` (KNX Switch All House Night)
+- `light.knx_switch_all_rooms_closets_lightstrip` (KNX Switch All Rooms closets Lightstrip)
+- `light.knx_switch_boiler_6th_floor` (KNX Switch Boiler 6th Floor)
+- `light.knx_switch_boiler_roof` (KNX Switch Boiler Roof)
+- `light.knx_switch_contrroled_sockets_near_boiler` (KNX Switch Contrroled Sockets near Boiler)
+- `light.knx_switch_daniel_study_closet_led` (KNX Switch Daniel Study Closet led)
+- `light.knx_switch_daniel_study_desk_light` (KNX Switch Daniel Study Desk light)
+- `light.knx_switch_daniel_study_hidden` (KNX Switch Daniel Study Hidden)
+- `light.knx_switch_daniella_study_desk` (KNX Switch Daniella Study Desk)
+- `light.knx_switch_daniella_study_hidden` (KNX Switch Daniella Study Hidden)
+- `light.knx_switch_daniella_study_lights` (KNX Switch Daniella Study lights)
+- `light.knx_switch_daniella_study_shelfs_led` (KNX Switch Daniella Study Shelfs led)
+- `light.knx_switch_daniella_study_strip` (KNX Switch Daniella Study Strip)
+- `light.knx_switch_den_hidden` (KNX Switch Den Hidden)
+- `light.knx_switch_dining_table` (KNX Switch Dining Table)
+- `light.knx_switch_downstairs_toilet_defog` (KNX Switch Downstairs Toilet Defog)
+- `light.knx_switch_downstairs_toilet_hidden` (KNX Switch Downstairs Toilet Hidden)
+- `light.knx_switch_downstairs_toilet_mirror` (KNX Switch Downstairs Toilet Mirror)
+- `light.knx_switch_downstairs_toilet_restroom_lights` (KNX Switch Downstairs Toilet Restroom lights)
+- `light.knx_switch_downstairs_toilet_spots_1` (KNX Switch Downstairs Toilet Spots 1)
+- `light.knx_switch_downstairs_toilet_spots_2` (KNX Switch Downstairs Toilet Spots 2)
+- `light.knx_switch_downstairs_toilet_vent` (KNX Switch Downstairs Toilet Vent)
+- `light.knx_switch_electricity_board_lightstrip` (KNX Switch Electricity board lightstrip)
+- `light.knx_switch_entrance_night_led` (KNX Switch Entrance Night led)
+- `light.knx_switch_games_closet_lightstrip` (KNX Switch Games Closet lightstrip)
+- `light.knx_switch_guest_bathroom_lights` (KNX Switch Guest Bathroom lights)
+- `light.knx_switch_guest_bathroom_mirror` (KNX Switch Guest Bathroom Mirror)
+- `light.knx_switch_guest_bathroom_spots_1` (KNX Switch Guest Bathroom Spots 1)
+- `light.knx_switch_guest_bathroom_spots_2` (KNX Switch Guest Bathroom Spots 2)
+- `light.knx_switch_guest_bathroom_strip` (KNX Switch Guest Bathroom Strip)
+- `light.knx_switch_guest_bathroom_towel_rail` (KNX Switch Guest Bathroom Towel Rail)
+- `light.knx_switch_guest_bathroom_vent` (KNX Switch Guest Bathroom Vent)
+- `light.knx_switch_kitchen_hidden` (KNX Switch Kitchen Hidden)
+- `light.knx_switch_kitchen_sink_led` (KNX Switch Kitchen Sink led)
+- `light.knx_switch_large_guest_room_closets_lightstrip` (KNX Switch Large Guest Room Closets Lightstrip)
+- `light.knx_switch_large_guest_room_fan` (KNX Switch Large Guest Room Fan)
+- `light.knx_switch_large_guest_room_hidden` (KNX Switch Large Guest Room Hidden)
+- `light.knx_switch_large_guest_room_reading_left` (KNX Switch Large Guest Room Reading Left)
+- `light.knx_switch_left_corridornight_led` (KNX Switch Left CorridorNight led)
+- `light.knx_switch_lounge_closet_led` (KNX Switch Lounge Closet Led)
+- `light.knx_switch_lounge_hidden` (KNX Switch Lounge Hidden)
+- `light.knx_switch_lounge_tv_led` (KNX Switch Lounge TV Led)
+- `light.knx_switch_main_all_house` (KNX Switch Main All House)
+- `light.knx_switch_master_bathroom_hidden` (KNX Switch Master Bathroom Hidden)
+- `light.knx_switch_master_bathroom_lights` (KNX Switch Master Bathroom Lights)
+- `light.knx_switch_master_bathroom_mirror` (KNX Switch Master Bathroom Mirror)
+- `light.knx_switch_master_bathroom_night_light` (KNX Switch Master Bathroom Night Light)
+- `light.knx_switch_master_bathroom_towel_rail` (KNX Switch Master Bathroom Towel Rail)
+- `light.knx_switch_master_bathroom_vent` (KNX Switch Master Bathroom Vent)
+- `light.knx_switch_master_bedroom_closets_lightstrip` (KNX Switch Master Bedroom Closets Lightstrip)
+- `light.knx_switch_master_bedroom_closets_strip` (KNX Switch Master Bedroom Closets Strip)
+- `light.knx_switch_master_bedroom_hidden` (KNX Switch Master Bedroom Hidden)
+- `light.knx_switch_master_bedroom_read_left` (KNX Switch Master Bedroom Read Left)
+- `light.knx_switch_master_bedroom_read_right` (KNX Switch Master Bedroom Read Right)
+- `light.knx_switch_master_corridor_closets_lightstrip` (KNX Switch Master Corridor Closets Lightstrip)
+- `light.knx_switch_mbr_tv_lift` (KNX Switch MBR TV Lift)
+- `light.knx_switch_medium_guest_room_closets_lightstrip` (KNX Switch Medium Guest Room Closets Lightstrip)
+- `light.knx_switch_medium_guest_room_fan` (KNX Switch Medium Guest Room Fan)
+- `light.knx_switch_medium_guest_room_hidden` (KNX Switch Medium Guest Room Hidden)
+- `light.knx_switch_medium_guest_room_lights` (KNX Switch Medium Guest Room lights)
+- `light.knx_switch_medium_guest_room_reading_left` (KNX Switch Medium Guest Room Reading Left)
+- `light.knx_switch_medium_guest_room_reading_right` (KNX Switch Medium Guest Room Reading Right)
+- `light.knx_switch_restroom_vent` (KNX Switch Restroom Vent)
+- `light.knx_switch_right_corridor_night_led` (KNX Switch Right Corridor Night led)
+- `light.knx_switch_small_guest_room_closets_lightstrip` (KNX Switch Small Guest Room Closets Lightstrip)
+- `light.knx_switch_small_guest_room_fan` (KNX Switch Small Guest Room Fan)
+- `light.knx_switch_small_guest_room_reading_light` (KNX Switch Small Guest Room Reading light)
+- `light.knx_switch_small_guest_roomhidden` (KNX Switch Small Guest RoomHidden)
+- `light.knx_switch_stir_pump` (KNX Switch Stir pump)
+- `light.knx_switch_terrace_fan` (KNX Switch Terrace Fan)
+- `light.knx_switch_terrace_heating` (KNX Switch Terrace Heating)
+- `light.knx_switch_terrace_lights` (KNX Switch Terrace Lights)
+- `light.knx_switch_utility_room_hall` (KNX Switch Utility Room Hall)
+- `light.knx_switch_utility_room_lights` (KNX Switch Utility Room Lights)
+- `light.knx_switch_utility_room_spot` (KNX Switch Utility Room Spot)
+- `light.knx_switch_utility_room_strip` (KNX Switch Utility Room Strip)
+- `light.knx_switch_welcome` (KNX Switch Welcome)
+- `light.knx_switch_brz_mym_khmym_qrym` (KNX Switch ברז מים חמים\קרים)
+- `light.knx_switch_tvkhn_bshry` (KNX Switch טוחן בשרי)
+- `light.knx_switch_tvkhn_khlby` (KNX Switch טוחן חלבי)
+- `light.knx_switch_mdykh_khlby` (KNX Switch מדיח חלבי)
+- `light.knx_switch_tnvr_mrkz` (KNX Switch תנור מרכז)
+- `light.knx_switch_tnvr_lyvn` (KNX Switch תנור עליון)
+- `light.knx_switch_tnvr_tkhtvn` (KNX Switch תנור תחתון)
+- `media_player.55_qled` (55" QLED)
+- `media_player.balcony_2` (Balcony)
+- `media_player.balcony` (Balcony )
+- `media_player.bbq_speaker` (BBQ speaker)
+- `media_player.den` (Den)
+- `media_player.kitchen` (Kitchen)
+- `media_player.lounge` (Lounge)
+- `media_player.master_bathroom` (Master Bathroom)
+- `media_player.master_bedroom` (Master Bedroom)
+- `media_player.master_bedroom_balcony` (Master Bedroom Balcony)
+- `media_player.mbr_balcony` (MBR balcony)
+- `media_player.sauna` (Sauna )
+- `media_player.terrace` (Terrace)
+
+## Duplicate friendly names
+
+1 friendly names are shared by more than one entity:
+
+- **Gym Speech enhancement** (2x)
+  - `select.gym_gym_speech_enhancement`
+  - `switch.gym_gym_speech_enhancement`
+
+### Near-duplicates (differ only by case/extra whitespace)
+
+- **"Balcony"** vs **"Balcony "**
+  - `media_player.balcony`
+  - `media_player.balcony_2`

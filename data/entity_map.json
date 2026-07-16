@@ -6,7 +6,7 @@
     "display_name": "Balcony Plants",
     "room": "Balcony",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_6th_balcony_wall",
@@ -15,7 +15,7 @@
     "display_name": "Balcony Wall",
     "room": "Balcony",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_5th_balcony_lights",
@@ -24,7 +24,7 @@
     "display_name": "Balcony lights",
     "room": "Balcony",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "media_player.balcony_2",
@@ -33,7 +33,7 @@
     "display_name": "Balcony",
     "room": "Balcony",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "media_player.balcony",
@@ -42,7 +42,7 @@
     "display_name": "Balcony",
     "room": "Balcony",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "climate.ac_heating_a_c_daniel_s_study",
@@ -51,7 +51,7 @@
     "display_name": "A/C & Heating",
     "room": "Daniel's Study",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_5th_fh_daniel_s_study",
@@ -60,7 +60,7 @@
     "display_name": "Floor Heating",
     "room": "Daniel's Study",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_daniel_study_strip_1",
@@ -69,7 +69,7 @@
     "display_name": "Daniel Study Strip 1",
     "room": "Daniel's Study",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_daniel_study_strip_2",
@@ -78,7 +78,7 @@
     "display_name": "Daniel Study Strip 2",
     "room": "Daniel's Study",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_daniel_study_lights",
@@ -87,7 +87,7 @@
     "display_name": "Daniel Study lights",
     "room": "Daniel's Study",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_daniel_study_closet_led",
@@ -96,7 +96,7 @@
     "display_name": "Daniel Study Closet led",
     "room": "Daniel's Study",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_daniel_study_desk_light",
@@ -105,7 +105,7 @@
     "display_name": "Daniel Study Desk light",
     "room": "Daniel's Study",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_daniel_study_hidden",
@@ -114,7 +114,7 @@
     "display_name": "Daniel Study Hidden",
     "room": "Daniel's Study",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "cover.daniel_s_study_daniel_study_blinds",
@@ -123,7 +123,7 @@
     "display_name": "Daniel's Study Daniel Study Blinds",
     "room": "Daniel's Study",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "climate.ac_heating_a_c_daniella_s_study",
@@ -132,7 +132,7 @@
     "display_name": "A/C & Heating",
     "room": "Daniella's Study",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_5th_fh_daniella_s_study",
@@ -141,7 +141,7 @@
     "display_name": "Floor Heating",
     "room": "Daniella's Study",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_daniella_study_spots",
@@ -150,7 +150,7 @@
     "display_name": "Daniella Study Spots",
     "room": "Daniella's Study",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_daniella_study_desk",
@@ -159,7 +159,7 @@
     "display_name": "Daniella Study Desk",
     "room": "Daniella's Study",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_daniella_study_hidden",
@@ -168,7 +168,7 @@
     "display_name": "Daniella Study Hidden",
     "room": "Daniella's Study",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_daniella_study_shelfs_led",
@@ -177,7 +177,7 @@
     "display_name": "Daniella Study Shelfs led",
     "room": "Daniella's Study",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_daniella_study_strip",
@@ -186,7 +186,7 @@
     "display_name": "Daniella Study Strip",
     "room": "Daniella's Study",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_daniella_study_lights",
@@ -195,7 +195,7 @@
     "display_name": "Daniella Study lights",
     "room": "Daniella's Study",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "cover.daniella_s_study_daniella_study_blinds",
@@ -204,7 +204,7 @@
     "display_name": "Daniella's Study Daniella Study Blinds",
     "room": "Daniella's Study",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "climate.ac_heating_a_c_den",
@@ -213,7 +213,7 @@
     "display_name": "A/C & Heating",
     "room": "Den",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_5th_fh_den",
@@ -222,7 +222,7 @@
     "display_name": "Floor Heating",
     "room": "Den",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_den_center_spots",
@@ -231,7 +231,7 @@
     "display_name": "Den Center Spots",
     "room": "Den",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_den_sides_spots",
@@ -240,7 +240,7 @@
     "display_name": "Den Sides Spots",
     "room": "Den",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_den_strip",
@@ -249,7 +249,7 @@
     "display_name": "Den Strip",
     "room": "Den",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_den_lights",
@@ -258,7 +258,7 @@
     "display_name": "Den lights",
     "room": "Den",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_den_hidden",
@@ -267,7 +267,7 @@
     "display_name": "Den Hidden",
     "room": "Den",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_games_closet_lightstrip",
@@ -276,7 +276,7 @@
     "display_name": "Games Closet lightstrip",
     "room": "Den",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "media_player.den",
@@ -285,7 +285,7 @@
     "display_name": "Den",
     "room": "Den",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "cover.den_den_blinds",
@@ -294,7 +294,7 @@
     "display_name": "Den Blinds",
     "room": "Den",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "light.knx_switch_5th_fh_downstairs_toilet",
@@ -303,7 +303,7 @@
     "display_name": "Floor Heating",
     "room": "Downstairs Toilet",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_restroom_spots",
@@ -312,7 +312,7 @@
     "display_name": "Restroom Spots",
     "room": "Downstairs Toilet",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_downstairs_toilet_hidden",
@@ -321,7 +321,7 @@
     "display_name": "Downstairs Toilet Hidden",
     "room": "Downstairs Toilet",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_downstairs_toilet_mirror",
@@ -330,7 +330,7 @@
     "display_name": "Downstairs Toilet Mirror",
     "room": "Downstairs Toilet",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_downstairs_toilet_restroom_lights",
@@ -339,7 +339,7 @@
     "display_name": "Downstairs Toilet Restroom lights",
     "room": "Downstairs Toilet",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_downstairs_toilet_spots_1",
@@ -348,7 +348,7 @@
     "display_name": "Downstairs Toilet Spots 1",
     "room": "Downstairs Toilet",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_downstairs_toilet_spots_2",
@@ -357,7 +357,7 @@
     "display_name": "Downstairs Toilet Spots 2",
     "room": "Downstairs Toilet",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_downstairs_toilet_defog",
@@ -366,7 +366,7 @@
     "display_name": "Downstairs Toilet Defog",
     "room": "Downstairs Toilet",
     "category": "ventilation",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_downstairs_toilet_vent",
@@ -375,7 +375,7 @@
     "display_name": "Downstairs Toilet Vent",
     "room": "Downstairs Toilet",
     "category": "ventilation",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_restroom_vent",
@@ -384,7 +384,7 @@
     "display_name": "Restroom Vent",
     "room": "Downstairs Toilet",
     "category": "ventilation",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_6th_fh_entrance_kitchen",
@@ -393,7 +393,7 @@
     "display_name": "Floor Heating",
     "room": "Entrance",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_entrance_strip",
@@ -402,7 +402,7 @@
     "display_name": "Entrance Strip",
     "room": "Entrance",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_entrance_night_led",
@@ -411,7 +411,7 @@
     "display_name": "Entrance Night led",
     "room": "Entrance",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_5th_fh_guest_bathroom_small_guest_room",
@@ -420,7 +420,7 @@
     "display_name": "Floor Heating",
     "room": "Guest Bathroom",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_guest_bathroom_mirror",
@@ -429,7 +429,7 @@
     "display_name": "Guest Bathroom Mirror",
     "room": "Guest Bathroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_guest_bathroom_spots_1",
@@ -438,7 +438,7 @@
     "display_name": "Guest Bathroom Spots 1",
     "room": "Guest Bathroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_guest_bathroom_spots_2",
@@ -447,7 +447,7 @@
     "display_name": "Guest Bathroom Spots 2",
     "room": "Guest Bathroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_guest_bathroom_strip",
@@ -456,7 +456,7 @@
     "display_name": "Guest Bathroom Strip",
     "room": "Guest Bathroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_guest_bathroom_lights",
@@ -465,7 +465,7 @@
     "display_name": "Guest Bathroom lights",
     "room": "Guest Bathroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "cover.guest_bathroom_guest_bathroom_blinds",
@@ -474,7 +474,7 @@
     "display_name": "Guest Bathroom Blinds",
     "room": "Guest Bathroom",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "light.knx_switch_guest_bathroom_towel_rail",
@@ -483,7 +483,7 @@
     "display_name": "Guest Bathroom Towel Rail",
     "room": "Guest Bathroom",
     "category": "towel_rail",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_guest_bathroom_vent",
@@ -492,7 +492,7 @@
     "display_name": "Guest Bathroom Vent",
     "room": "Guest Bathroom",
     "category": "ventilation",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "climate.ac_heating_a_c_gym",
@@ -501,7 +501,7 @@
     "display_name": "A/C & Heating",
     "room": "Gym",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_5th_fh_gym",
@@ -510,7 +510,7 @@
     "display_name": "Floor Heating",
     "room": "Gym",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_gym_lights",
@@ -519,7 +519,7 @@
     "display_name": "Gym lights",
     "room": "Gym",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "media_player.gym_gym",
@@ -528,7 +528,7 @@
     "display_name": "Gym",
     "room": "Gym",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "light.knx_dimmer_hall_spots",
@@ -537,7 +537,7 @@
     "display_name": "Hall Spots",
     "room": "Hall",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "climate.ac_heating_a_c_kitchen",
@@ -546,7 +546,7 @@
     "display_name": "A/C & Heating",
     "room": "Kitchen",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_mdykh_khlby",
@@ -555,7 +555,7 @@
     "display_name": "Dishwasher (Dairy)",
     "room": "Kitchen",
     "category": "kitchen_appliance",
-    "mvp": false
+    "group": "Appliances"
   },
   {
     "entity_id": "light.knx_switch_tvkhn_khlby",
@@ -564,7 +564,7 @@
     "display_name": "Garbage Disposal (Dairy)",
     "room": "Kitchen",
     "category": "kitchen_appliance",
-    "mvp": false
+    "group": "Appliances"
   },
   {
     "entity_id": "light.knx_switch_tvkhn_bshry",
@@ -573,7 +573,7 @@
     "display_name": "Garbage Disposal (Meat)",
     "room": "Kitchen",
     "category": "kitchen_appliance",
-    "mvp": false
+    "group": "Appliances"
   },
   {
     "entity_id": "light.knx_switch_brz_mym_khmym_qrym",
@@ -582,7 +582,7 @@
     "display_name": "Hot/Cold Water Tap",
     "room": "Kitchen",
     "category": "kitchen_appliance",
-    "mvp": false
+    "group": "Appliances"
   },
   {
     "entity_id": "light.knx_switch_tnvr_mrkz",
@@ -591,7 +591,7 @@
     "display_name": "Oven (Center)",
     "room": "Kitchen",
     "category": "kitchen_appliance",
-    "mvp": false
+    "group": "Appliances"
   },
   {
     "entity_id": "light.knx_switch_tnvr_tkhtvn",
@@ -600,7 +600,7 @@
     "display_name": "Oven (Lower)",
     "room": "Kitchen",
     "category": "kitchen_appliance",
-    "mvp": false
+    "group": "Appliances"
   },
   {
     "entity_id": "light.knx_switch_tnvr_lyvn",
@@ -609,7 +609,7 @@
     "display_name": "Oven (Upper)",
     "room": "Kitchen",
     "category": "kitchen_appliance",
-    "mvp": false
+    "group": "Appliances"
   },
   {
     "entity_id": "light.knx_dimmer_kitchen_ceiling",
@@ -618,7 +618,7 @@
     "display_name": "Kitchen Ceiling",
     "room": "Kitchen",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_kitchen_island",
@@ -627,7 +627,7 @@
     "display_name": "Kitchen Island",
     "room": "Kitchen",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_kitchen_strip_1",
@@ -636,7 +636,7 @@
     "display_name": "Kitchen Strip 1",
     "room": "Kitchen",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_kitchen_strip_2",
@@ -645,7 +645,7 @@
     "display_name": "Kitchen Strip 2",
     "room": "Kitchen",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_kitchen_hidden",
@@ -654,7 +654,7 @@
     "display_name": "Kitchen Hidden",
     "room": "Kitchen",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_kitchen_sink_led",
@@ -663,7 +663,7 @@
     "display_name": "Kitchen Sink led",
     "room": "Kitchen",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "media_player.kitchen",
@@ -672,7 +672,7 @@
     "display_name": "Kitchen",
     "room": "Kitchen",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "cover.kitchen_kitchen_left",
@@ -681,7 +681,7 @@
     "display_name": "Kitchen Left",
     "room": "Kitchen",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "cover.kitchen_kitchen_right",
@@ -690,7 +690,7 @@
     "display_name": "Kitchen Right",
     "room": "Kitchen",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "light.knx_dimmer_landing_lights",
@@ -699,7 +699,7 @@
     "display_name": "Landing lights",
     "room": "Landing",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "climate.ac_heating_a_c_large_guest_room",
@@ -708,7 +708,7 @@
     "display_name": "A/C & Heating",
     "room": "Large Guest Room",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_large_guest_room_fan",
@@ -717,7 +717,7 @@
     "display_name": "Large Guest Room Fan",
     "room": "Large Guest Room",
     "category": "fan",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_5th_fh_large_guest_room",
@@ -726,7 +726,7 @@
     "display_name": "Floor Heating",
     "room": "Large Guest Room",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_large_guest_room_reading_right",
@@ -735,7 +735,7 @@
     "display_name": "Large Guest Room Reading Right",
     "room": "Large Guest Room",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_large_guest_room_spots",
@@ -744,7 +744,7 @@
     "display_name": "Large Guest Room Spots",
     "room": "Large Guest Room",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_large_guest_room_strip",
@@ -753,7 +753,7 @@
     "display_name": "Large Guest Room Strip",
     "room": "Large Guest Room",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_large_guest_room_lights",
@@ -762,7 +762,7 @@
     "display_name": "Large Guest Room lights",
     "room": "Large Guest Room",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_large_guest_room_closets_lightstrip",
@@ -771,7 +771,7 @@
     "display_name": "Large Guest Room Closets Lightstrip",
     "room": "Large Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_large_guest_room_hidden",
@@ -780,7 +780,7 @@
     "display_name": "Large Guest Room Hidden",
     "room": "Large Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_large_guest_room_reading_left",
@@ -789,7 +789,7 @@
     "display_name": "Large Guest Room Reading Left",
     "room": "Large Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "cover.large_guest_room_large_guest_room_blinds",
@@ -798,7 +798,7 @@
     "display_name": "Large Guest Room Blinds",
     "room": "Large Guest Room",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "light.knx_dimmer_left_corridor_lights",
@@ -807,7 +807,7 @@
     "display_name": "Left Corridor lights",
     "room": "Left Corridor",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_left_corridornight_led",
@@ -816,7 +816,7 @@
     "display_name": "Left CorridorNight led",
     "room": "Left Corridor",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "climate.ac_heating_a_c_lounge",
@@ -825,7 +825,7 @@
     "display_name": "A/C & Heating",
     "room": "Lounge",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_6th_fh_lounge_dining",
@@ -834,7 +834,7 @@
     "display_name": "Floor Heating",
     "room": "Lounge",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_lounge_cove",
@@ -843,7 +843,7 @@
     "display_name": "Lounge Cove",
     "room": "Lounge",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_lounge_spots",
@@ -852,7 +852,7 @@
     "display_name": "Lounge Spots",
     "room": "Lounge",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_lounge_strip",
@@ -861,7 +861,7 @@
     "display_name": "Lounge Strip",
     "room": "Lounge",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_dining_table",
@@ -870,7 +870,7 @@
     "display_name": "Dining Table",
     "room": "Lounge",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_lounge_closet_led",
@@ -879,7 +879,7 @@
     "display_name": "Lounge Closet Led",
     "room": "Lounge",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_lounge_hidden",
@@ -888,7 +888,7 @@
     "display_name": "Lounge Hidden",
     "room": "Lounge",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_lounge_tv_led",
@@ -897,7 +897,7 @@
     "display_name": "Lounge TV Led",
     "room": "Lounge",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "media_player.55_qled",
@@ -906,7 +906,7 @@
     "display_name": "55\" QLED",
     "room": "Lounge",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "media_player.lounge",
@@ -915,7 +915,7 @@
     "display_name": "Lounge",
     "room": "Lounge",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "cover.lounge_lounge_left",
@@ -924,7 +924,7 @@
     "display_name": "Lounge Left",
     "room": "Lounge",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "cover.lounge_lounge_right",
@@ -933,7 +933,7 @@
     "display_name": "Lounge Right",
     "room": "Lounge",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "light.knx_switch_6th_fh_master_bathroom",
@@ -942,7 +942,7 @@
     "display_name": "Floor Heating",
     "room": "Master Bathroom",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_master_bathroom_strip",
@@ -951,7 +951,7 @@
     "display_name": "Master Bathroom Strip",
     "room": "Master Bathroom",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_bathroom_hidden",
@@ -960,7 +960,7 @@
     "display_name": "Master Bathroom Hidden",
     "room": "Master Bathroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_bathroom_lights",
@@ -969,7 +969,7 @@
     "display_name": "Master Bathroom Lights",
     "room": "Master Bathroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_bathroom_mirror",
@@ -978,7 +978,7 @@
     "display_name": "Master Bathroom Mirror",
     "room": "Master Bathroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_bathroom_night_light",
@@ -987,7 +987,7 @@
     "display_name": "Master Bathroom Night Light",
     "room": "Master Bathroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "media_player.master_bathroom",
@@ -996,7 +996,7 @@
     "display_name": "Master Bathroom",
     "room": "Master Bathroom",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "light.knx_switch_master_bathroom_towel_rail",
@@ -1005,7 +1005,7 @@
     "display_name": "Master Bathroom Towel Rail",
     "room": "Master Bathroom",
     "category": "towel_rail",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_master_bathroom_vent",
@@ -1014,7 +1014,7 @@
     "display_name": "Master Bathroom Vent",
     "room": "Master Bathroom",
     "category": "ventilation",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "climate.ac_heating_a_c_master_bedroom",
@@ -1023,7 +1023,7 @@
     "display_name": "A/C & Heating",
     "room": "Master Bedroom",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_6th_fh_mbr",
@@ -1032,7 +1032,7 @@
     "display_name": "Floor Heating",
     "room": "Master Bedroom",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_master_bedroom_lights",
@@ -1041,7 +1041,7 @@
     "display_name": "Master Bedroom Lights",
     "room": "Master Bedroom",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_master_bedroom_spots",
@@ -1050,7 +1050,7 @@
     "display_name": "Master Bedroom Spots",
     "room": "Master Bedroom",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_master_bedroom_strip",
@@ -1059,7 +1059,7 @@
     "display_name": "Master Bedroom Strip",
     "room": "Master Bedroom",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_bedroom_closets_lightstrip",
@@ -1068,7 +1068,7 @@
     "display_name": "Master Bedroom Closets Lightstrip",
     "room": "Master Bedroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_bedroom_closets_strip",
@@ -1077,7 +1077,7 @@
     "display_name": "Master Bedroom Closets Strip",
     "room": "Master Bedroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_bedroom_hidden",
@@ -1086,7 +1086,7 @@
     "display_name": "Master Bedroom Hidden",
     "room": "Master Bedroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_bedroom_read_left",
@@ -1095,7 +1095,7 @@
     "display_name": "Master Bedroom Read Left",
     "room": "Master Bedroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_bedroom_read_right",
@@ -1104,7 +1104,7 @@
     "display_name": "Master Bedroom Read Right",
     "room": "Master Bedroom",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "media_player.mbr_balcony",
@@ -1113,7 +1113,7 @@
     "display_name": "MBR balcony",
     "room": "Master Bedroom",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "media_player.master_bedroom",
@@ -1122,7 +1122,7 @@
     "display_name": "Master Bedroom",
     "room": "Master Bedroom",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "media_player.master_bedroom_balcony",
@@ -1131,7 +1131,7 @@
     "display_name": "Master Bedroom Balcony",
     "room": "Master Bedroom",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "light.knx_switch_mbr_tv_lift",
@@ -1140,7 +1140,7 @@
     "display_name": "MBR TV Lift",
     "room": "Master Bedroom",
     "category": "motorized_furniture",
-    "mvp": false
+    "group": "Utilities"
   },
   {
     "entity_id": "cover.master_bedroom_master_bedroom_balcony_left",
@@ -1149,7 +1149,7 @@
     "display_name": "Master Bedroom Balcony Left",
     "room": "Master Bedroom",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "cover.master_bedroom_master_bedroom_balcony_right",
@@ -1158,7 +1158,7 @@
     "display_name": "Master Bedroom Balcony Right",
     "room": "Master Bedroom",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "cover.master_bedroom_master_bedroom_window",
@@ -1167,7 +1167,7 @@
     "display_name": "Master Bedroom Window",
     "room": "Master Bedroom",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "light.knx_dimmer_master_corridor_lights",
@@ -1176,7 +1176,7 @@
     "display_name": "Master Corridor Lights",
     "room": "Master Corridor",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_master_corridor_closets_lightstrip",
@@ -1185,7 +1185,7 @@
     "display_name": "Master Corridor Closets Lightstrip",
     "room": "Master Corridor",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "climate.ac_heating_a_c_medium_guest_room",
@@ -1194,7 +1194,7 @@
     "display_name": "A/C & Heating",
     "room": "Medium Guest Room",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_medium_guest_room_fan",
@@ -1203,7 +1203,7 @@
     "display_name": "Medium Guest Room Fan",
     "room": "Medium Guest Room",
     "category": "fan",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_5th_fh_medium_guest_room",
@@ -1212,7 +1212,7 @@
     "display_name": "Floor Heating",
     "room": "Medium Guest Room",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_medium_guest_room_spots",
@@ -1221,7 +1221,7 @@
     "display_name": "Medium Guest Room Spots",
     "room": "Medium Guest Room",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_medium_guest_room_strip",
@@ -1230,7 +1230,7 @@
     "display_name": "Medium Guest Room Strip",
     "room": "Medium Guest Room",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_medium_guest_room_closets_lightstrip",
@@ -1239,7 +1239,7 @@
     "display_name": "Medium Guest Room Closets Lightstrip",
     "room": "Medium Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_medium_guest_room_hidden",
@@ -1248,7 +1248,7 @@
     "display_name": "Medium Guest Room Hidden",
     "room": "Medium Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_medium_guest_room_reading_left",
@@ -1257,7 +1257,7 @@
     "display_name": "Medium Guest Room Reading Left",
     "room": "Medium Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_medium_guest_room_reading_right",
@@ -1266,7 +1266,7 @@
     "display_name": "Medium Guest Room Reading Right",
     "room": "Medium Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_medium_guest_room_lights",
@@ -1275,7 +1275,7 @@
     "display_name": "Medium Guest Room lights",
     "room": "Medium Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "cover.medium_guest_room_medium_guest_room_blinds",
@@ -1284,7 +1284,7 @@
     "display_name": "Medium Guest Room Blinds",
     "room": "Medium Guest Room",
     "category": "shade",
-    "mvp": true
+    "group": "Shades"
   },
   {
     "entity_id": "climate.rack_unit_109",
@@ -1293,7 +1293,7 @@
     "display_name": "Rack UNIT 109",
     "room": "Rack",
     "category": "infrastructure_climate",
-    "mvp": false
+    "group": "Utilities"
   },
   {
     "entity_id": "light.knx_dimmer_right_corridor_lights",
@@ -1302,7 +1302,7 @@
     "display_name": "Right Corridor lights",
     "room": "Right Corridor",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_right_corridor_night_led",
@@ -1311,7 +1311,7 @@
     "display_name": "Right Corridor Night led",
     "room": "Right Corridor",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_boiler_roof",
@@ -1320,7 +1320,7 @@
     "display_name": "Boiler Roof",
     "room": "Roof",
     "category": "infrastructure",
-    "mvp": false
+    "group": "Utilities"
   },
   {
     "entity_id": "climate.ac_heating_a_c_sauna",
@@ -1329,7 +1329,7 @@
     "display_name": "A/C & Heating",
     "room": "Sauna",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_5th_fh_sauna",
@@ -1338,7 +1338,7 @@
     "display_name": "Floor Heating",
     "room": "Sauna",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_sauna_spots",
@@ -1347,7 +1347,7 @@
     "display_name": "Sauna Spots",
     "room": "Sauna",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "media_player.sauna",
@@ -1356,7 +1356,7 @@
     "display_name": "Sauna",
     "room": "Sauna",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "climate.ac_heating_a_c_small_guset_room",
@@ -1365,7 +1365,7 @@
     "display_name": "A/C & Heating",
     "room": "Small Guest Room",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_small_guest_room_fan",
@@ -1374,7 +1374,7 @@
     "display_name": "Small Guest Room Fan",
     "room": "Small Guest Room",
     "category": "fan",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_dimmer_small_guest_room_spots",
@@ -1383,7 +1383,7 @@
     "display_name": "Small Guest Room Spots",
     "room": "Small Guest Room",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_small_guest_room_strip",
@@ -1392,7 +1392,7 @@
     "display_name": "Small Guest Room Strip",
     "room": "Small Guest Room",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_small_guest_room_lights",
@@ -1401,7 +1401,7 @@
     "display_name": "Small Guest Room lights",
     "room": "Small Guest Room",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_small_guest_room_closets_lightstrip",
@@ -1410,7 +1410,7 @@
     "display_name": "Small Guest Room Closets Lightstrip",
     "room": "Small Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_small_guest_room_reading_light",
@@ -1419,7 +1419,7 @@
     "display_name": "Small Guest Room Reading light",
     "room": "Small Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_small_guest_roomhidden",
@@ -1428,7 +1428,7 @@
     "display_name": "Small Guest RoomHidden",
     "room": "Small Guest Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_dimmer_stairs",
@@ -1437,7 +1437,7 @@
     "display_name": "Stairs",
     "room": "Stairs",
     "category": "light_dimmer",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_terrace_fan",
@@ -1446,7 +1446,7 @@
     "display_name": "Terrace Fan",
     "room": "Terrace",
     "category": "fan",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_terrace_heating",
@@ -1455,7 +1455,7 @@
     "display_name": "Terrace Heating",
     "room": "Terrace",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_terrace_lights",
@@ -1464,7 +1464,7 @@
     "display_name": "Terrace Lights",
     "room": "Terrace",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "media_player.bbq_speaker",
@@ -1473,7 +1473,7 @@
     "display_name": "BBQ speaker",
     "room": "Terrace",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "media_player.terrace",
@@ -1482,7 +1482,7 @@
     "display_name": "Terrace",
     "room": "Terrace",
     "category": "media",
-    "mvp": true
+    "group": "Media"
   },
   {
     "entity_id": "climate.ac_heating_a_c_utility_room",
@@ -1491,7 +1491,7 @@
     "display_name": "A/C & Heating",
     "room": "Utility Room",
     "category": "climate_zone",
-    "mvp": true
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_5th_controlled_socket",
@@ -1500,7 +1500,7 @@
     "display_name": "Controlled Socket",
     "room": "Utility Room",
     "category": "controlled_socket",
-    "mvp": false
+    "group": "Utilities"
   },
   {
     "entity_id": "light.knx_switch_6th_fh_utility",
@@ -1509,7 +1509,7 @@
     "display_name": "Floor Heating",
     "room": "Utility Room",
     "category": "floor_heating",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_boiler_6th_floor",
@@ -1518,7 +1518,7 @@
     "display_name": "Boiler 6th Floor",
     "room": "Utility Room",
     "category": "infrastructure",
-    "mvp": false
+    "group": "Utilities"
   },
   {
     "entity_id": "light.knx_switch_contrroled_sockets_near_boiler",
@@ -1527,7 +1527,7 @@
     "display_name": "Contrroled Sockets near Boiler",
     "room": "Utility Room",
     "category": "infrastructure",
-    "mvp": false
+    "group": "Utilities"
   },
   {
     "entity_id": "light.knx_switch_electricity_board_lightstrip",
@@ -1536,7 +1536,7 @@
     "display_name": "Electricity board lightstrip",
     "room": "Utility Room",
     "category": "infrastructure",
-    "mvp": false
+    "group": "Utilities"
   },
   {
     "entity_id": "light.knx_switch_stir_pump",
@@ -1545,7 +1545,7 @@
     "display_name": "Stir pump",
     "room": "Utility Room",
     "category": "infrastructure",
-    "mvp": false
+    "group": "Utilities"
   },
   {
     "entity_id": "light.knx_switch_utility_room_hall",
@@ -1554,7 +1554,7 @@
     "display_name": "Utility Room Hall",
     "room": "Utility Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_utility_room_lights",
@@ -1563,7 +1563,7 @@
     "display_name": "Utility Room Lights",
     "room": "Utility Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_utility_room_spot",
@@ -1572,7 +1572,7 @@
     "display_name": "Utility Room Spot",
     "room": "Utility Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_utility_room_strip",
@@ -1581,7 +1581,7 @@
     "display_name": "Utility Room Strip",
     "room": "Utility Room",
     "category": "light_switch",
-    "mvp": true
+    "group": "Lighting"
   },
   {
     "entity_id": "light.knx_switch_ac_heat_5th",
@@ -1590,7 +1590,7 @@
     "display_name": "AC\\ HEAT 5TH",
     "room": "Whole House",
     "category": "hvac_master_switch",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_ac_heat_6th",
@@ -1599,7 +1599,7 @@
     "display_name": "AC\\HEAT 6TH",
     "room": "Whole House",
     "category": "hvac_master_switch",
-    "mvp": false
+    "group": "Climate & Comfort"
   },
   {
     "entity_id": "light.knx_switch_all_house_exit",
@@ -1608,7 +1608,7 @@
     "display_name": "All House Exit",
     "room": "Whole House",
     "category": "scene_switch",
-    "mvp": true
+    "group": "Scenes"
   },
   {
     "entity_id": "light.knx_switch_all_house_morning",
@@ -1617,7 +1617,7 @@
     "display_name": "All House Morning",
     "room": "Whole House",
     "category": "scene_switch",
-    "mvp": true
+    "group": "Scenes"
   },
   {
     "entity_id": "light.knx_switch_all_house_night",
@@ -1626,7 +1626,7 @@
     "display_name": "All House Night",
     "room": "Whole House",
     "category": "scene_switch",
-    "mvp": true
+    "group": "Scenes"
   },
   {
     "entity_id": "light.knx_switch_all_rooms_closets_lightstrip",
@@ -1635,7 +1635,7 @@
     "display_name": "All Rooms closets Lightstrip",
     "room": "Whole House",
     "category": "scene_switch",
-    "mvp": true
+    "group": "Scenes"
   },
   {
     "entity_id": "light.knx_switch_main_all_house",
@@ -1644,7 +1644,7 @@
     "display_name": "Main All House",
     "room": "Whole House",
     "category": "scene_switch",
-    "mvp": true
+    "group": "Scenes"
   },
   {
     "entity_id": "light.knx_switch_welcome",
@@ -1653,6 +1653,6 @@
     "display_name": "Welcome",
     "room": "Whole House",
     "category": "scene_switch",
-    "mvp": true
+    "group": "Scenes"
   }
 ]

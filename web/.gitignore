@@ -7,3 +7,4 @@ audit.log
 next-env.d.ts
 favorites.json
 users.json
+scenes.json

@@ -31,6 +31,13 @@ interface UiDevice {
 type View = { t: "home" } | { t: "room"; room: string };
 type Flash = "ok" | "sent" | "fail";
 
+interface CustomScene {
+  id: string;
+  name: string;
+  room: string | null;
+  deviceCount: number;
+}
+
 const GROUP_ORDER = ["Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
 
 export default function Page() {
@@ -41,6 +48,8 @@ export default function Page() {
   const [flash, setFlash] = useState<Record<string, Flash>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [favs, setFavs] = useState<string[]>([]);
+  const [customScenes, setCustomScenes] = useState<CustomScene[]>([]);
+  const [editScenes, setEditScenes] = useState(false);
   const [authNeeded, setAuthNeeded] = useState(false);
   const [appKey, setAppKey] = useState("");
   const [mounted, setMounted] = useState(false);
@@ -82,12 +91,41 @@ export default function Page() {
     }
   }, [headers]);
 
+  const loadScenes = useCallback(async () => {
+    try {
+      const res = await fetch("/api/scenes", { headers: headers() });
+      if (res.ok) setCustomScenes(((await res.json()) as { scenes: CustomScene[] }).scenes);
+    } catch { /* non-critical */ }
+  }, [headers]);
+
   useEffect(() => {
     refresh();
     loadFavs();
+    loadScenes();
     const t = setInterval(refresh, 3000);
     return () => clearInterval(t);
-  }, [refresh, loadFavs]);
+  }, [refresh, loadFavs, loadScenes]);
+
+  const sceneOp = useCallback(
+    async (body: Record<string, unknown>) => {
+      try {
+        const res = await fetch("/api/scenes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers() },
+          body: JSON.stringify(body),
+        });
+        const out = await res.json();
+        if (!res.ok) throw new Error(out.error ?? "scene operation failed");
+        loadScenes();
+        refresh();
+        return true;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "scene operation failed");
+        return false;
+      }
+    },
+    [headers, loadScenes, refresh],
+  );
 
   const toggleFav = useCallback(
     async (deviceId: string) => {
@@ -237,9 +275,19 @@ export default function Page() {
               ))}
           </div>
 
-          {scenes.length > 0 && (
+          {(scenes.length > 0 || customScenes.length > 0) && (
             <>
-              <div className="section-label">Scenes</div>
+              <div className="section-label">
+                Scenes{" "}
+                {customScenes.length > 0 && (
+                  <button
+                    onClick={() => setEditScenes((v) => !v)}
+                    style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", fontSize: 11, cursor: "pointer", textDecoration: "underline", textTransform: "none", letterSpacing: 0 }}
+                  >
+                    {editScenes ? "done" : "edit"}
+                  </button>
+                )}
+              </div>
               <div className="scenes">
                 {scenes.map((s) => (
                   <button
@@ -249,6 +297,22 @@ export default function Page() {
                     onClick={() => send(s.id, { command: "turn_on" })}
                   >
                     {s.label.replace(/^All House /, "")}
+                  </button>
+                ))}
+                {customScenes.map((s) => (
+                  <button
+                    key={s.id}
+                    className="scene-pill"
+                    style={{ background: "var(--chip)", color: "var(--ink)", border: "1px solid var(--card-line)" }}
+                    onClick={() => {
+                      if (editScenes) {
+                        if (window.confirm(`Delete scene "${s.name}"?`)) sceneOp({ action: "delete", id: s.id });
+                      } else {
+                        sceneOp({ action: "apply", id: s.id });
+                      }
+                    }}
+                  >
+                    {editScenes ? `✕ ${s.name}` : s.name}
                   </button>
                 ))}
               </div>
@@ -280,6 +344,10 @@ export default function Page() {
           send={send}
           favs={favs}
           onFav={toggleFav}
+          onCapture={(room) => {
+            const name = window.prompt(`Save ${room} as a scene — name it:`);
+            if (name?.trim()) sceneOp({ action: "capture", name: name.trim(), room });
+          }}
           back={() => setView({ t: "home" })}
         />
       )}
@@ -393,7 +461,7 @@ function Login({ onDone }: { onDone: () => void }) {
 }
 
 function RoomView({
-  room, groups, flash, busy, send, favs, onFav, back,
+  room, groups, flash, busy, send, favs, onFav, onCapture, back,
 }: {
   room: string;
   groups: [string, UiDevice[]][];
@@ -402,13 +470,21 @@ function RoomView({
   send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
   favs: string[];
   onFav: (id: string) => void;
+  onCapture: (room: string) => void;
   back: () => void;
 }) {
   return (
     <>
       <button className="h-back" onClick={back}>‹ Home</button>
       <h1 className="h-title">{room}</h1>
-      <p className="h-sub">&nbsp;</p>
+      <p className="h-sub">
+        <button
+          onClick={() => onCapture(room)}
+          style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+        >
+          save current look as a scene
+        </button>
+      </p>
       {groups.map(([group, ds]) => (
         <section key={group}>
           <div className="section-label">{group}</div>

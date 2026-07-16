@@ -32,12 +32,16 @@ export default function Page() {
   const [pending, setPending] = useState<Record<string, Pending>>({});
   const [flash, setFlash] = useState<Record<string, "ok" | "sent" | "fail">>({});
   const [appKey, setAppKey] = useState<string>("");
+  // Render the password input only after mount: iOS Safari's password
+  // manager mutates it pre-hydration, causing a spurious mismatch warning.
+  const [mounted, setMounted] = useState(false);
   const keyRef = useRef("");
 
   useEffect(() => {
     const k = localStorage.getItem("appKey") ?? "";
     setAppKey(k);
     keyRef.current = k;
+    setMounted(true);
   }, []);
 
   const headers = useCallback(
@@ -107,7 +111,7 @@ export default function Page() {
         <summary style={{ color: "#7d8a97", fontSize: 13, cursor: "pointer" }}>
           App key
         </summary>
-        <input
+        {mounted && <input
           type="password"
           value={appKey}
           placeholder="only needed if APP_KEY is set"
@@ -120,7 +124,7 @@ export default function Page() {
             width: "100%", padding: 8, marginTop: 8, borderRadius: 8,
             border: "1px solid #2a3644", background: "#121924", color: "#e8edf2",
           }}
-        />
+        />}
       </details>
 
       {error && (

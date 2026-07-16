@@ -31,3 +31,33 @@ Home Assistant Green is online at `http://10.0.0.69:8123`. Owner account created
 ### Next runbook stage
 
 Stage 2 — connect Control4: install pending Home Assistant updates, then add the Control4 integration with the Core 3 local IP and homeowner credentials. Record the entity count by domain.
+
+## 2026-07-16 — Control4 integration connected (runbook Stage 2)
+
+### Controller identification
+
+Three Control4 devices on the network (Fing, MAC OUI `00:0F:FF`):
+
+| IP | Hostname | Role |
+| --- | --- | --- |
+| `10.0.0.29` | `000FFF9F3B44-CO` | **Core 3 — primary Director** (`control4_core3_000FFF9F3B44`) |
+| `10.0.0.36` | `000FFF9F3B0E-CO` | Core-series satellite (rejects Director token) |
+| `10.0.0.6` | `000FFF972A54-EA` | EA-series satellite (rejects Director token) |
+
+All three answer HTTP 200 on port 443, so port-probing cannot identify the Director; only the cloud-issued token (or the account's `controllerCommonName`) can.
+
+### Setup failure and resolution
+
+Initial attempts against `10.0.0.29` failed with `aiohttp ServerDisconnectedError` during the **cloud** call to `apis.control4.com/authentication/v1/rest/authorization` (the Director-token grant in `pyControl4.account.getDirectorBearerToken`). Credentials were never the problem — the same flow reached the local-rejection stage on the satellite IPs minutes apart, so the cloud endpoint was dropping connections intermittently, most likely rate-limiting after several rapid auth attempts.
+
+**Fix:** restart Home Assistant (clears the shared aiohttp connection pool), wait ~20–30 minutes, then attempt setup once. Worked on the first try. Lesson for future re-auth events: avoid rapid-fire setup retries against the Control4 cloud.
+
+### Notable hardware finding
+
+Climate is not native Control4: multiple **CoolAutomation "HVAC + UFH Zone"** bridge devices (AC + underfloor heating) are proxied through Control4 and appear in Home Assistant. Several share the default name "AC - Heating" — renaming required in the Stage 5 normalization pass.
+
+### Follow-ups
+
+- [ ] Record entity counts by domain after integration settles.
+- [ ] Stage 3: safe tests (one light, one shade, one thermostat read).
+- [ ] Stage 5: rename duplicate CoolAutomation zones, assign Areas.

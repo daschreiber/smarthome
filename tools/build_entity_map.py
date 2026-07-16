@@ -71,6 +71,10 @@ HIDDEN_CATEGORIES = {
 VISIBILITY_OVERRIDES = {
     "light.knx_switch_stir_pump": False,
     "light.knx_switch_electricity_board_lightstrip": False,
+    # Boilers no longer exist; relays are leftovers from a prior state.
+    "light.knx_switch_boiler_6th_floor": False,
+    "light.knx_switch_boiler_roof": False,
+    "light.knx_switch_contrroled_sockets_near_boiler": False,
 }
 
 GROUPS = {

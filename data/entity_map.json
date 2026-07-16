@@ -1467,7 +1467,7 @@
     "room": "Roof",
     "category": "infrastructure",
     "group": "Utilities",
-    "visible": true
+    "visible": false
   },
   {
     "entity_id": "climate.ac_heating_a_c_sauna",
@@ -1687,7 +1687,7 @@
     "room": "Utility Room",
     "category": "infrastructure",
     "group": "Utilities",
-    "visible": true
+    "visible": false
   },
   {
     "entity_id": "light.knx_switch_contrroled_sockets_near_boiler",
@@ -1697,7 +1697,7 @@
     "room": "Utility Room",
     "category": "infrastructure",
     "group": "Utilities",
-    "visible": true
+    "visible": false
   },
   {
     "entity_id": "light.knx_switch_electricity_board_lightstrip",

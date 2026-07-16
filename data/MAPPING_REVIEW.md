@@ -204,13 +204,13 @@ Controllable entities mapped: **184**
 - [Master Bedroom] Master Bedroom Window (shade)  `cover.master_bedroom_master_bedroom_window`
 - [Medium Guest Room] Medium Guest Room Blinds (shade)  `cover.medium_guest_room_medium_guest_room_blinds`
 
-## Utilities (8, 4 hidden)
+## Utilities (8, 7 hidden)
 
 - [Master Bedroom] MBR TV Lift (motorized_furniture)  `light.knx_switch_mbr_tv_lift`
 - [hidden] [Rack] Rack UNIT 109 (infrastructure_climate)  `climate.rack_unit_109`
-- [Roof] Boiler Roof (infrastructure)  `light.knx_switch_boiler_roof`
-- [Utility Room] Boiler 6th Floor (infrastructure)  `light.knx_switch_boiler_6th_floor`
+- [hidden] [Roof] Boiler Roof (infrastructure)  `light.knx_switch_boiler_roof`
+- [hidden] [Utility Room] Boiler 6th Floor (infrastructure)  `light.knx_switch_boiler_6th_floor`
 - [hidden] [Utility Room] Controlled Socket (controlled_socket)  `light.knx_switch_5th_controlled_socket`
-- [Utility Room] Contrroled Sockets near Boiler (infrastructure)  `light.knx_switch_contrroled_sockets_near_boiler`
+- [hidden] [Utility Room] Contrroled Sockets near Boiler (infrastructure)  `light.knx_switch_contrroled_sockets_near_boiler`
 - [hidden] [Utility Room] Electricity board lightstrip (infrastructure)  `light.knx_switch_electricity_board_lightstrip`
 - [hidden] [Utility Room] Stir pump (infrastructure)  `light.knx_switch_stir_pump`

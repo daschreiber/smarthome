@@ -211,6 +211,13 @@ def main():
     out.sort(key=lambda r: (r["room"], r["category"], r["display_name"]))
     with open(os.path.join(ROOT, "data", "entity_map.json"), "w") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
+    # Mirror into the web app so deployments that build only web/ (e.g.
+    # Railway with root directory = web) carry the map with them.
+    web_data = os.path.join(ROOT, "web", "data")
+    if os.path.isdir(os.path.join(ROOT, "web")):
+        os.makedirs(web_data, exist_ok=True)
+        with open(os.path.join(web_data, "entity_map.json"), "w") as f:
+            json.dump(out, f, indent=2, ensure_ascii=False)
 
     groups = {}
     for r in out:

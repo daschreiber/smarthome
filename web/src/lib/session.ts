@@ -15,24 +15,16 @@ function secret(): string {
   return s;
 }
 
+import { anyUsers, getUser, verifyPassword } from "./users";
+
 export function usersConfigured(): boolean {
-  return Boolean(process.env.APP_USERS && process.env.APP_SESSION_SECRET);
+  return Boolean(process.env.APP_SESSION_SECRET) && (anyUsers() || Boolean(process.env.APP_USERS));
 }
 
 export function checkCredentials(email: string, password: string): boolean {
-  const users = (process.env.APP_USERS ?? "").split(",");
-  const norm = email.trim().toLowerCase();
-  for (const u of users) {
-    const idx = u.indexOf(":");
-    if (idx < 1) continue;
-    const uEmail = u.slice(0, idx).trim().toLowerCase();
-    const uPass = u.slice(idx + 1);
-    if (uEmail !== norm) continue;
-    const a = Buffer.from(uPass);
-    const b = Buffer.from(password);
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
-  }
-  return false;
+  const user = getUser(email);
+  if (!user) return false;
+  return verifyPassword(password, user.passwordHash);
 }
 
 function sign(payload: string): string {

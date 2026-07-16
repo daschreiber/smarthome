@@ -188,6 +188,8 @@ export default function Page() {
             {" · "}
             <a href="/activity" style={{ color: "var(--dim)" }}>activity</a>
             {" · "}
+            <a href="/users" style={{ color: "var(--dim)" }}>users</a>
+            {" · "}
             <button
               onClick={() => fetch("/api/auth/logout", { method: "POST" }).then(() => location.reload())}
               style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", padding: 0, cursor: "pointer", textDecoration: "underline" }}
@@ -290,6 +292,8 @@ function Login({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -309,6 +313,49 @@ function Login({ onDone }: { onDone: () => void }) {
       setBusy(false);
     }
   };
+
+  const requestReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/auth/reset-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "request failed");
+      setNote(body.message);
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "request failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (forgot) {
+    return (
+      <form onSubmit={requestReset} style={{ marginTop: "18vh" }}>
+        <h1 className="h-title">Reset password</h1>
+        <p className="h-sub">Enter your email and we&apos;ll get you a reset link.</p>
+        {err && <div className="error-banner">{err}</div>}
+        {note && <p className="h-sub" style={{ color: "var(--accent)" }}>{note}</p>}
+        <div className="appkey" style={{ margin: 0 }}>
+          <input type="email" value={email} placeholder="email" autoComplete="username" onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <button className="scene-pill" disabled={busy || !email} style={{ width: "100%", marginTop: 14, padding: 12 }}>
+          {busy ? "Sending…" : "Send reset link"}
+        </button>
+        <p className="h-sub" style={{ marginTop: 12 }}>
+          <button type="button" onClick={() => { setForgot(false); setNote(null); setErr(null); }}
+            style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
+            Back to sign in
+          </button>
+        </p>
+      </form>
+    );
+  }
 
   return (
     <form onSubmit={submit} style={{ marginTop: "18vh" }}>
@@ -335,6 +382,12 @@ function Login({ onDone }: { onDone: () => void }) {
       <button className="scene-pill" disabled={busy} style={{ width: "100%", marginTop: 14, padding: 12 }}>
         {busy ? "Signing in…" : "Sign in"}
       </button>
+      <p className="h-sub" style={{ marginTop: 12 }}>
+        <button type="button" onClick={() => setForgot(true)}
+          style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", padding: 0, cursor: "pointer", textDecoration: "underline" }}>
+          Forgot password?
+        </button>
+      </p>
     </form>
   );
 }

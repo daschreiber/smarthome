@@ -2,14 +2,15 @@
 """Build the classified entity map (runbook Stage 4->5 bridge).
 
 Reads inventory/entities.json (raw Home Assistant states export) and produces:
-  data/entity_map.json   - per-entity: room, category, mvp flag, display name
+  data/entity_map.json   - per-entity: room, category, app group, display name
   data/MAPPING_REVIEW.md - human-readable review sheet grouped by category
 
 Key insight from the inventory: the Control4 project fronts a KNX bus, and many
 KNX relay channels are exposed as `light` entities although they are actually
 fans, vents, towel rails, boilers, appliance sockets, floor-heating valves,
-scene group-switches, or a TV lift. The MVP app must not present those as
-lights, so classification happens here, in reviewable code.
+scene group-switches, or a TV lift. Nothing is excluded from the app; each
+entity is assigned an app group so consequential loads are organized apart
+from everyday lighting. Classification happens here, in reviewable code.
 
 Usage: python3 tools/build_entity_map.py
 """
@@ -24,7 +25,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOMS = [
     ("daniel's study", "Daniel's Study"), ("daniel study", "Daniel's Study"),
     ("daniella's study", "Daniella's Study"), ("daniella study", "Daniella's Study"),
-    ("master bedroom balcony", "Master Bedroom"), ("mbr balcony", "Master Bedroom"),
+    ("master bedroom balcony", "Master Bedroom Balcony"),
+    ("mbr balcony", "Master Bedroom Balcony"),
     ("master bathroom", "Master Bathroom"), ("master bedroom", "Master Bedroom"),
     ("mbr", "Master Bedroom"), ("master corridor", "Master Corridor"),
     ("guest bathroom+small guest room", "Guest Bathroom"),
@@ -35,30 +37,75 @@ ROOMS = [
     ("downstairs toilet", "Downstairs Toilet"), ("restroom", "Downstairs Toilet"),
     ("left corridor", "Left Corridor"), ("right corridor", "Right Corridor"),
     ("entrance+kitchen", "Entrance"), ("lounge+dining", "Lounge"),
-    ("dining table", "Lounge"), ("dining", "Lounge"),
+    ("dining table", "Dining"), ("dining", "Dining"),
     ("kitchen", "Kitchen"), ("lounge", "Lounge"), ("den", "Den"), ("gym", "Gym"),
     ("sauna", "Sauna"), ("utility", "Utility Room"), ("entrance", "Entrance"),
-    ("landing", "Landing"), ("stairs", "Stairs"), ("hall", "Hall"),
-    ("terrace", "Terrace"), ("bbq", "Terrace"), ("balcony", "Balcony"),
-    ("boiler 6th", "Utility Room"), ("boiler roof", "Roof"), ("roof", "Roof"),
+    ("landing", "Stairs & Landing"), ("stairs", "Stairs & Landing"),
+    ("hall", "Entrance"),
+    ("terrace", "Terrace"), ("bbq", "Terrace"),
+    ("5th balcony", "Balcony (5th)"), ("6th balcony", "Balcony (6th)"),
+    ("balcony", "Balcony (6th)"),
+    ("boiler 6th", "Utility Room"), ("boiler roof", "Utility Room"),
+    ("roof", "Utility Room"),
     ("electricity board", "Utility Room"), ("games closet", "Den"),
-    ("rack", "Rack"), ("all house", "Whole House"), ("all rooms", "Whole House"),
+    ("rack", "Utility Room"), ("all house", "Whole House"), ("all rooms", "Whole House"),
     ("welcome", "Whole House"), ("55\" qled", "Lounge"),
 ]
 
-# (regex on friendly name, category, include in MVP) - first match wins.
+# (regex on friendly name, category) - first match wins. Nothing is excluded:
+# every entity gets an app group; consequential loads live in Utilities/Appliances.
 LIGHT_RULES = [
-    (r"all house|all rooms|main all house|welcome", "scene_switch", True),
-    (r"\bfh\b|- fh -", "floor_heating", False),
-    (r"ac\\\\? ?heat|ac\\ heat|ac.heat (5|6)th", "hvac_master_switch", False),
-    (r"boiler|pump|electricity board", "infrastructure", False),
-    (r"socket", "controlled_socket", False),
-    (r"tv lift", "motorized_furniture", False),
-    (r"\bvent\b|defog", "ventilation", True),
-    (r"towel rail", "towel_rail", True),
-    (r"\bfan\b", "fan", True),
-    (r"טוחן|מדיח|תנור|ברז", "kitchen_appliance", False),
+    (r"all house|all rooms|main all house|welcome", "scene_switch"),
+    (r"\bfh\b|- fh -", "floor_heating"),
+    (r"ac\\\\? ?heat|ac\\ heat|ac.heat (5|6)th", "hvac_master_switch"),
+    (r"boiler|pump|electricity board", "infrastructure"),
+    (r"socket", "controlled_socket"),
+    (r"tv lift", "motorized_furniture"),
+    (r"\bvent\b|defog", "ventilation"),
+    (r"towel rail", "towel_rail"),
+    (r"\bfan\b", "fan"),
+    (r"טוחן|מדיח|תנור|ברז", "kitchen_appliance"),
 ]
+
+# Categories that are behind-the-scenes plumbing: kept in the map but hidden
+# from the app's default view (and hidden in HA). Flip here to resurface.
+HIDDEN_CATEGORIES = {
+    "floor_heating", "kitchen_appliance", "controlled_socket",
+    "hvac_master_switch", "infrastructure_climate",
+}
+VISIBILITY_OVERRIDES = {
+    "light.knx_switch_stir_pump": False,
+    "light.knx_switch_electricity_board_lightstrip": False,
+    # Boilers no longer exist; relays are leftovers from a prior state.
+    "light.knx_switch_boiler_6th_floor": False,
+    "light.knx_switch_boiler_roof": False,
+    "light.knx_switch_contrroled_sockets_near_boiler": False,
+}
+
+GROUPS = {
+    "light_dimmer": "Lighting", "light_switch": "Lighting",
+    "shade": "Shades",
+    "climate_zone": "Climate & Comfort", "floor_heating": "Climate & Comfort",
+    "ventilation": "Climate & Comfort", "towel_rail": "Climate & Comfort",
+    "fan": "Climate & Comfort", "hvac_master_switch": "Climate & Comfort",
+    "infrastructure_climate": "Utilities",
+    "media": "Media", "scene_switch": "Scenes",
+    "kitchen_appliance": "Appliances",
+    "infrastructure": "Utilities", "controlled_socket": "Utilities",
+    "motorized_furniture": "Utilities",
+}
+
+# Owner-confirmed floor layout. Whole House entities carry no floor.
+FLOORS = {
+    "Entrance": 6, "Lounge": 6, "Dining": 6, "Kitchen": 6, "Terrace": 6,
+    "Balcony (6th)": 6, "Master Corridor": 6, "Master Bedroom": 6,
+    "Master Bathroom": 6, "Master Bedroom Balcony": 6, "Utility Room": 6,
+    "Den": 5, "Balcony (5th)": 5, "Gym": 5, "Left Corridor": 5,
+    "Right Corridor": 5, "Daniella's Study": 5, "Small Guest Room": 5,
+    "Large Guest Room": 5, "Medium Guest Room": 5, "Guest Bathroom": 5,
+    "Daniel's Study": 5, "Downstairs Toilet": 5, "Sauna": 5,
+    "Stairs & Landing": 5,
+}
 
 HEBREW_NAMES = {
     "light.knx_switch_brz_mym_khmym_qrym": "Hot/Cold Water Tap",
@@ -72,6 +119,9 @@ HEBREW_NAMES = {
 
 
 ROOM_OVERRIDES = {
+    # shades onto the MBR balcony are inside the master bedroom
+    "cover.master_bedroom_master_bedroom_balcony_left": "Master Bedroom",
+    "cover.master_bedroom_master_bedroom_balcony_right": "Master Bedroom",
     "light.knx_switch_5th_controlled_socket": "Utility Room",
     "light.knx_switch_ac_heat_5th": "Whole House",
     "light.knx_switch_ac_heat_6th": "Whole House",
@@ -109,23 +159,19 @@ def clean_name(name, room):
 
 
 def classify(e):
-    domain, name, low = e["domain"], e["name"], e["name"].lower()
+    domain, low = e["domain"], e["name"].lower()
     if domain == "climate":
-        if "rack" in low:
-            return "infrastructure_climate", False
-        return "climate_zone", True
+        return "infrastructure_climate" if "rack" in low else "climate_zone"
     if domain == "cover":
-        return "shade", True
+        return "shade"
     if domain == "media_player":
-        return "media", True
+        return "media"
     if domain == "light":
-        for pattern, category, mvp in LIGHT_RULES:
+        for pattern, category in LIGHT_RULES:
             if re.search(pattern, low):
-                return category, mvp
-        if "knx_dimmer" in e["entity_id"]:
-            return "light_dimmer", True
-        return "light_switch", True
-    return f"other_{domain}", False
+                return category
+        return "light_dimmer" if "knx_dimmer" in e["entity_id"] else "light_switch"
+    return f"other_{domain}"
 
 
 def main():
@@ -136,7 +182,7 @@ def main():
     for e in entities:
         if e["domain"] not in ("light", "cover", "climate", "media_player"):
             continue
-        category, mvp = classify(e)
+        category = classify(e)
         room = (ROOM_OVERRIDES.get(e["entity_id"])
                 or infer_room(e["name"])
                 or infer_room(e["entity_id"].replace("_", " ")))
@@ -152,8 +198,11 @@ def main():
             "original_name": e["name"],
             "display_name": display,
             "room": room,
+            "floor": FLOORS.get(room),
             "category": category,
-            "mvp": mvp,
+            "group": GROUPS.get(category, "Utilities"),
+            "visible": VISIBILITY_OVERRIDES.get(
+                e["entity_id"], category not in HIDDEN_CATEGORIES),
         }
         out.append(row)
         categories.setdefault(category, []).append(row)
@@ -163,25 +212,34 @@ def main():
     with open(os.path.join(ROOT, "data", "entity_map.json"), "w") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
 
+    groups = {}
+    for r in out:
+        groups.setdefault(r["group"], []).append(r)
+
     lines = ["# Entity Mapping Review Sheet", "",
              "Generated by `tools/build_entity_map.py` from `inventory/entities.json`.",
              "Edit the rules in the script (not this file) and regenerate.", "",
-             f"Controllable entities mapped: **{len(out)}**  ",
-             f"Included in MVP: **{sum(1 for r in out if r['mvp'])}**  ",
-             f"Excluded from MVP: **{sum(1 for r in out if not r['mvp'])}**", ""]
-    for cat in sorted(categories):
-        rows = sorted(categories[cat], key=lambda r: (r["room"], r["display_name"]))
-        flag = "included in MVP" if rows[0]["mvp"] else "EXCLUDED from MVP"
-        lines += [f"## {cat} ({len(rows)}) — {flag}", ""]
-        lines += [f"- [{r['room'] or 'NO ROOM'}] {r['display_name']}  `{r['entity_id']}`"
+             "Every controllable entity is included; the `group` decides which app",
+             "section it appears in. Consequential loads (boilers, ovens, pump, HVAC",
+             "master cutoffs, TV lift) live under Utilities/Appliances and are",
+             "candidates for a confirm-before-run tap in the UI.", "",
+             f"Controllable entities mapped: **{len(out)}**", ""]
+    for grp in sorted(groups):
+        rows = sorted(groups[grp], key=lambda r: (r["room"], r["display_name"]))
+        hidden = sum(1 for r in rows if not r["visible"])
+        lines += [f"## {grp} ({len(rows)}{f', {hidden} hidden' if hidden else ''})", ""]
+        lines += [f"- {'[hidden] ' if not r['visible'] else ''}[{r['room'] or 'NO ROOM'}] "
+                  f"{r['display_name']} ({r['category']})  `{r['entity_id']}`"
                   for r in rows]
         lines.append("")
     with open(os.path.join(ROOT, "data", "MAPPING_REVIEW.md"), "w") as f:
         f.write("\n".join(lines))
 
-    print(f"{len(out)} entities mapped into {len(categories)} categories")
-    for cat in sorted(categories, key=lambda c: -len(categories[c])):
-        print(f"  {cat:24} {len(categories[cat]):3}  mvp={categories[cat][0]['mvp']}")
+    print(f"{len(out)} entities mapped into {len(categories)} categories, {len(groups)} app groups")
+    for grp in sorted(groups, key=lambda g: -len(groups[g])):
+        hid = sum(1 for r in groups[grp] if not r["visible"])
+        print(f"  {grp:20} {len(groups[grp]):3}  hidden={hid}")
+    print(f"visible={sum(1 for r in out if r['visible'])} hidden={sum(1 for r in out if not r['visible'])}")
     missing = [r for r in out if not r["room"]]
     print(f"entities with no inferred room: {len(missing)}")
     for r in missing:

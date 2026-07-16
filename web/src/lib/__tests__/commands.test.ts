@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CommandSchema, assertCommandAllowed, buildServiceCall } from "../commands";
+import { CommandSchema, assertCommandAllowed, buildServiceCall, expectedStates } from "../commands";
 import type { Device } from "../registry";
 
 const dimmer: Device = {
@@ -94,6 +94,21 @@ describe("temperature bounds per kind", () => {
     expect(() => buildServiceCall(sauna, { command: "turn_on" })).toThrow(
       /sauna adapter/,
     );
+  });
+});
+
+describe("expectedStates (read-back verification)", () => {
+  it("proves on/off and cover motion states", () => {
+    expect(expectedStates({ command: "turn_on" })).toEqual(["on"]);
+    expect(expectedStates({ command: "set_brightness", brightnessPct: 30 })).toEqual(["on"]);
+    expect(expectedStates({ command: "turn_off" })).toEqual(["off"]);
+    expect(expectedStates({ command: "open" })).toEqual(["open", "opening"]);
+    expect(expectedStates({ command: "close" })).toEqual(["closed", "closing"]);
+  });
+  it("declines to verify what state comparison cannot prove", () => {
+    expect(expectedStates({ command: "stop" })).toBeNull();
+    expect(expectedStates({ command: "set_position", positionPct: 50 })).toBeNull();
+    expect(expectedStates({ command: "set_temperature", temperature: 22 })).toBeNull();
   });
 });
 

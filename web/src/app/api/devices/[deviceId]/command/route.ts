@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CommandSchema, assertCommandAllowed, buildServiceCall } from "@/lib/commands";
+import { CommandSchema, assertCommandAllowed, buildServiceCall, expectedStates } from "@/lib/commands";
 import { callService, getState } from "@/lib/ha";
 import { getDevice } from "@/lib/registry";
 import { audit } from "@/lib/audit";
@@ -84,10 +84,25 @@ export async function POST(
   try {
     const call = buildServiceCall(device, cmd);
     await callService(call.domain, call.service, call.data);
-    // Brief settle, then read back the real state — never claim success
-    // beyond what HA confirms (PRODUCT_SPEC §6).
-    await new Promise((r) => setTimeout(r, 1200));
-    const after = await getState(device.entityId);
+
+    // Read back until the state matches the command's intent. KNX status
+    // feedback arrives via the Control4 integration's Director polling, so
+    // ~4s is normal (observed 3.7s in commissioning); poll up to 8s.
+    // "confirmed" is ONLY claimed when the observed state proves the command
+    // (PRODUCT_SPEC §6); otherwise the command is reported as "sent".
+    const expected = expectedStates(cmd);
+    const deadline = Date.now() + 8000;
+    let after = null;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 700));
+      after = await getState(device.entityId);
+      if (!expected) break;
+      if (after && expected.includes(after.state)) break;
+      if (Date.now() >= deadline) break;
+    }
+    const verified = !!expected && !!after && expected.includes(after.state);
+    const status = expected ? (verified ? "confirmed" : "sent") : "sent";
+
     const durationMs = Date.now() - started;
     audit({
       ts: new Date().toISOString(),
@@ -97,10 +112,10 @@ export async function POST(
       args,
       ok: true,
       durationMs,
-      resultState: after?.state,
+      resultState: after ? `${after.state}${verified ? "" : " (unverified)"}` : undefined,
     });
     return NextResponse.json({
-      status: "confirmed",
+      status,
       state: after?.state ?? "unknown",
       brightnessPct:
         after && typeof after.attributes.brightness === "number"

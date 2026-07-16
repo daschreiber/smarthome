@@ -1,0 +1,74 @@
+# Conversational Layer and Device Expansion — Spec Addendum
+
+Owner direction (2026-07-16): the app is not only a remote control. It should
+support conversational programming ("turn on all the lights in the kitchen
+tomorrow at 4:00 and off at 8:00"), user-created scenes and automations, and —
+over time — devices beyond the Control4/KNX estate: Samsung Smart TVs, Yale
+Linus lock, the sauna (custom app already exists), and two Roborock vacuums
+(one per floor).
+
+This addendum extends `PRODUCT_SPEC.md`; it does not change the MVP build
+order in `DESIGN_AND_DELIVERY_LOOP.md`.
+
+## Three-layer model
+
+1. **Control** — live state + direct commands (the current MVP).
+2. **Composition** — scenes (state snapshots) and automations
+   (trigger/condition/action rules). Both are first-class Home Assistant
+   objects created via its API; the app manages them, it does not reimplement
+   scheduling or rules.
+3. **Conversation** — an LLM translates natural language into a structured,
+   human-reviewable proposal (scene/automation/command batch). It is applied
+   only after explicit user confirmation in the UI.
+
+## Conversational layer principles
+
+- The LLM proposes; it never executes. Output is a typed JSON proposal the
+  backend validates against the entity map before anything is applied.
+- Proposals are rendered as readable cards (what, when, which rooms/devices)
+  with Create/Cancel. Applied proposals become ordinary HA
+  scenes/automations — visible, editable, deletable in the app afterward.
+- The LLM's vocabulary IS `data/entity_map.json`: rooms, floors, groups,
+  display names. Entities with `visible: false` are excluded from its tool
+  schema entirely.
+- Security-tier actions (locks, later) are never creatable conversationally
+  in the first iteration.
+- The LLM API key is a backend secret beside the HA token; nothing
+  LLM-related runs in the browser. Every conversational creation is audit-
+  logged with the original utterance.
+
+## Consequences for the backend design (apply NOW)
+
+The command layer will have two callers: the UI and the LLM. Therefore
+commands are semantic and room-oriented, not entity passthroughs:
+
+- `lights_on(room | floor | whole_house)`, `set_dimmer(entity, level)`
+- `set_cover(entity | room, position)`
+- `set_climate(room, target, mode)`
+- `activate_scene(scene_id)`
+- `create_scene(name, captured_states | explicit_states)`
+- `create_automation(spec)` / `list/enable/disable/delete_automation`
+- Validation + authorization + audit at this layer, once, for both callers.
+
+## Device expansion path (extends Phase F)
+
+Every future device arrives the same way: HA integration → entities appear →
+rows added to the entity map → app inherits them. New capability types to
+model when they land:
+
+| Device | Integration route | New capabilities |
+| --- | --- | --- |
+| Samsung Smart TVs | Samsung TV / SmartThings (55" QLED already discovered) | power, volume, source |
+| Yale Linus lock | Yale Home cloud or Matter (see Phase F prerequisites) | lock/unlock — security tier: PIN + confirm + audit, excluded from conversation initially |
+| Sauna | wrap the existing custom app's API as a small custom HA integration | on/off, target temp — then schedulable like anything else |
+| Roborock ×2 | official Roborock integration | start/stop/dock, per-floor/room cleaning |
+
+## UI consequences (for the design brainstorm)
+
+- Information architecture gains: an **Automations** section (list, toggle,
+  edit, history) and a **command input** (text now, voice later) that returns
+  proposal cards.
+- Scenes become user-creatable ("capture this room as a scene"), not just
+  the six inherited KNX scene switches.
+- The Settings > audit log distinguishes manual, scheduled, and
+  conversational origins.

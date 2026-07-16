@@ -56,8 +56,18 @@ Initial attempts against `10.0.0.29` failed with `aiohttp ServerDisconnectedErro
 
 Climate is not native Control4: multiple **CoolAutomation "HVAC + UFH Zone"** bridge devices (AC + underfloor heating) are proxied through Control4 and appear in Home Assistant. Several share the default name "AC - Heating" — renaming required in the Stage 5 normalization pass.
 
+### Integration result
+
+**179 devices / 178 entities** created by the Control4 integration. Per-domain breakdown deferred to the Stage 4 inventory export (to be done from a desktop browser).
+
+## 2026-07-16 — First control verified (runbook Stage 3, partial)
+
+**Cover control works end-to-end**: study blinds lowered and raised from the Home Assistant iOS app. Chain proven: phone → Home Assistant Green (`10.0.0.69`) → Core 3 Director (`10.0.0.29`) → physical device, all local. This is the vertical slice the architecture depends on.
+
 ### Follow-ups
 
-- [ ] Record entity counts by domain after integration settles.
-- [ ] Stage 3: safe tests (one light, one shade, one thermostat read).
-- [ ] Stage 5: rename duplicate CoolAutomation zones, assign Areas.
+- [ ] Finish Stage 3 safe tests: one light/dimmer, one thermostat read (verify displayed state matches reality before touching set-points).
+- [ ] Stage 4: full entity inventory export with per-domain counts.
+- [ ] Stage 5: rename duplicate CoolAutomation "AC - Heating" zones, assign Areas.
+- [ ] Enable Home Assistant backups.
+- [ ] DHCP reservations for the Green (`10.0.0.69`) and Core 3 (`10.0.0.29`).

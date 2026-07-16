@@ -1,10 +1,22 @@
 [
   {
+    "entity_id": "light.knx_switch_5th_balcony_lights",
+    "domain": "light",
+    "original_name": "KNX Switch 5th Balcony lights",
+    "display_name": "Balcony lights",
+    "room": "Balcony (5th)",
+    "floor": 5,
+    "category": "light_switch",
+    "group": "Lighting",
+    "visible": true
+  },
+  {
     "entity_id": "light.knx_switch_6th_balcony_plants",
     "domain": "light",
     "original_name": "KNX Switch 6th Balcony Plants",
     "display_name": "Balcony Plants",
-    "room": "Balcony",
+    "room": "Balcony (6th)",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -14,17 +26,8 @@
     "domain": "light",
     "original_name": "KNX Switch 6th Balcony Wall",
     "display_name": "Balcony Wall",
-    "room": "Balcony",
-    "category": "light_switch",
-    "group": "Lighting",
-    "visible": true
-  },
-  {
-    "entity_id": "light.knx_switch_5th_balcony_lights",
-    "domain": "light",
-    "original_name": "KNX Switch 5th Balcony lights",
-    "display_name": "Balcony lights",
-    "room": "Balcony",
+    "room": "Balcony (6th)",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -34,7 +37,8 @@
     "domain": "media_player",
     "original_name": "Balcony",
     "display_name": "Balcony",
-    "room": "Balcony",
+    "room": "Balcony (6th)",
+    "floor": 6,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -44,7 +48,8 @@
     "domain": "media_player",
     "original_name": "Balcony ",
     "display_name": "Balcony",
-    "room": "Balcony",
+    "room": "Balcony (6th)",
+    "floor": 6,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -55,6 +60,7 @@
     "original_name": "AC - Heating A/C Daniel's Study",
     "display_name": "A/C & Heating",
     "room": "Daniel's Study",
+    "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -65,6 +71,7 @@
     "original_name": "KNX Switch 5th - FH - Daniel's Study",
     "display_name": "Floor Heating",
     "room": "Daniel's Study",
+    "floor": 5,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -75,6 +82,7 @@
     "original_name": "KNX Dimmer Daniel Study Strip 1",
     "display_name": "Daniel Study Strip 1",
     "room": "Daniel's Study",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -85,6 +93,7 @@
     "original_name": "KNX Dimmer Daniel Study Strip 2",
     "display_name": "Daniel Study Strip 2",
     "room": "Daniel's Study",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -95,6 +104,7 @@
     "original_name": "KNX Dimmer Daniel Study lights",
     "display_name": "Daniel Study lights",
     "room": "Daniel's Study",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -105,6 +115,7 @@
     "original_name": "KNX Switch Daniel Study Closet led",
     "display_name": "Daniel Study Closet led",
     "room": "Daniel's Study",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -115,6 +126,7 @@
     "original_name": "KNX Switch Daniel Study Desk light",
     "display_name": "Daniel Study Desk light",
     "room": "Daniel's Study",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -125,6 +137,7 @@
     "original_name": "KNX Switch Daniel Study Hidden",
     "display_name": "Daniel Study Hidden",
     "room": "Daniel's Study",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -135,6 +148,7 @@
     "original_name": "Daniel's Study Daniel Study Blinds",
     "display_name": "Daniel's Study Daniel Study Blinds",
     "room": "Daniel's Study",
+    "floor": 5,
     "category": "shade",
     "group": "Shades",
     "visible": true
@@ -145,6 +159,7 @@
     "original_name": "AC - Heating A/C Daniella's Study",
     "display_name": "A/C & Heating",
     "room": "Daniella's Study",
+    "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -155,6 +170,7 @@
     "original_name": "KNX Switch 5th - FH - Daniella's Study",
     "display_name": "Floor Heating",
     "room": "Daniella's Study",
+    "floor": 5,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -165,6 +181,7 @@
     "original_name": "KNX Dimmer Daniella Study Spots",
     "display_name": "Daniella Study Spots",
     "room": "Daniella's Study",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -175,6 +192,7 @@
     "original_name": "KNX Switch Daniella Study Desk",
     "display_name": "Daniella Study Desk",
     "room": "Daniella's Study",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -185,6 +203,7 @@
     "original_name": "KNX Switch Daniella Study Hidden",
     "display_name": "Daniella Study Hidden",
     "room": "Daniella's Study",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -195,6 +214,7 @@
     "original_name": "KNX Switch Daniella Study Shelfs led",
     "display_name": "Daniella Study Shelfs led",
     "room": "Daniella's Study",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -205,6 +225,7 @@
     "original_name": "KNX Switch Daniella Study Strip",
     "display_name": "Daniella Study Strip",
     "room": "Daniella's Study",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -215,6 +236,7 @@
     "original_name": "KNX Switch Daniella Study lights",
     "display_name": "Daniella Study lights",
     "room": "Daniella's Study",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -225,6 +247,7 @@
     "original_name": "Daniella's Study Daniella Study Blinds",
     "display_name": "Daniella's Study Daniella Study Blinds",
     "room": "Daniella's Study",
+    "floor": 5,
     "category": "shade",
     "group": "Shades",
     "visible": true
@@ -235,6 +258,7 @@
     "original_name": "AC - Heating A/C Den",
     "display_name": "A/C & Heating",
     "room": "Den",
+    "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -245,6 +269,7 @@
     "original_name": "KNX Switch 5th - FH - Den",
     "display_name": "Floor Heating",
     "room": "Den",
+    "floor": 5,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -255,6 +280,7 @@
     "original_name": "KNX Dimmer Den Center Spots",
     "display_name": "Den Center Spots",
     "room": "Den",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -265,6 +291,7 @@
     "original_name": "KNX Dimmer Den Sides Spots",
     "display_name": "Den Sides Spots",
     "room": "Den",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -275,6 +302,7 @@
     "original_name": "KNX Dimmer Den Strip",
     "display_name": "Den Strip",
     "room": "Den",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -285,6 +313,7 @@
     "original_name": "KNX Dimmer Den lights",
     "display_name": "Den lights",
     "room": "Den",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -295,6 +324,7 @@
     "original_name": "KNX Switch Den Hidden",
     "display_name": "Den Hidden",
     "room": "Den",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -305,6 +335,7 @@
     "original_name": "KNX Switch Games Closet lightstrip",
     "display_name": "Games Closet lightstrip",
     "room": "Den",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -315,6 +346,7 @@
     "original_name": "Den",
     "display_name": "Den",
     "room": "Den",
+    "floor": 5,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -325,8 +357,20 @@
     "original_name": "Den Den Blinds",
     "display_name": "Den Blinds",
     "room": "Den",
+    "floor": 5,
     "category": "shade",
     "group": "Shades",
+    "visible": true
+  },
+  {
+    "entity_id": "light.knx_switch_dining_table",
+    "domain": "light",
+    "original_name": "KNX Switch Dining Table",
+    "display_name": "Dining Table",
+    "room": "Dining",
+    "floor": 6,
+    "category": "light_switch",
+    "group": "Lighting",
     "visible": true
   },
   {
@@ -335,6 +379,7 @@
     "original_name": "KNX Switch 5th - FH - Downstairs toilet",
     "display_name": "Floor Heating",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -345,6 +390,7 @@
     "original_name": "KNX Dimmer Restroom Spots",
     "display_name": "Restroom Spots",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -355,6 +401,7 @@
     "original_name": "KNX Switch Downstairs Toilet Hidden",
     "display_name": "Downstairs Toilet Hidden",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -365,6 +412,7 @@
     "original_name": "KNX Switch Downstairs Toilet Mirror",
     "display_name": "Downstairs Toilet Mirror",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -375,6 +423,7 @@
     "original_name": "KNX Switch Downstairs Toilet Restroom lights",
     "display_name": "Downstairs Toilet Restroom lights",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -385,6 +434,7 @@
     "original_name": "KNX Switch Downstairs Toilet Spots 1",
     "display_name": "Downstairs Toilet Spots 1",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -395,6 +445,7 @@
     "original_name": "KNX Switch Downstairs Toilet Spots 2",
     "display_name": "Downstairs Toilet Spots 2",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -405,6 +456,7 @@
     "original_name": "KNX Switch Downstairs Toilet Defog",
     "display_name": "Downstairs Toilet Defog",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "ventilation",
     "group": "Climate & Comfort",
     "visible": true
@@ -415,6 +467,7 @@
     "original_name": "KNX Switch Downstairs Toilet Vent",
     "display_name": "Downstairs Toilet Vent",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "ventilation",
     "group": "Climate & Comfort",
     "visible": true
@@ -425,6 +478,7 @@
     "original_name": "KNX Switch Restroom Vent",
     "display_name": "Restroom Vent",
     "room": "Downstairs Toilet",
+    "floor": 5,
     "category": "ventilation",
     "group": "Climate & Comfort",
     "visible": true
@@ -435,6 +489,7 @@
     "original_name": "KNX Switch 6th - FH - Entrance+Kitchen",
     "display_name": "Floor Heating",
     "room": "Entrance",
+    "floor": 6,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -445,6 +500,18 @@
     "original_name": "KNX Dimmer Entrance Strip",
     "display_name": "Entrance Strip",
     "room": "Entrance",
+    "floor": 6,
+    "category": "light_dimmer",
+    "group": "Lighting",
+    "visible": true
+  },
+  {
+    "entity_id": "light.knx_dimmer_hall_spots",
+    "domain": "light",
+    "original_name": "KNX Dimmer Hall Spots",
+    "display_name": "Hall Spots",
+    "room": "Entrance",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -455,6 +522,7 @@
     "original_name": "KNX Switch Entrance Night led",
     "display_name": "Entrance Night led",
     "room": "Entrance",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -465,6 +533,7 @@
     "original_name": "KNX Switch 5th - FH - Guest Bathroom+Small Guest room",
     "display_name": "Floor Heating",
     "room": "Guest Bathroom",
+    "floor": 5,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -475,6 +544,7 @@
     "original_name": "KNX Switch Guest Bathroom Mirror",
     "display_name": "Guest Bathroom Mirror",
     "room": "Guest Bathroom",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -485,6 +555,7 @@
     "original_name": "KNX Switch Guest Bathroom Spots 1",
     "display_name": "Guest Bathroom Spots 1",
     "room": "Guest Bathroom",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -495,6 +566,7 @@
     "original_name": "KNX Switch Guest Bathroom Spots 2",
     "display_name": "Guest Bathroom Spots 2",
     "room": "Guest Bathroom",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -505,6 +577,7 @@
     "original_name": "KNX Switch Guest Bathroom Strip",
     "display_name": "Guest Bathroom Strip",
     "room": "Guest Bathroom",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -515,6 +588,7 @@
     "original_name": "KNX Switch Guest Bathroom lights",
     "display_name": "Guest Bathroom lights",
     "room": "Guest Bathroom",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -525,6 +599,7 @@
     "original_name": "Guest Bathroom Guest Bathroom Blinds",
     "display_name": "Guest Bathroom Blinds",
     "room": "Guest Bathroom",
+    "floor": 5,
     "category": "shade",
     "group": "Shades",
     "visible": true
@@ -535,6 +610,7 @@
     "original_name": "KNX Switch Guest Bathroom Towel Rail",
     "display_name": "Guest Bathroom Towel Rail",
     "room": "Guest Bathroom",
+    "floor": 5,
     "category": "towel_rail",
     "group": "Climate & Comfort",
     "visible": true
@@ -545,6 +621,7 @@
     "original_name": "KNX Switch Guest Bathroom Vent",
     "display_name": "Guest Bathroom Vent",
     "room": "Guest Bathroom",
+    "floor": 5,
     "category": "ventilation",
     "group": "Climate & Comfort",
     "visible": true
@@ -555,6 +632,7 @@
     "original_name": "AC - Heating A/C Gym",
     "display_name": "A/C & Heating",
     "room": "Gym",
+    "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -565,6 +643,7 @@
     "original_name": "KNX Switch 5th - FH - Gym",
     "display_name": "Floor Heating",
     "room": "Gym",
+    "floor": 5,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -575,6 +654,7 @@
     "original_name": "KNX Dimmer Gym lights",
     "display_name": "Gym lights",
     "room": "Gym",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -585,18 +665,9 @@
     "original_name": "Gym",
     "display_name": "Gym",
     "room": "Gym",
+    "floor": 5,
     "category": "media",
     "group": "Media",
-    "visible": true
-  },
-  {
-    "entity_id": "light.knx_dimmer_hall_spots",
-    "domain": "light",
-    "original_name": "KNX Dimmer Hall Spots",
-    "display_name": "Hall Spots",
-    "room": "Hall",
-    "category": "light_dimmer",
-    "group": "Lighting",
     "visible": true
   },
   {
@@ -605,6 +676,7 @@
     "original_name": "AC - Heating A/C Kitchen",
     "display_name": "A/C & Heating",
     "room": "Kitchen",
+    "floor": 6,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -615,6 +687,7 @@
     "original_name": "KNX Switch מדיח חלבי",
     "display_name": "Dishwasher (Dairy)",
     "room": "Kitchen",
+    "floor": 6,
     "category": "kitchen_appliance",
     "group": "Appliances",
     "visible": false
@@ -625,6 +698,7 @@
     "original_name": "KNX Switch טוחן חלבי",
     "display_name": "Garbage Disposal (Dairy)",
     "room": "Kitchen",
+    "floor": 6,
     "category": "kitchen_appliance",
     "group": "Appliances",
     "visible": false
@@ -635,6 +709,7 @@
     "original_name": "KNX Switch טוחן בשרי",
     "display_name": "Garbage Disposal (Meat)",
     "room": "Kitchen",
+    "floor": 6,
     "category": "kitchen_appliance",
     "group": "Appliances",
     "visible": false
@@ -645,6 +720,7 @@
     "original_name": "KNX Switch ברז מים חמים\\קרים",
     "display_name": "Hot/Cold Water Tap",
     "room": "Kitchen",
+    "floor": 6,
     "category": "kitchen_appliance",
     "group": "Appliances",
     "visible": false
@@ -655,6 +731,7 @@
     "original_name": "KNX Switch תנור מרכז",
     "display_name": "Oven (Center)",
     "room": "Kitchen",
+    "floor": 6,
     "category": "kitchen_appliance",
     "group": "Appliances",
     "visible": false
@@ -665,6 +742,7 @@
     "original_name": "KNX Switch תנור תחתון",
     "display_name": "Oven (Lower)",
     "room": "Kitchen",
+    "floor": 6,
     "category": "kitchen_appliance",
     "group": "Appliances",
     "visible": false
@@ -675,6 +753,7 @@
     "original_name": "KNX Switch תנור עליון",
     "display_name": "Oven (Upper)",
     "room": "Kitchen",
+    "floor": 6,
     "category": "kitchen_appliance",
     "group": "Appliances",
     "visible": false
@@ -685,6 +764,7 @@
     "original_name": "KNX Dimmer Kitchen Ceiling",
     "display_name": "Kitchen Ceiling",
     "room": "Kitchen",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -695,6 +775,7 @@
     "original_name": "KNX Dimmer Kitchen Island",
     "display_name": "Kitchen Island",
     "room": "Kitchen",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -705,6 +786,7 @@
     "original_name": "KNX Dimmer Kitchen Strip 1",
     "display_name": "Kitchen Strip 1",
     "room": "Kitchen",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -715,6 +797,7 @@
     "original_name": "KNX Dimmer Kitchen Strip 2",
     "display_name": "Kitchen Strip 2",
     "room": "Kitchen",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -725,6 +808,7 @@
     "original_name": "KNX Switch Kitchen Hidden",
     "display_name": "Kitchen Hidden",
     "room": "Kitchen",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -735,6 +819,7 @@
     "original_name": "KNX Switch Kitchen Sink led",
     "display_name": "Kitchen Sink led",
     "room": "Kitchen",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -745,6 +830,7 @@
     "original_name": "Kitchen",
     "display_name": "Kitchen",
     "room": "Kitchen",
+    "floor": 6,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -755,6 +841,7 @@
     "original_name": "Kitchen Kitchen Left",
     "display_name": "Kitchen Left",
     "room": "Kitchen",
+    "floor": 6,
     "category": "shade",
     "group": "Shades",
     "visible": true
@@ -765,18 +852,9 @@
     "original_name": "Kitchen Kitchen Right",
     "display_name": "Kitchen Right",
     "room": "Kitchen",
+    "floor": 6,
     "category": "shade",
     "group": "Shades",
-    "visible": true
-  },
-  {
-    "entity_id": "light.knx_dimmer_landing_lights",
-    "domain": "light",
-    "original_name": "KNX Dimmer Landing lights",
-    "display_name": "Landing lights",
-    "room": "Landing",
-    "category": "light_dimmer",
-    "group": "Lighting",
     "visible": true
   },
   {
@@ -785,6 +863,7 @@
     "original_name": "AC - Heating A/C Large Guest Room",
     "display_name": "A/C & Heating",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -795,6 +874,7 @@
     "original_name": "KNX Switch Large Guest Room Fan",
     "display_name": "Large Guest Room Fan",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "fan",
     "group": "Climate & Comfort",
     "visible": true
@@ -805,6 +885,7 @@
     "original_name": "KNX Switch 5th - FH - Large Guest room",
     "display_name": "Floor Heating",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -815,6 +896,7 @@
     "original_name": "KNX Dimmer Large Guest Room Reading Right",
     "display_name": "Large Guest Room Reading Right",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -825,6 +907,7 @@
     "original_name": "KNX Dimmer Large Guest Room Spots",
     "display_name": "Large Guest Room Spots",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -835,6 +918,7 @@
     "original_name": "KNX Dimmer Large Guest Room Strip",
     "display_name": "Large Guest Room Strip",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -845,6 +929,7 @@
     "original_name": "KNX Dimmer Large Guest Room  lights",
     "display_name": "Large Guest Room lights",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -855,6 +940,7 @@
     "original_name": "KNX Switch Large Guest Room Closets Lightstrip",
     "display_name": "Large Guest Room Closets Lightstrip",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -865,6 +951,7 @@
     "original_name": "KNX Switch Large Guest Room Hidden",
     "display_name": "Large Guest Room Hidden",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -875,6 +962,7 @@
     "original_name": "KNX Switch Large Guest Room Reading Left",
     "display_name": "Large Guest Room Reading Left",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -885,6 +973,7 @@
     "original_name": "Large Guest Room Large Guest Room Blinds",
     "display_name": "Large Guest Room Blinds",
     "room": "Large Guest Room",
+    "floor": 5,
     "category": "shade",
     "group": "Shades",
     "visible": true
@@ -895,6 +984,7 @@
     "original_name": "KNX Dimmer Left Corridor lights",
     "display_name": "Left Corridor lights",
     "room": "Left Corridor",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -905,6 +995,7 @@
     "original_name": "KNX Switch Left CorridorNight led",
     "display_name": "Left CorridorNight led",
     "room": "Left Corridor",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -915,6 +1006,7 @@
     "original_name": "AC - Heating A/C Lounge",
     "display_name": "A/C & Heating",
     "room": "Lounge",
+    "floor": 6,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -925,6 +1017,7 @@
     "original_name": "KNX Switch 6th - FH - Lounge+Dining",
     "display_name": "Floor Heating",
     "room": "Lounge",
+    "floor": 6,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -935,6 +1028,7 @@
     "original_name": "KNX Dimmer Lounge Cove",
     "display_name": "Lounge Cove",
     "room": "Lounge",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -945,6 +1039,7 @@
     "original_name": "KNX Dimmer Lounge Spots",
     "display_name": "Lounge Spots",
     "room": "Lounge",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -955,17 +1050,8 @@
     "original_name": "KNX Dimmer Lounge Strip",
     "display_name": "Lounge Strip",
     "room": "Lounge",
+    "floor": 6,
     "category": "light_dimmer",
-    "group": "Lighting",
-    "visible": true
-  },
-  {
-    "entity_id": "light.knx_switch_dining_table",
-    "domain": "light",
-    "original_name": "KNX Switch Dining Table",
-    "display_name": "Dining Table",
-    "room": "Lounge",
-    "category": "light_switch",
     "group": "Lighting",
     "visible": true
   },
@@ -975,6 +1061,7 @@
     "original_name": "KNX Switch Lounge Closet Led",
     "display_name": "Lounge Closet Led",
     "room": "Lounge",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -985,6 +1072,7 @@
     "original_name": "KNX Switch Lounge Hidden",
     "display_name": "Lounge Hidden",
     "room": "Lounge",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -995,6 +1083,7 @@
     "original_name": "KNX Switch Lounge TV Led",
     "display_name": "Lounge TV Led",
     "room": "Lounge",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1005,6 +1094,7 @@
     "original_name": "55\" QLED",
     "display_name": "55\" QLED",
     "room": "Lounge",
+    "floor": 6,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -1015,6 +1105,7 @@
     "original_name": "Lounge",
     "display_name": "Lounge",
     "room": "Lounge",
+    "floor": 6,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -1025,6 +1116,7 @@
     "original_name": "Lounge Lounge Left",
     "display_name": "Lounge Left",
     "room": "Lounge",
+    "floor": 6,
     "category": "shade",
     "group": "Shades",
     "visible": true
@@ -1035,6 +1127,7 @@
     "original_name": "Lounge Lounge Right",
     "display_name": "Lounge Right",
     "room": "Lounge",
+    "floor": 6,
     "category": "shade",
     "group": "Shades",
     "visible": true
@@ -1045,6 +1138,7 @@
     "original_name": "KNX Switch 6th - FH - Master Bathroom",
     "display_name": "Floor Heating",
     "room": "Master Bathroom",
+    "floor": 6,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -1055,6 +1149,7 @@
     "original_name": "KNX Dimmer Master Bathroom Strip",
     "display_name": "Master Bathroom Strip",
     "room": "Master Bathroom",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1065,6 +1160,7 @@
     "original_name": "KNX Switch Master Bathroom Hidden",
     "display_name": "Master Bathroom Hidden",
     "room": "Master Bathroom",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1075,6 +1171,7 @@
     "original_name": "KNX Switch Master Bathroom Lights",
     "display_name": "Master Bathroom Lights",
     "room": "Master Bathroom",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1085,6 +1182,7 @@
     "original_name": "KNX Switch Master Bathroom Mirror",
     "display_name": "Master Bathroom Mirror",
     "room": "Master Bathroom",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1095,6 +1193,7 @@
     "original_name": "KNX Switch Master Bathroom Night Light",
     "display_name": "Master Bathroom Night Light",
     "room": "Master Bathroom",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1105,6 +1204,7 @@
     "original_name": "Master Bathroom",
     "display_name": "Master Bathroom",
     "room": "Master Bathroom",
+    "floor": 6,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -1115,6 +1215,7 @@
     "original_name": "KNX Switch Master Bathroom Towel Rail",
     "display_name": "Master Bathroom Towel Rail",
     "room": "Master Bathroom",
+    "floor": 6,
     "category": "towel_rail",
     "group": "Climate & Comfort",
     "visible": true
@@ -1125,6 +1226,7 @@
     "original_name": "KNX Switch Master Bathroom Vent",
     "display_name": "Master Bathroom Vent",
     "room": "Master Bathroom",
+    "floor": 6,
     "category": "ventilation",
     "group": "Climate & Comfort",
     "visible": true
@@ -1135,6 +1237,7 @@
     "original_name": "AC - Heating A/C Master Bedroom",
     "display_name": "A/C & Heating",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -1145,6 +1248,7 @@
     "original_name": "KNX Switch 6th - FH - MBR",
     "display_name": "Floor Heating",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -1155,6 +1259,7 @@
     "original_name": "KNX Dimmer Master Bedroom Lights",
     "display_name": "Master Bedroom Lights",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1165,6 +1270,7 @@
     "original_name": "KNX Dimmer Master Bedroom Spots",
     "display_name": "Master Bedroom Spots",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1175,6 +1281,7 @@
     "original_name": "KNX Dimmer Master Bedroom Strip",
     "display_name": "Master Bedroom Strip",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1185,6 +1292,7 @@
     "original_name": "KNX Switch Master Bedroom Closets Lightstrip",
     "display_name": "Master Bedroom Closets Lightstrip",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1195,6 +1303,7 @@
     "original_name": "KNX Switch Master Bedroom Closets Strip",
     "display_name": "Master Bedroom Closets Strip",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1205,6 +1314,7 @@
     "original_name": "KNX Switch Master Bedroom Hidden",
     "display_name": "Master Bedroom Hidden",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1215,6 +1325,7 @@
     "original_name": "KNX Switch Master Bedroom Read Left",
     "display_name": "Master Bedroom Read Left",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1225,18 +1336,9 @@
     "original_name": "KNX Switch Master Bedroom Read Right",
     "display_name": "Master Bedroom Read Right",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
-    "visible": true
-  },
-  {
-    "entity_id": "media_player.mbr_balcony",
-    "domain": "media_player",
-    "original_name": "MBR balcony",
-    "display_name": "MBR balcony",
-    "room": "Master Bedroom",
-    "category": "media",
-    "group": "Media",
     "visible": true
   },
   {
@@ -1245,16 +1347,7 @@
     "original_name": "Master Bedroom",
     "display_name": "Master Bedroom",
     "room": "Master Bedroom",
-    "category": "media",
-    "group": "Media",
-    "visible": true
-  },
-  {
-    "entity_id": "media_player.master_bedroom_balcony",
-    "domain": "media_player",
-    "original_name": "Master Bedroom Balcony",
-    "display_name": "Master Bedroom Balcony",
-    "room": "Master Bedroom",
+    "floor": 6,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -1265,6 +1358,7 @@
     "original_name": "KNX Switch MBR TV Lift",
     "display_name": "MBR TV Lift",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "motorized_furniture",
     "group": "Utilities",
     "visible": true
@@ -1275,6 +1369,7 @@
     "original_name": "Master Bedroom Master Bedroom Balcony Left",
     "display_name": "Master Bedroom Balcony Left",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "shade",
     "group": "Shades",
     "visible": true
@@ -1285,6 +1380,7 @@
     "original_name": "Master Bedroom Master Bedroom Balcony Right",
     "display_name": "Master Bedroom Balcony Right",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "shade",
     "group": "Shades",
     "visible": true
@@ -1295,8 +1391,31 @@
     "original_name": "Master Bedroom Master Bedroom Window",
     "display_name": "Master Bedroom Window",
     "room": "Master Bedroom",
+    "floor": 6,
     "category": "shade",
     "group": "Shades",
+    "visible": true
+  },
+  {
+    "entity_id": "media_player.mbr_balcony",
+    "domain": "media_player",
+    "original_name": "MBR balcony",
+    "display_name": "MBR balcony",
+    "room": "Master Bedroom Balcony",
+    "floor": 6,
+    "category": "media",
+    "group": "Media",
+    "visible": true
+  },
+  {
+    "entity_id": "media_player.master_bedroom_balcony",
+    "domain": "media_player",
+    "original_name": "Master Bedroom Balcony",
+    "display_name": "Master Bedroom Balcony",
+    "room": "Master Bedroom Balcony",
+    "floor": 6,
+    "category": "media",
+    "group": "Media",
     "visible": true
   },
   {
@@ -1305,6 +1424,7 @@
     "original_name": "KNX Dimmer Master Corridor Lights",
     "display_name": "Master Corridor Lights",
     "room": "Master Corridor",
+    "floor": 6,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1315,6 +1435,7 @@
     "original_name": "KNX Switch Master Corridor Closets Lightstrip",
     "display_name": "Master Corridor Closets Lightstrip",
     "room": "Master Corridor",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1325,6 +1446,7 @@
     "original_name": "AC - Heating A/C Medium Guest Room",
     "display_name": "A/C & Heating",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -1335,6 +1457,7 @@
     "original_name": "KNX Switch Medium Guest Room Fan",
     "display_name": "Medium Guest Room Fan",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "fan",
     "group": "Climate & Comfort",
     "visible": true
@@ -1345,6 +1468,7 @@
     "original_name": "KNX Switch 5th - FH - Medium Guest room",
     "display_name": "Floor Heating",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -1355,6 +1479,7 @@
     "original_name": "KNX Dimmer Medium Guest Room Spots",
     "display_name": "Medium Guest Room Spots",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1365,6 +1490,7 @@
     "original_name": "KNX Dimmer Medium Guest Room Strip",
     "display_name": "Medium Guest Room Strip",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1375,6 +1501,7 @@
     "original_name": "KNX Switch Medium Guest Room Closets Lightstrip",
     "display_name": "Medium Guest Room Closets Lightstrip",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1385,6 +1512,7 @@
     "original_name": "KNX Switch Medium Guest Room Hidden",
     "display_name": "Medium Guest Room Hidden",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1395,6 +1523,7 @@
     "original_name": "KNX Switch Medium Guest Room Reading Left",
     "display_name": "Medium Guest Room Reading Left",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1405,6 +1534,7 @@
     "original_name": "KNX Switch Medium Guest Room Reading Right",
     "display_name": "Medium Guest Room Reading Right",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1415,6 +1545,7 @@
     "original_name": "KNX Switch Medium Guest Room lights",
     "display_name": "Medium Guest Room lights",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1425,19 +1556,10 @@
     "original_name": "Medium Guest Room Medium Guest Room Blinds",
     "display_name": "Medium Guest Room Blinds",
     "room": "Medium Guest Room",
+    "floor": 5,
     "category": "shade",
     "group": "Shades",
     "visible": true
-  },
-  {
-    "entity_id": "climate.rack_unit_109",
-    "domain": "climate",
-    "original_name": "Rack UNIT 109",
-    "display_name": "Rack UNIT 109",
-    "room": "Rack",
-    "category": "infrastructure_climate",
-    "group": "Utilities",
-    "visible": false
   },
   {
     "entity_id": "light.knx_dimmer_right_corridor_lights",
@@ -1445,6 +1567,7 @@
     "original_name": "KNX Dimmer Right Corridor lights",
     "display_name": "Right Corridor lights",
     "room": "Right Corridor",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1455,19 +1578,10 @@
     "original_name": "KNX Switch Right Corridor Night led",
     "display_name": "Right Corridor Night led",
     "room": "Right Corridor",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
-  },
-  {
-    "entity_id": "light.knx_switch_boiler_roof",
-    "domain": "light",
-    "original_name": "KNX Switch Boiler Roof",
-    "display_name": "Boiler Roof",
-    "room": "Roof",
-    "category": "infrastructure",
-    "group": "Utilities",
-    "visible": false
   },
   {
     "entity_id": "climate.ac_heating_a_c_sauna",
@@ -1475,6 +1589,7 @@
     "original_name": "AC - Heating A/C Sauna",
     "display_name": "A/C & Heating",
     "room": "Sauna",
+    "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -1485,6 +1600,7 @@
     "original_name": "KNX Switch 5th - FH - Sauna",
     "display_name": "Floor Heating",
     "room": "Sauna",
+    "floor": 5,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -1495,6 +1611,7 @@
     "original_name": "KNX Dimmer Sauna Spots",
     "display_name": "Sauna Spots",
     "room": "Sauna",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1505,6 +1622,7 @@
     "original_name": "Sauna ",
     "display_name": "Sauna",
     "room": "Sauna",
+    "floor": 5,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -1515,6 +1633,7 @@
     "original_name": "AC - Heating A/C Small Guset Room",
     "display_name": "A/C & Heating",
     "room": "Small Guest Room",
+    "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -1525,6 +1644,7 @@
     "original_name": "KNX Switch Small Guest Room Fan",
     "display_name": "Small Guest Room Fan",
     "room": "Small Guest Room",
+    "floor": 5,
     "category": "fan",
     "group": "Climate & Comfort",
     "visible": true
@@ -1535,6 +1655,7 @@
     "original_name": "KNX Dimmer Small Guest Room Spots",
     "display_name": "Small Guest Room Spots",
     "room": "Small Guest Room",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1545,6 +1666,7 @@
     "original_name": "KNX Dimmer Small Guest Room Strip",
     "display_name": "Small Guest Room Strip",
     "room": "Small Guest Room",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1555,6 +1677,7 @@
     "original_name": "KNX Dimmer Small Guest Room  lights",
     "display_name": "Small Guest Room lights",
     "room": "Small Guest Room",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1565,6 +1688,7 @@
     "original_name": "KNX Switch Small Guest Room Closets Lightstrip",
     "display_name": "Small Guest Room Closets Lightstrip",
     "room": "Small Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1575,6 +1699,7 @@
     "original_name": "KNX Switch Small Guest Room Reading light",
     "display_name": "Small Guest Room Reading light",
     "room": "Small Guest Room",
+    "floor": 5,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1585,7 +1710,19 @@
     "original_name": "KNX Switch Small Guest RoomHidden",
     "display_name": "Small Guest RoomHidden",
     "room": "Small Guest Room",
+    "floor": 5,
     "category": "light_switch",
+    "group": "Lighting",
+    "visible": true
+  },
+  {
+    "entity_id": "light.knx_dimmer_landing_lights",
+    "domain": "light",
+    "original_name": "KNX Dimmer Landing lights",
+    "display_name": "Landing lights",
+    "room": "Stairs & Landing",
+    "floor": 5,
+    "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
   },
@@ -1594,7 +1731,8 @@
     "domain": "light",
     "original_name": "KNX Dimmer Stairs",
     "display_name": "Stairs",
-    "room": "Stairs",
+    "room": "Stairs & Landing",
+    "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
     "visible": true
@@ -1605,6 +1743,7 @@
     "original_name": "KNX Switch Terrace Fan",
     "display_name": "Terrace Fan",
     "room": "Terrace",
+    "floor": 6,
     "category": "fan",
     "group": "Climate & Comfort",
     "visible": true
@@ -1615,6 +1754,7 @@
     "original_name": "KNX Switch Terrace Heating",
     "display_name": "Terrace Heating",
     "room": "Terrace",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1625,6 +1765,7 @@
     "original_name": "KNX Switch Terrace Lights",
     "display_name": "Terrace Lights",
     "room": "Terrace",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1635,6 +1776,7 @@
     "original_name": "BBQ speaker",
     "display_name": "BBQ speaker",
     "room": "Terrace",
+    "floor": 6,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -1645,6 +1787,7 @@
     "original_name": "Terrace",
     "display_name": "Terrace",
     "room": "Terrace",
+    "floor": 6,
     "category": "media",
     "group": "Media",
     "visible": true
@@ -1655,6 +1798,7 @@
     "original_name": "AC - Heating A/C Utility Room",
     "display_name": "A/C & Heating",
     "room": "Utility Room",
+    "floor": 6,
     "category": "climate_zone",
     "group": "Climate & Comfort",
     "visible": true
@@ -1665,6 +1809,7 @@
     "original_name": "KNX Switch 5th Controlled Socket",
     "display_name": "Controlled Socket",
     "room": "Utility Room",
+    "floor": 6,
     "category": "controlled_socket",
     "group": "Utilities",
     "visible": false
@@ -1675,6 +1820,7 @@
     "original_name": "KNX Switch 6th - FH - Utility",
     "display_name": "Floor Heating",
     "room": "Utility Room",
+    "floor": 6,
     "category": "floor_heating",
     "group": "Climate & Comfort",
     "visible": false
@@ -1685,6 +1831,18 @@
     "original_name": "KNX Switch Boiler 6th Floor",
     "display_name": "Boiler 6th Floor",
     "room": "Utility Room",
+    "floor": 6,
+    "category": "infrastructure",
+    "group": "Utilities",
+    "visible": false
+  },
+  {
+    "entity_id": "light.knx_switch_boiler_roof",
+    "domain": "light",
+    "original_name": "KNX Switch Boiler Roof",
+    "display_name": "Boiler Roof",
+    "room": "Utility Room",
+    "floor": 6,
     "category": "infrastructure",
     "group": "Utilities",
     "visible": false
@@ -1695,6 +1853,7 @@
     "original_name": "KNX Switch Contrroled Sockets near Boiler",
     "display_name": "Contrroled Sockets near Boiler",
     "room": "Utility Room",
+    "floor": 6,
     "category": "infrastructure",
     "group": "Utilities",
     "visible": false
@@ -1705,6 +1864,7 @@
     "original_name": "KNX Switch Electricity board lightstrip",
     "display_name": "Electricity board lightstrip",
     "room": "Utility Room",
+    "floor": 6,
     "category": "infrastructure",
     "group": "Utilities",
     "visible": false
@@ -1715,7 +1875,19 @@
     "original_name": "KNX Switch Stir pump",
     "display_name": "Stir pump",
     "room": "Utility Room",
+    "floor": 6,
     "category": "infrastructure",
+    "group": "Utilities",
+    "visible": false
+  },
+  {
+    "entity_id": "climate.rack_unit_109",
+    "domain": "climate",
+    "original_name": "Rack UNIT 109",
+    "display_name": "Rack UNIT 109",
+    "room": "Utility Room",
+    "floor": 6,
+    "category": "infrastructure_climate",
     "group": "Utilities",
     "visible": false
   },
@@ -1725,6 +1897,7 @@
     "original_name": "KNX Switch Utility Room Hall",
     "display_name": "Utility Room Hall",
     "room": "Utility Room",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1735,6 +1908,7 @@
     "original_name": "KNX Switch Utility Room Lights",
     "display_name": "Utility Room Lights",
     "room": "Utility Room",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1745,6 +1919,7 @@
     "original_name": "KNX Switch Utility Room Spot",
     "display_name": "Utility Room Spot",
     "room": "Utility Room",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1755,6 +1930,7 @@
     "original_name": "KNX Switch Utility Room Strip",
     "display_name": "Utility Room Strip",
     "room": "Utility Room",
+    "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
@@ -1765,6 +1941,7 @@
     "original_name": "KNX Switch AC\\ HEAT 5TH",
     "display_name": "AC\\ HEAT 5TH",
     "room": "Whole House",
+    "floor": null,
     "category": "hvac_master_switch",
     "group": "Climate & Comfort",
     "visible": false
@@ -1775,6 +1952,7 @@
     "original_name": "KNX Switch AC\\HEAT 6TH",
     "display_name": "AC\\HEAT 6TH",
     "room": "Whole House",
+    "floor": null,
     "category": "hvac_master_switch",
     "group": "Climate & Comfort",
     "visible": false
@@ -1785,6 +1963,7 @@
     "original_name": "KNX Switch All House Exit",
     "display_name": "All House Exit",
     "room": "Whole House",
+    "floor": null,
     "category": "scene_switch",
     "group": "Scenes",
     "visible": true
@@ -1795,6 +1974,7 @@
     "original_name": "KNX Switch All House Morning",
     "display_name": "All House Morning",
     "room": "Whole House",
+    "floor": null,
     "category": "scene_switch",
     "group": "Scenes",
     "visible": true
@@ -1805,6 +1985,7 @@
     "original_name": "KNX Switch All House Night",
     "display_name": "All House Night",
     "room": "Whole House",
+    "floor": null,
     "category": "scene_switch",
     "group": "Scenes",
     "visible": true
@@ -1815,6 +1996,7 @@
     "original_name": "KNX Switch All Rooms closets Lightstrip",
     "display_name": "All Rooms closets Lightstrip",
     "room": "Whole House",
+    "floor": null,
     "category": "scene_switch",
     "group": "Scenes",
     "visible": true
@@ -1825,6 +2007,7 @@
     "original_name": "KNX Switch Main All House",
     "display_name": "Main All House",
     "room": "Whole House",
+    "floor": null,
     "category": "scene_switch",
     "group": "Scenes",
     "visible": true
@@ -1835,6 +2018,7 @@
     "original_name": "KNX Switch Welcome",
     "display_name": "Welcome",
     "room": "Whole House",
+    "floor": null,
     "category": "scene_switch",
     "group": "Scenes",
     "visible": true

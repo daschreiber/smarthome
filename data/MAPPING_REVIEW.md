@@ -64,9 +64,9 @@ Controllable entities mapped: **184**
 
 ## Lighting (97)
 
-- [Balcony] Balcony Plants (light_switch)  `light.knx_switch_6th_balcony_plants`
-- [Balcony] Balcony Wall (light_switch)  `light.knx_switch_6th_balcony_wall`
-- [Balcony] Balcony lights (light_switch)  `light.knx_switch_5th_balcony_lights`
+- [Balcony (5th)] Balcony lights (light_switch)  `light.knx_switch_5th_balcony_lights`
+- [Balcony (6th)] Balcony Plants (light_switch)  `light.knx_switch_6th_balcony_plants`
+- [Balcony (6th)] Balcony Wall (light_switch)  `light.knx_switch_6th_balcony_wall`
 - [Daniel's Study] Daniel Study Closet led (light_switch)  `light.knx_switch_daniel_study_closet_led`
 - [Daniel's Study] Daniel Study Desk light (light_switch)  `light.knx_switch_daniel_study_desk_light`
 - [Daniel's Study] Daniel Study Hidden (light_switch)  `light.knx_switch_daniel_study_hidden`
@@ -85,6 +85,7 @@ Controllable entities mapped: **184**
 - [Den] Den Strip (light_dimmer)  `light.knx_dimmer_den_strip`
 - [Den] Den lights (light_dimmer)  `light.knx_dimmer_den_lights`
 - [Den] Games Closet lightstrip (light_switch)  `light.knx_switch_games_closet_lightstrip`
+- [Dining] Dining Table (light_switch)  `light.knx_switch_dining_table`
 - [Downstairs Toilet] Downstairs Toilet Hidden (light_switch)  `light.knx_switch_downstairs_toilet_hidden`
 - [Downstairs Toilet] Downstairs Toilet Mirror (light_switch)  `light.knx_switch_downstairs_toilet_mirror`
 - [Downstairs Toilet] Downstairs Toilet Restroom lights (light_switch)  `light.knx_switch_downstairs_toilet_restroom_lights`
@@ -93,20 +94,19 @@ Controllable entities mapped: **184**
 - [Downstairs Toilet] Restroom Spots (light_dimmer)  `light.knx_dimmer_restroom_spots`
 - [Entrance] Entrance Night led (light_switch)  `light.knx_switch_entrance_night_led`
 - [Entrance] Entrance Strip (light_dimmer)  `light.knx_dimmer_entrance_strip`
+- [Entrance] Hall Spots (light_dimmer)  `light.knx_dimmer_hall_spots`
 - [Guest Bathroom] Guest Bathroom Mirror (light_switch)  `light.knx_switch_guest_bathroom_mirror`
 - [Guest Bathroom] Guest Bathroom Spots 1 (light_switch)  `light.knx_switch_guest_bathroom_spots_1`
 - [Guest Bathroom] Guest Bathroom Spots 2 (light_switch)  `light.knx_switch_guest_bathroom_spots_2`
 - [Guest Bathroom] Guest Bathroom Strip (light_switch)  `light.knx_switch_guest_bathroom_strip`
 - [Guest Bathroom] Guest Bathroom lights (light_switch)  `light.knx_switch_guest_bathroom_lights`
 - [Gym] Gym lights (light_dimmer)  `light.knx_dimmer_gym_lights`
-- [Hall] Hall Spots (light_dimmer)  `light.knx_dimmer_hall_spots`
 - [Kitchen] Kitchen Ceiling (light_dimmer)  `light.knx_dimmer_kitchen_ceiling`
 - [Kitchen] Kitchen Hidden (light_switch)  `light.knx_switch_kitchen_hidden`
 - [Kitchen] Kitchen Island (light_dimmer)  `light.knx_dimmer_kitchen_island`
 - [Kitchen] Kitchen Sink led (light_switch)  `light.knx_switch_kitchen_sink_led`
 - [Kitchen] Kitchen Strip 1 (light_dimmer)  `light.knx_dimmer_kitchen_strip_1`
 - [Kitchen] Kitchen Strip 2 (light_dimmer)  `light.knx_dimmer_kitchen_strip_2`
-- [Landing] Landing lights (light_dimmer)  `light.knx_dimmer_landing_lights`
 - [Large Guest Room] Large Guest Room Closets Lightstrip (light_switch)  `light.knx_switch_large_guest_room_closets_lightstrip`
 - [Large Guest Room] Large Guest Room Hidden (light_switch)  `light.knx_switch_large_guest_room_hidden`
 - [Large Guest Room] Large Guest Room Reading Left (light_switch)  `light.knx_switch_large_guest_room_reading_left`
@@ -116,7 +116,6 @@ Controllable entities mapped: **184**
 - [Large Guest Room] Large Guest Room lights (light_dimmer)  `light.knx_dimmer_large_guest_room_lights`
 - [Left Corridor] Left Corridor lights (light_dimmer)  `light.knx_dimmer_left_corridor_lights`
 - [Left Corridor] Left CorridorNight led (light_switch)  `light.knx_switch_left_corridornight_led`
-- [Lounge] Dining Table (light_switch)  `light.knx_switch_dining_table`
 - [Lounge] Lounge Closet Led (light_switch)  `light.knx_switch_lounge_closet_led`
 - [Lounge] Lounge Cove (light_dimmer)  `light.knx_dimmer_lounge_cove`
 - [Lounge] Lounge Hidden (light_switch)  `light.knx_switch_lounge_hidden`
@@ -154,7 +153,8 @@ Controllable entities mapped: **184**
 - [Small Guest Room] Small Guest Room Strip (light_dimmer)  `light.knx_dimmer_small_guest_room_strip`
 - [Small Guest Room] Small Guest Room lights (light_dimmer)  `light.knx_dimmer_small_guest_room_lights`
 - [Small Guest Room] Small Guest RoomHidden (light_switch)  `light.knx_switch_small_guest_roomhidden`
-- [Stairs] Stairs (light_dimmer)  `light.knx_dimmer_stairs`
+- [Stairs & Landing] Landing lights (light_dimmer)  `light.knx_dimmer_landing_lights`
+- [Stairs & Landing] Stairs (light_dimmer)  `light.knx_dimmer_stairs`
 - [Terrace] Terrace Heating (light_switch)  `light.knx_switch_terrace_heating`
 - [Terrace] Terrace Lights (light_switch)  `light.knx_switch_terrace_lights`
 - [Utility Room] Utility Room Hall (light_switch)  `light.knx_switch_utility_room_hall`
@@ -164,17 +164,17 @@ Controllable entities mapped: **184**
 
 ## Media (14)
 
-- [Balcony] Balcony (media)  `media_player.balcony_2`
-- [Balcony] Balcony (media)  `media_player.balcony`
+- [Balcony (6th)] Balcony (media)  `media_player.balcony_2`
+- [Balcony (6th)] Balcony (media)  `media_player.balcony`
 - [Den] Den (media)  `media_player.den`
 - [Gym] Gym (media)  `media_player.gym_gym`
 - [Kitchen] Kitchen (media)  `media_player.kitchen`
 - [Lounge] 55" QLED (media)  `media_player.55_qled`
 - [Lounge] Lounge (media)  `media_player.lounge`
 - [Master Bathroom] Master Bathroom (media)  `media_player.master_bathroom`
-- [Master Bedroom] MBR balcony (media)  `media_player.mbr_balcony`
 - [Master Bedroom] Master Bedroom (media)  `media_player.master_bedroom`
-- [Master Bedroom] Master Bedroom Balcony (media)  `media_player.master_bedroom_balcony`
+- [Master Bedroom Balcony] MBR balcony (media)  `media_player.mbr_balcony`
+- [Master Bedroom Balcony] Master Bedroom Balcony (media)  `media_player.master_bedroom_balcony`
 - [Sauna] Sauna (media)  `media_player.sauna`
 - [Terrace] BBQ speaker (media)  `media_player.bbq_speaker`
 - [Terrace] Terrace (media)  `media_player.terrace`
@@ -207,10 +207,10 @@ Controllable entities mapped: **184**
 ## Utilities (8, 7 hidden)
 
 - [Master Bedroom] MBR TV Lift (motorized_furniture)  `light.knx_switch_mbr_tv_lift`
-- [hidden] [Rack] Rack UNIT 109 (infrastructure_climate)  `climate.rack_unit_109`
-- [hidden] [Roof] Boiler Roof (infrastructure)  `light.knx_switch_boiler_roof`
 - [hidden] [Utility Room] Boiler 6th Floor (infrastructure)  `light.knx_switch_boiler_6th_floor`
+- [hidden] [Utility Room] Boiler Roof (infrastructure)  `light.knx_switch_boiler_roof`
 - [hidden] [Utility Room] Controlled Socket (controlled_socket)  `light.knx_switch_5th_controlled_socket`
 - [hidden] [Utility Room] Contrroled Sockets near Boiler (infrastructure)  `light.knx_switch_contrroled_sockets_near_boiler`
 - [hidden] [Utility Room] Electricity board lightstrip (infrastructure)  `light.knx_switch_electricity_board_lightstrip`
+- [hidden] [Utility Room] Rack UNIT 109 (infrastructure_climate)  `climate.rack_unit_109`
 - [hidden] [Utility Room] Stir pump (infrastructure)  `light.knx_switch_stir_pump`

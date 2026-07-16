@@ -25,7 +25,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOMS = [
     ("daniel's study", "Daniel's Study"), ("daniel study", "Daniel's Study"),
     ("daniella's study", "Daniella's Study"), ("daniella study", "Daniella's Study"),
-    ("master bedroom balcony", "Master Bedroom"), ("mbr balcony", "Master Bedroom"),
+    ("master bedroom balcony", "Master Bedroom Balcony"),
+    ("mbr balcony", "Master Bedroom Balcony"),
     ("master bathroom", "Master Bathroom"), ("master bedroom", "Master Bedroom"),
     ("mbr", "Master Bedroom"), ("master corridor", "Master Corridor"),
     ("guest bathroom+small guest room", "Guest Bathroom"),
@@ -36,14 +37,18 @@ ROOMS = [
     ("downstairs toilet", "Downstairs Toilet"), ("restroom", "Downstairs Toilet"),
     ("left corridor", "Left Corridor"), ("right corridor", "Right Corridor"),
     ("entrance+kitchen", "Entrance"), ("lounge+dining", "Lounge"),
-    ("dining table", "Lounge"), ("dining", "Lounge"),
+    ("dining table", "Dining"), ("dining", "Dining"),
     ("kitchen", "Kitchen"), ("lounge", "Lounge"), ("den", "Den"), ("gym", "Gym"),
     ("sauna", "Sauna"), ("utility", "Utility Room"), ("entrance", "Entrance"),
-    ("landing", "Landing"), ("stairs", "Stairs"), ("hall", "Hall"),
-    ("terrace", "Terrace"), ("bbq", "Terrace"), ("balcony", "Balcony"),
-    ("boiler 6th", "Utility Room"), ("boiler roof", "Roof"), ("roof", "Roof"),
+    ("landing", "Stairs & Landing"), ("stairs", "Stairs & Landing"),
+    ("hall", "Entrance"),
+    ("terrace", "Terrace"), ("bbq", "Terrace"),
+    ("5th balcony", "Balcony (5th)"), ("6th balcony", "Balcony (6th)"),
+    ("balcony", "Balcony (6th)"),
+    ("boiler 6th", "Utility Room"), ("boiler roof", "Utility Room"),
+    ("roof", "Utility Room"),
     ("electricity board", "Utility Room"), ("games closet", "Den"),
-    ("rack", "Rack"), ("all house", "Whole House"), ("all rooms", "Whole House"),
+    ("rack", "Utility Room"), ("all house", "Whole House"), ("all rooms", "Whole House"),
     ("welcome", "Whole House"), ("55\" qled", "Lounge"),
 ]
 
@@ -90,6 +95,18 @@ GROUPS = {
     "motorized_furniture": "Utilities",
 }
 
+# Owner-confirmed floor layout. Whole House entities carry no floor.
+FLOORS = {
+    "Entrance": 6, "Lounge": 6, "Dining": 6, "Kitchen": 6, "Terrace": 6,
+    "Balcony (6th)": 6, "Master Corridor": 6, "Master Bedroom": 6,
+    "Master Bathroom": 6, "Master Bedroom Balcony": 6, "Utility Room": 6,
+    "Den": 5, "Balcony (5th)": 5, "Gym": 5, "Left Corridor": 5,
+    "Right Corridor": 5, "Daniella's Study": 5, "Small Guest Room": 5,
+    "Large Guest Room": 5, "Medium Guest Room": 5, "Guest Bathroom": 5,
+    "Daniel's Study": 5, "Downstairs Toilet": 5, "Sauna": 5,
+    "Stairs & Landing": 5,
+}
+
 HEBREW_NAMES = {
     "light.knx_switch_brz_mym_khmym_qrym": "Hot/Cold Water Tap",
     "light.knx_switch_tvkhn_bshry": "Garbage Disposal (Meat)",
@@ -102,6 +119,9 @@ HEBREW_NAMES = {
 
 
 ROOM_OVERRIDES = {
+    # shades onto the MBR balcony are inside the master bedroom
+    "cover.master_bedroom_master_bedroom_balcony_left": "Master Bedroom",
+    "cover.master_bedroom_master_bedroom_balcony_right": "Master Bedroom",
     "light.knx_switch_5th_controlled_socket": "Utility Room",
     "light.knx_switch_ac_heat_5th": "Whole House",
     "light.knx_switch_ac_heat_6th": "Whole House",
@@ -178,6 +198,7 @@ def main():
             "original_name": e["name"],
             "display_name": display,
             "room": room,
+            "floor": FLOORS.get(room),
             "category": category,
             "group": GROUPS.get(category, "Utilities"),
             "visible": VISIBILITY_OVERRIDES.get(

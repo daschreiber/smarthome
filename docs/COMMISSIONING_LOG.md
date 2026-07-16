@@ -97,3 +97,27 @@ Notable: `media_player.balcony` ("Balcony Speakers 1") is a VSSL A3x via Google 
 - Stage 6: dedicated HA user + long-lived token for the app (owner task).
 - Stage 7: remote access via Home Assistant Cloud.
 - Then: application backend + PWA against `data/entity_map.json`.
+
+## 2026-07-16 — Stage 6 done; vertical slice proven (Loop 2)
+
+- Dedicated `smarthome-app` HA user created (non-admin, local-network-only)
+  with a long-lived token, stored in the owner's password manager and in
+  `web/.env.local` on the development Mac only.
+- Vertical slice verified end-to-end on the LAN (via Claude Cowork):
+  health OK, 154 visible devices with live state, and
+  `light.knx_dimmer_daniel_study_lights` physically switched on and off from
+  the backend. Round trips ~3.7-4.0s, inside the 5s budget. HA history
+  confirmed the physical transitions.
+- **Finding:** KNX state feedback takes ~3.7s to reach HA (Control4
+  integration polls the Director on a 5s interval), so the original fixed
+  1.2s read-back returned stale state while the response claimed
+  "confirmed". Fixed: the backend now polls read-back up to 8s and returns
+  "confirmed" only when the observed state proves the command's intent;
+  otherwise it returns "sent" with the observed state. If latency ever needs
+  to shrink: lower the Control4 integration scan interval, then consider the
+  HA WebSocket stream (Phase E).
+- KLAFS sauna integrated as a virtual device via the existing sauna service
+  (safety tier: confirm-required, 40-100°C bounds). Committed follow-up:
+  promote the sauna to HA entities so automations/scenes can target it.
+- Owner requirement recorded: room synonyms for natural language
+  (`data/room_aliases.json`).

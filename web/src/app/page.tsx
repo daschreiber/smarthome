@@ -30,7 +30,7 @@ export default function Page() {
   const [devices, setDevices] = useState<UiDevice[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Record<string, Pending>>({});
-  const [flash, setFlash] = useState<Record<string, "ok" | "fail">>({});
+  const [flash, setFlash] = useState<Record<string, "ok" | "sent" | "fail">>({});
   const [appKey, setAppKey] = useState<string>("");
   const keyRef = useRef("");
 
@@ -74,10 +74,11 @@ export default function Page() {
           body: JSON.stringify({ command, ...extra }),
         });
         const body = await res.json();
-        if (!res.ok || body.status !== "confirmed") {
+        if (!res.ok || (body.status !== "confirmed" && body.status !== "sent")) {
           throw new Error(body.error ?? "command failed");
         }
-        setFlash((f) => ({ ...f, [id]: "ok" }));
+        // "sent" = accepted but not yet state-verified; the 3s poll catches up.
+        setFlash((f) => ({ ...f, [id]: body.status === "confirmed" ? "ok" : "sent" }));
       } catch {
         setFlash((f) => ({ ...f, [id]: "fail" }));
       } finally {
@@ -144,7 +145,7 @@ export default function Page() {
               <div key={d.id} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 background: "#121924", borderRadius: 12, padding: "12px 14px", marginBottom: 8,
-                border: `1px solid ${f === "ok" ? "#2f6f4f" : f === "fail" ? "#6e2228" : "#1d2733"}`,
+                border: `1px solid ${f === "ok" ? "#2f6f4f" : f === "sent" ? "#6f5a2f" : f === "fail" ? "#6e2228" : "#1d2733"}`,
                 opacity: d.available ? 1 : 0.45, transition: "border-color .3s",
               }}>
                 <div>

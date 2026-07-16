@@ -81,6 +81,27 @@ export function assertCommandAllowed(device: Device, cmd: Command): void {
   }
 }
 
+/**
+ * States that prove a command took effect, for read-back verification.
+ * null = not verifiable by simple state comparison (position, volume, stop);
+ * those commands report the observed state without claiming confirmation.
+ */
+export function expectedStates(cmd: Command): string[] | null {
+  switch (cmd.command) {
+    case "turn_on":
+    case "set_brightness":
+      return ["on"];
+    case "turn_off":
+      return ["off"];
+    case "open":
+      return ["open", "opening"];
+    case "close":
+      return ["closed", "closing"];
+    default:
+      return null;
+  }
+}
+
 /** Pure mapping: (device, command) -> HA service call, or throws. */
 export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
   assertCommandAllowed(device, cmd);

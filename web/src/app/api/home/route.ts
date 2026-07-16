@@ -29,17 +29,21 @@ export async function GET(req: NextRequest) {
             floor: d.floor,
             group: d.group,
             kind: d.kind,
+            category: d.category,
             capabilities: d.capabilities,
             requiresConfirmation: true,
             state: sauna ? (sauna.poweredOn ? "on" : "off") : "unknown",
             available: !!sauna && sauna.connected,
             currentTemperature: sauna?.currentTemperature ?? null,
             targetTemperature: sauna?.selectedTemperature ?? null,
+            hvacMode: null,
             brightnessPct: null,
             lastUpdated: null,
           };
         }
         const s = states.get(d.entityId);
+        const attr = (k: string) =>
+          s && typeof s.attributes[k] === "number" ? (s.attributes[k] as number) : null;
         return {
           id: d.id,
           label: d.label,
@@ -47,13 +51,16 @@ export async function GET(req: NextRequest) {
           floor: d.floor,
           group: d.group,
           kind: d.kind,
+          category: d.category,
           capabilities: d.capabilities,
+          requiresConfirmation: !!d.requiresConfirmation,
           state: s?.state ?? "unknown",
           available: !!s && s.state !== "unavailable" && s.state !== "unknown",
           brightnessPct:
-            s && typeof s.attributes.brightness === "number"
-              ? Math.round(((s.attributes.brightness as number) / 255) * 100)
-              : null,
+            attr("brightness") != null ? Math.round((attr("brightness")! / 255) * 100) : null,
+          currentTemperature: attr("current_temperature"),
+          targetTemperature: attr("temperature"),
+          hvacMode: d.kind === "climate" ? s?.state ?? null : null,
           lastUpdated: s?.last_updated ?? null,
         };
       });

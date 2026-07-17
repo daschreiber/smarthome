@@ -26,20 +26,31 @@ export interface PlanRoom {
   outdoor?: boolean;
   /** Secondary block of a room that appears more than once — no label. */
   unlabeled?: boolean;
+  /**
+   * Part of a physically continuous outdoor space: no divider strokes of its
+   * own — the shared outline comes from the floor's outdoorUnions.
+   */
+  seamless?: boolean;
 }
 
 export interface FloorGeometry {
   viewBox: { w: number; h: number };
   /** Building footprint (exterior walls), drawn behind the rooms. */
   envelope: Array<Array<[number, number]>>;
+  /** Dashed outlines drawn around continuous outdoor spaces (see seamless). */
+  outdoorUnions?: Array<Array<[number, number]>>;
   rooms: PlanRoom[];
 }
 
 export const FLOOR_GEOMETRY: Record<5 | 6, FloorGeometry> = {
   // ---- Floor 6 (penthouse). Wide floor: lounge west, stair core + dining
-  // center, kitchen, then the master suite east with its angled facade.
-  // The terrace runs the whole south face; a balcony wedge hugs the angled
-  // east wall. y = drawing-% × 0.563 (true aspect).
+  // center, kitchen, then the master suite east — corridor along the top,
+  // walk-in closet below it, bath, and the bedroom against the angled
+  // facade. The utility room runs to the outer (angled) wall. One
+  // continuous outdoor strip spans the whole south face: dining furniture
+  // on the terrace (west), lounge furniture on the balcony (east), the
+  // master's stretch at the far east — no physical divisions.
+  // y = drawing-% × 0.563 (true aspect).
   6: {
     viewBox: { w: 100, h: 53 },
     envelope: [
@@ -48,6 +59,9 @@ export const FLOOR_GEOMETRY: Record<5 | 6, FloorGeometry> = {
         [68, 5.6], [85, 5.6], [91, 32.6], [3, 32.6],
       ],
     ],
+    outdoorUnions: [
+      [[3, 33.4], [91.2, 33.4], [93, 51.8], [3, 51.8]],
+    ],
     rooms: [
       { room: "Entrance", rect: { x: 16, y: 5.6, w: 24, h: 5.7 } },
       { room: "Entrance", rect: { x: 27, y: 1.1, w: 11, h: 4.5 }, unlabeled: true }, // guest WC nook
@@ -55,29 +69,38 @@ export const FLOOR_GEOMETRY: Record<5 | 6, FloorGeometry> = {
       // x21-40 above dining is the stair core — footprint, not a room.
       { room: "Dining", rect: { x: 21, y: 18.6, w: 19, h: 14 } },
       { room: "Kitchen", rect: { x: 40, y: 5.6, w: 12, h: 27 } },
-      { room: "Master Corridor", label: "Dressing", rect: { x: 52, y: 5.6, w: 18, h: 13 } },
+      { room: "Master Corridor", label: "Corridor", rect: { x: 52, y: 5.6, w: 18, h: 5.7 } },
+      // The walk-in closet is its own room on the drawing (ארונות); its
+      // devices live under Master Corridor in the entity map.
+      { room: "Master Corridor", label: "Closet", rect: { x: 52, y: 11.3, w: 14, h: 7.3 } },
       { room: "Master Bathroom", label: "Bath", rect: { x: 52, y: 18.6, w: 14, h: 14 } },
-      { room: "Utility Room", label: "Utility", rect: { x: 70, y: 5.6, w: 11, h: 11.8 } },
+      {
+        room: "Utility Room",
+        label: "Utility",
+        poly: [[70, 5.6], [85, 5.6], [87.6, 17.4], [70, 17.4]],
+      },
       {
         room: "Master Bedroom",
         label: "Master",
         poly: [
-          [66, 18.6], [70, 18.6], [70, 17.4], [81, 17.4], [81, 5.6],
-          [85, 5.6], [91, 32.6], [66, 32.6],
+          [66, 11.3], [70, 11.3], [70, 17.4], [87.6, 17.4], [91, 32.6],
+          [66, 32.6], [66, 18.6],
         ],
       },
-      {
-        room: "Master Bedroom Balcony",
-        label: "Balcony",
-        poly: [[86, 5.6], [96, 5.6], [93, 32.6], [91.5, 32.6]],
-        outdoor: true,
-      },
-      { room: "Terrace", rect: { x: 3, y: 33.4, w: 59, h: 18.4 }, outdoor: true },
+      { room: "Terrace", rect: { x: 3, y: 33.4, w: 59, h: 18.4 }, outdoor: true, seamless: true },
       {
         room: "Balcony (6th)",
         label: "Balcony",
-        poly: [[62, 33.4], [91.5, 33.4], [93, 51.8], [62, 51.8]],
+        rect: { x: 62, y: 33.4, w: 22, h: 18.4 },
         outdoor: true,
+        seamless: true,
+      },
+      {
+        room: "Master Bedroom Balcony",
+        poly: [[84, 33.4], [91.2, 33.4], [93, 51.8], [84, 51.8]],
+        outdoor: true,
+        seamless: true,
+        unlabeled: true,
       },
     ],
   },

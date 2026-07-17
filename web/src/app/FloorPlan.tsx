@@ -51,6 +51,19 @@ export default function FloorPlan({
       {geo.rooms.map((r, i) => (
         <Block key={`${r.room}-${i}`} r={r} st={rooms.get(r.room)} onOpen={onOpen} />
       ))}
+      {/* One dashed outline around each physically continuous outdoor space. */}
+      {(geo.outdoorUnions ?? []).map((poly, i) => (
+        <path
+          key={`union-${i}`}
+          d={pathOf(poly)}
+          fill="none"
+          stroke="var(--card-line)"
+          strokeWidth={0.5}
+          strokeDasharray="1.6 1"
+          strokeLinejoin="round"
+          pointerEvents="none"
+        />
+      ))}
     </svg>
   );
 }
@@ -80,15 +93,20 @@ function Block({
   const cx = b.x + b.w / 2;
   const cy = b.y + b.h / 2;
 
+  // Seamless blocks are parts of one continuous space: no divider strokes,
+  // the shared dashed outline is drawn by the floor's outdoorUnions.
+  const stroke = r.seamless ? "none" : "var(--bg)";
+  const dashes = r.outdoor && !r.seamless ? "1.6 1" : undefined;
+  const fill = lit ? "color-mix(in srgb, var(--active) 24%, var(--card))" : "var(--card)";
   const shape = r.poly ? (
     <path
       d={pathOf(r.poly)}
-      fill={lit ? "color-mix(in srgb, var(--active) 24%, var(--card))" : "var(--card)"}
+      fill={fill}
       fillOpacity={r.outdoor && !lit ? 0.5 : 1}
-      stroke="var(--bg)"
+      stroke={stroke}
       strokeWidth={0.7}
       strokeLinejoin="round"
-      strokeDasharray={r.outdoor ? "1.6 1" : undefined}
+      strokeDasharray={dashes}
     />
   ) : (
     <rect
@@ -96,11 +114,11 @@ function Block({
       y={r.rect!.y}
       width={r.rect!.w}
       height={r.rect!.h}
-      fill={lit ? "color-mix(in srgb, var(--active) 24%, var(--card))" : "var(--card)"}
+      fill={fill}
       fillOpacity={r.outdoor && !lit ? 0.5 : 1}
-      stroke="var(--bg)"
+      stroke={stroke}
       strokeWidth={0.7}
-      strokeDasharray={r.outdoor ? "1.6 1" : undefined}
+      strokeDasharray={dashes}
     />
   );
 

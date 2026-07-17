@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { authenticate } from "@/lib/auth";
 import { unitEntityIds } from "@/lib/coolmaster";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
+import { noiseMediaEntity, noiseStatus, noiseStreamUrl, setNoiseVolume } from "@/lib/whitenoise";
 
 /**
  * Command execution flow per IMPLEMENTATION_SPEC §9:
@@ -44,6 +45,70 @@ export async function POST(
   }
 
   const started = Date.now();
+
+  if (device.kind === "noise") {
+    try {
+      assertCommandAllowed(device, cmd);
+      let message = "ok";
+      let listeners: number | null = null;
+      if (cmd.command === "set_volume") {
+        // The stream's own volume, via the noise server.
+        const s = await setNoiseVolume(cmd.volumePct);
+        message = `volume ${s.volume}%`;
+        listeners = s.listeners;
+      } else if (cmd.command === "turn_on" || cmd.command === "turn_off") {
+        // On/off drives the Control4 zone: play the stream URL, or stop it.
+        // The token-bearing URL stays server-side (never sent to the browser).
+        if (cmd.command === "turn_on") {
+          await callService("media_player", "play_media", {
+            entity_id: noiseMediaEntity(),
+            media_content_id: noiseStreamUrl(),
+            media_content_type: "music",
+          });
+        } else {
+          await callService("media_player", "turn_off", { entity_id: noiseMediaEntity() });
+        }
+        // The noise server's listener count is the ground truth: poll a few
+        // seconds for the zone to connect (or drop). "confirmed" only when it
+        // proves the intent; otherwise "sent" (the play_media may be a no-op
+        // if the Control4 integration doesn't support URL playback).
+        const wantPlaying = cmd.command === "turn_on";
+        const deadline = Date.now() + 8000;
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 1000));
+          listeners = (await noiseStatus().catch(() => null))?.listeners ?? listeners;
+          if (listeners != null && wantPlaying === listeners > 0) break;
+          if (Date.now() >= deadline) break;
+        }
+        message = listeners && listeners > 0 ? "playing" : "idle";
+      } else {
+        throw new Error(`white noise does not support ${cmd.command}`);
+      }
+      const verified =
+        cmd.command === "set_volume" ||
+        (cmd.command === "turn_on" ? (listeners ?? 0) > 0 : listeners === 0);
+      const durationMs = Date.now() - started;
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
+        command, args, ok: true, durationMs,
+        resultState: listeners != null ? (listeners > 0 ? "on" : "off") : undefined,
+      });
+      return NextResponse.json({
+        status: verified ? "confirmed" : "sent",
+        state: listeners != null ? (listeners > 0 ? "on" : "off") : "unknown",
+        message,
+        durationMs,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
+        command, args, ok: false, durationMs: Date.now() - started, error: message,
+      });
+      const clientError = /does not support|out of range/.test(message);
+      return NextResponse.json({ status: "failed", error: message }, { status: clientError ? 400 : 502 });
+    }
+  }
 
   if (device.kind === "sauna") {
     try {

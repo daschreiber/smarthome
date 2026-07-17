@@ -692,7 +692,7 @@ function Device({
 }) {
   const star = onFav ? <Star on={!!fav} onClick={() => onFav(d.id)} label={d.label} /> : null;
   if (d.kind === "sauna") return <SaunaCard d={d} busy={busy} send={send} />;
-  if (d.kind === "noise") return <NoiseCard d={d} busy={busy} />;
+  if (d.kind === "noise") return <NoiseCard d={d} busy={busy} send={send} />;
   if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} star={star} />;
   if (d.kind === "cover") {
     return (
@@ -853,22 +853,30 @@ function ClimateCard({
  * belongs to the Control4 bedside button, so the card reports playing/idle
  * honestly from the server's listener count instead of pretending.
  */
-function NoiseCard({ d, busy }: { d: UiDevice; busy: boolean }) {
+function NoiseCard({
+  d, busy, send,
+}: {
+  d: UiDevice;
+  busy: boolean;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
+}) {
   const [drag, setDrag] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const playing = d.state === "on";
   const volume = drag ?? d.volumePct ?? 50;
 
-  const post = (body: Record<string, unknown>) => {
+  // Noise TYPE has no CommandSchema equivalent, so it goes to the dedicated
+  // route; on/off and volume ride the standard command path (so scenes,
+  // automations, and the assistant get them too).
+  const setType = (noiseType: string) => {
     setNote(null);
     fetch("/api/noise", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ noiseType }),
     })
       .then(async (res) => {
-        const out = await res.json();
-        if (!res.ok) throw new Error(out.error ?? "failed");
+        if (!res.ok) throw new Error((await res.json()).error ?? "failed");
       })
       .catch((e) => {
         setNote(e instanceof Error ? e.message : "failed");
@@ -886,23 +894,34 @@ function NoiseCard({ d, busy }: { d: UiDevice; busy: boolean }) {
               (d.available
                 ? playing
                   ? `playing · ${d.noiseType ?? "white"}`
-                  : "idle — start from the bedside button"
+                  : "off"
                 : `unavailable${d.note ? ` — ${d.note}` : ""}`)}
           </div>
         </div>
-        <div className="btn-row">
-          {(["white", "brown", "pink"] as const).map((t) => (
-            <button
-              key={t}
-              className="mini-btn"
-              disabled={busy || !d.available}
-              style={d.noiseType === t ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : undefined}
-              onClick={() => post({ noiseType: t })}
-            >
-              {t[0].toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
+        <button
+          className="toggle"
+          aria-pressed={playing}
+          aria-label={`White noise ${playing ? "off" : "on"}`}
+          disabled={busy || !d.available}
+          onClick={() =>
+            send(d.id, { command: playing ? "turn_off" : "turn_on" }).then((r) => {
+              if (!r.ok) { setNote(r.error ?? "failed"); setTimeout(() => setNote(null), 6000); }
+            })
+          }
+        />
+      </div>
+      <div className="slider-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", paddingBottom: 6 }}>
+        {(["white", "brown", "pink"] as const).map((t) => (
+          <button
+            key={t}
+            className="mini-btn"
+            disabled={busy || !d.available}
+            style={d.noiseType === t ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : undefined}
+            onClick={() => setType(t)}
+          >
+            {t[0].toUpperCase() + t.slice(1)}
+          </button>
+        ))}
       </div>
       <div className="slider-row">
         <input
@@ -914,8 +933,9 @@ function NoiseCard({ d, busy }: { d: UiDevice; busy: boolean }) {
           disabled={busy || !d.available}
           onChange={(e) => setDrag(Number(e.target.value))}
           onPointerUp={(e) => {
+            const v = Number((e.target as HTMLInputElement).value);
             setDrag(null);
-            post({ volumePct: Number((e.target as HTMLInputElement).value) });
+            send(d.id, { command: "set_volume", volumePct: v });
           }}
         />
       </div>

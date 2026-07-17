@@ -166,7 +166,9 @@ function virtualDevices(): Device[] {
       group: "Media",
       category: "noise_machine",
       visible: true,
-      capabilities: ["volume"],
+      // on_off drives the room's Control4 zone (play/stop the stream) via HA;
+      // volume is the stream's own level via the noise server.
+      capabilities: ["on_off", "volume"],
     });
   }
   return devices;

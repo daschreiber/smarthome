@@ -57,6 +57,7 @@ network-scoped, only the login restriction was.
    | `SAUNA_API_TOKEN` | the sauna app's API token (optional) |
    | `WHITENOISE_BASE_URL` | the white-noise machine's URL (optional, enables the Master Bedroom noise card) |
    | `WHITENOISE_TOKEN` | the white-noise machine's SECRET_TOKEN (optional) |
+   | `WHITENOISE_MEDIA_ENTITY` | optional — the HA media_player entity the app tells to play/stop the stream for in-app on/off (defaults to `media_player.master_bedroom`). Requires the Control4 integration to support `play_media` with a URL; if it doesn't, on/off reports "sent" and the bedside button remains the reliable path |
    | `ANTHROPIC_API_KEY` | optional — enables the "Ask the house" conversational assistant (console.anthropic.com → API keys); without it the chat screen shows a friendly "not configured" message |
    | `GOOGLE_CLIENT_ID` | optional — enables "Continue with Google" on the sign-in screen (Google Cloud Console → OAuth client, redirect URI `<APP_BASE_URL>/api/auth/google/callback`) |
    | `GOOGLE_CLIENT_SECRET` | optional — pairs with `GOOGLE_CLIENT_ID`. Google only proves identity; access still requires the email to be on the app's user list |

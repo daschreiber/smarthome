@@ -21,6 +21,23 @@ export function noiseConfigured(): boolean {
   return Boolean(process.env.WHITENOISE_BASE_URL && process.env.WHITENOISE_TOKEN);
 }
 
+/**
+ * The Home Assistant media_player entity for the room whose speakers play the
+ * stream. On/off is done by telling this Control4 zone to play (or stop) the
+ * stream URL — no bedside button required. Defaults to the Master Bedroom.
+ */
+export function noiseMediaEntity(): string {
+  return process.env.WHITENOISE_MEDIA_ENTITY || "media_player.master_bedroom";
+}
+
+/** The token-bearing stream URL the zone connects to. Server-side only —
+ *  it carries the token and must never reach the browser. */
+export function noiseStreamUrl(): string {
+  const base = (process.env.WHITENOISE_BASE_URL ?? "").replace(/\/+$/, "");
+  const token = process.env.WHITENOISE_TOKEN ?? "";
+  return `${base}/stream?token=${encodeURIComponent(token)}`;
+}
+
 async function call(path: string, method: "GET" | "POST"): Promise<NoiseStatus> {
   const base = (process.env.WHITENOISE_BASE_URL ?? "").replace(/\/+$/, "");
   const token = process.env.WHITENOISE_TOKEN ?? "";

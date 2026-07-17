@@ -23,7 +23,7 @@ Two verified constraints (from the Home Assistant core source):
 1. The official Control4 integration exposes exactly four platforms: `light`, `cover`, `climate`, and `media_player` (room media). Control4 scenes, switches, locks, and alarm functions are **not** exposed. Household scenes will be recreated as Home Assistant scenes/scripts acting on those four domains.
 2. Authentication is cloud-then-local: homeowner credentials go to the Control4 cloud for an account token, which is exchanged for a local Director token. Day-to-day control is local, but setup and token refresh need Control4 cloud reachability.
 
-Expected architecture:
+Architecture (as built):
 
 ```text
 Phone / browser PWA
@@ -34,12 +34,18 @@ Private application backend
         v
 Home Assistant Green
         |
-        v
-Control4 Core 3 local API
+        +--> Control4 Core 3 local API --> lights, shades, media, scenes
         |
-        v
-Lights, shades, climate, media, scenes
+        +--> CoolMaster bridge (10.0.0.90) --> all A/C commands
 ```
+
+**Climate is the exception to the Control4 path.** The Control4→CoolAutomation
+proxy silently drops setpoint reads and writes, so every A/C zone is mapped to
+its CoolMaster indoor unit(s) (`coolmaster_units` in `data/entity_map.json`)
+and all climate commands — on/off and setpoints — go through Home Assistant's
+native `coolmaster` integration straight to the bridge. Zone state is still
+read from the Control4 entities, which mirror the bridge within ~4s. Full
+investigation and unit mapping: `docs/COMMISSIONING_LOG.md` (2026-07-17).
 
 ### Cloud-only investigation
 

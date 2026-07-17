@@ -4,7 +4,7 @@ import { callService, getState } from "@/lib/ha";
 import { getDevice } from "@/lib/registry";
 import { audit } from "@/lib/audit";
 import { authenticate } from "@/lib/auth";
-import { setpointEntityIds } from "@/lib/coolmaster";
+import { unitEntityIds } from "@/lib/coolmaster";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
 
 /**
@@ -95,7 +95,7 @@ export async function POST(
     // Setpoints are the exception state can't prove: they verify against the
     // CoolMaster unit's reported target temperature instead.
     const wantedTemp = cmd.command === "set_temperature" ? cmd.temperature : null;
-    const setpointUnits = wantedTemp != null ? setpointEntityIds(device) : null;
+    const setpointUnits = wantedTemp != null ? unitEntityIds(device) : null;
     const readbackId = setpointUnits?.[0] ?? device.entityId;
     const setpointReached = (s: { attributes: Record<string, unknown> } | null) =>
       !!setpointUnits && !!s && s.attributes.temperature === wantedTemp;

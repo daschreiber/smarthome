@@ -74,13 +74,14 @@ HIDDEN_CATEGORIES = {
     "hvac_master_switch", "infrastructure_climate", "coolmaster_setpoint_unit",
 }
 
-# CoolMaster indoor-unit ids per climate zone. The Control4->CoolAutomation
+# CoolMaster indoor-unit ids per climate zone. ALL climate commands (on/off
+# and setpoints) target these units via the HA `coolmaster` integration
+# (bridge at 10.0.0.90:10102, S/N 05116051): the Control4->CoolAutomation
 # proxy drops setpoint reads AND writes (verified 2026-07-17: HA accepts
-# climate.set_temperature, entity never updates, wall unit unaffected), so the
-# app reads/writes setpoints via the HA `coolmaster` integration's entities
-# (CoolMaster bridge at 10.0.0.90:10102, S/N 05116051). Room->unit mapping
-# established by temperature correlation plus per-zone on/off toggles watched
-# live on the bridge's ASCII console; open-plan zones drive several units.
+# climate.set_temperature, entity never updates, wall unit unaffected).
+# Room->unit mapping established by temperature correlation plus per-zone
+# on/off toggles watched live on the bridge's ASCII console; open-plan zones
+# drive several units.
 COOLMASTER_UNITS = {
     "climate.ac_heating_a_c_den": ["L1.101"],
     "climate.ac_heating_a_c_medium_guest_room": ["L1.102"],

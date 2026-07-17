@@ -174,17 +174,34 @@ flows into `data/entity_map.json` as `coolmaster_units` per climate row.
 ### Fix shape
 
 Home Assistant's native **`coolmaster` integration** talks to the bridge
-directly and gets working setpoint read/write per unit. The app now prefers
-those unit entities for climate setpoints (write to all of a zone's units,
-read from the first; on/off stays on the Control4 zone entity, which works
-and keeps multi-unit zones grouped). Until the integration exists the app
-degrades exactly to the old behavior.
+directly and gets working on/off and setpoint read/write per unit. The app
+routes **all climate commands** to a zone's unit entities (one service call
+fans out to every unit; kitchen sets 3 at once). Zone state and current
+temperature are still read from the Control4 entity, which mirrors the bridge
+within ~4s and keeps multi-unit zones grouped; the target temperature is read
+from the zone's first unit. Zones with no mapped units — and any install
+where the coolmaster integration is missing — degrade to the old behavior.
 
-### OWNER ACTION REQUIRED (~30s, needs an admin HA login)
+### Owner action (done same day, see next entry)
 
-The `smarthome-app` token is deliberately non-admin, so the integration must
-be added by hand: HA → Settings → Devices & Services → Add Integration →
-"CoolMasterNet" → host `10.0.0.90`, port `10102`, tick the modes (off / heat /
-cool / heat_cool). 16 climate entities (`climate.l1_101` …) appear; no app
-restart needed. (Attempted via browser automation from the dev Mac — blocked
-by macOS's per-app Local Network permission, worth granting to Chrome one day.)
+The `smarthome-app` token is deliberately non-admin, so the integration had
+to be added with an owner login: HA → Settings → Devices & Services → Add
+Integration → "CoolMasterNet" → host `10.0.0.90`. (Attempted via browser
+automation from the dev Mac first — blocked by macOS's per-app Local Network
+permission, worth granting to Chrome one day.)
+
+## 2026-07-17 — CoolMaster integration live; climate verified end-to-end
+
+- Owner added the CoolMasterNet integration (host `10.0.0.90`, all modes,
+  no swing). All 16 unit entities appeared with the exact predicted ids
+  (`climate.l1_101` … `climate.l1_202`), each reporting a real target
+  temperature — including the gym's stranded 16°C from the owner's test.
+- Write path verified live: `climate.set_temperature` on `climate.l1_106`
+  to 22.5° changed the physical bridge setpoint within ~3s (bridge console
+  read back 22°); restored to 24°. Note: wall units display whole degrees,
+  so half-degree setpoints round on the physical display.
+- Owner decision: route climate **on/off** through the CoolMaster units as
+  well, not just setpoints — Control4 is now fully out of the A/C command
+  path (it remains the state/telemetry source for zone cards).
+- Security note recorded (SECURITY_AND_OPERATIONS §7): the bridge's port
+  10102 console is unauthenticated on the LAN.

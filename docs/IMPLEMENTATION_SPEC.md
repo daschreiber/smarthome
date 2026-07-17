@@ -133,8 +133,18 @@ The public application uses the stable application `id`, never the raw Home Assi
 
 ### Climate
 
-- set temperature: `climate.set_temperature`
+Climate commands do NOT target the Control4 zone entity: the
+Control4→CoolAutomation proxy silently drops setpoints (2026-07-17
+commissioning-log entry). Each zone's `coolmaster_units` in the entity map
+lists its CoolMaster indoor units, exposed as `climate.l1_*` entities by the
+HA `coolmaster` integration; commands fan out to all of a zone's units in one
+service call. Zone state (hvac mode, current temperature) is still read from
+the Control4 entity; the target temperature is read from the first unit.
+
+- on/off: `climate.turn_on` / `climate.turn_off` on the unit entities
+- set temperature: `climate.set_temperature` on the unit entities
 - HVAC mode: `climate.set_hvac_mode`, only if explicitly allowed
+- zones with no mapped units fall back to the Control4 entity
 
 ### Scenes and scripts
 

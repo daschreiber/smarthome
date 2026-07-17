@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { setpointEntityIds } from "./coolmaster";
+import { unitEntityIds } from "./coolmaster";
 import type { Device } from "./registry";
 
 /**
@@ -120,14 +120,17 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
     throw new Error("sauna commands are executed by the sauna adapter, not Home Assistant");
   }
   const target = { entity_id: device.entityId };
+  // Climate zones command their CoolMaster units directly — the bridge is the
+  // authority; the Control4 proxy only ever handled on/off and drops setpoints.
+  const climateTarget = () => ({ entity_id: unitEntityIds(device) ?? device.entityId });
   switch (cmd.command) {
     case "turn_on":
-      if (device.kind === "climate") return { domain: "climate", service: "turn_on", data: target };
+      if (device.kind === "climate") return { domain: "climate", service: "turn_on", data: climateTarget() };
       return device.kind === "media_player"
         ? { domain: "media_player", service: "turn_on", data: target }
         : { domain: "light", service: "turn_on", data: target };
     case "turn_off":
-      if (device.kind === "climate") return { domain: "climate", service: "turn_off", data: target };
+      if (device.kind === "climate") return { domain: "climate", service: "turn_off", data: climateTarget() };
       return device.kind === "media_player"
         ? { domain: "media_player", service: "turn_off", data: target }
         : { domain: "light", service: "turn_off", data: target };
@@ -149,16 +152,12 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
         service: "set_cover_position",
         data: { ...target, position: cmd.positionPct },
       };
-    case "set_temperature": {
-      // Zones backed by CoolMaster units get the setpoint written to the
-      // units directly — the Control4 zone entity silently drops it.
-      const units = setpointEntityIds(device);
+    case "set_temperature":
       return {
         domain: "climate",
         service: "set_temperature",
-        data: { entity_id: units ?? device.entityId, temperature: cmd.temperature },
+        data: { ...climateTarget(), temperature: cmd.temperature },
       };
-    }
     case "set_volume":
       return {
         domain: "media_player",

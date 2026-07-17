@@ -27,7 +27,7 @@ export interface MapRow {
   category: string;
   group: string;
   visible: boolean;
-  /** CoolMaster indoor units behind this zone (setpoints bypass Control4). */
+  /** CoolMaster indoor units behind this zone (climate commands bypass Control4). */
   coolmaster_units?: string[];
 }
 

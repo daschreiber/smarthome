@@ -26,9 +26,12 @@ Ledger liked least.**
 
 Every room with a CoolAutomation zone gets a full climate card: current
 temperature, target set-point (+/-), HVAC mode. Backed by the existing
-`set_temperature` / `hvac_mode` capabilities and 10-32°C server bounds.
-Floor-heating toggles join the Climate & Comfort group when unhidden.
-The sauna is the confirm-required outlier (40-100°C).
+`set_temperature` / `hvac_mode` capabilities and 10-32°C server bounds;
+commands execute against the zone's CoolMaster units, not Control4 (see
+IMPLEMENTATION_SPEC §7 Climate). When no setpoint is readable the +/- anchors
+at the room's current temperature. Floor-heating toggles join the Climate &
+Comfort group when unhidden. The sauna is the confirm-required outlier
+(40-100°C).
 
 ## Resolves
 

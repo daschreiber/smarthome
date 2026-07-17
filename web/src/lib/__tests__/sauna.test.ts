@@ -50,6 +50,20 @@ describe("sauna adapter wire contract", () => {
     await expect(saunaStart()).rejects.toThrow(/heater did not ignite/);
   });
 
+  it("a gateway timeout during start is 'sent', not failed — the watchdog owns it", async () => {
+    vi.stubGlobal("fetch", async () => new Response("FUNCTION_INVOCATION_TIMEOUT", { status: 504 }));
+    const r = await saunaStart();
+    expect(r.verified).toBe(false);
+    expect(r.message).toMatch(/watchdog/);
+  });
+
+  it("start reports verified=false when the app answers 'armed, pending ignition'", async () => {
+    response = { success: true, verified: false, message: "Sauna armed - heating starts by 12:40" };
+    const r = await saunaStart();
+    expect(r.verified).toBe(false);
+    expect(r.message).toMatch(/armed/);
+  });
+
   it("an error body counts as failure even with HTTP 200", async () => {
     response = { error: "Login failed" };
     await expect(saunaStatus()).rejects.toThrow(/Login failed/);

@@ -49,9 +49,12 @@ export async function POST(
     try {
       assertCommandAllowed(device, cmd);
       let message = "ok";
-      if (cmd.command === "turn_on") message = await saunaStart();
-      else if (cmd.command === "turn_off") message = await saunaStop();
-      else if (cmd.command === "set_temperature") {
+      let verified = true;
+      if (cmd.command === "turn_on" || cmd.command === "turn_off") {
+        const result = cmd.command === "turn_on" ? await saunaStart() : await saunaStop();
+        message = result.message;
+        verified = result.verified;
+      } else if (cmd.command === "set_temperature") {
         await saunaSetTemperature(cmd.temperature);
         message = `target ${cmd.temperature}°C`;
       }
@@ -61,9 +64,12 @@ export async function POST(
         ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
         command, args, ok: true, durationMs,
         resultState: after ? (after.poweredOn ? "on" : "off") : undefined,
+        error: verified ? undefined : message,
       });
       return NextResponse.json({
-        status: "confirmed",
+        // "confirmed" only when the sauna app itself verified the outcome;
+        // otherwise "sent" — its watchdog continues verification server-side.
+        status: verified ? "confirmed" : "sent",
         state: after ? (after.poweredOn ? "on" : "off") : "unknown",
         message,
         currentTemperature: after?.currentTemperature ?? null,

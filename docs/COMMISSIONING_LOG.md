@@ -205,3 +205,34 @@ permission, worth granting to Chrome one day.)
   path (it remains the state/telemetry source for zone cards).
 - Security note recorded (SECURITY_AND_OPERATIONS §7): the bridge's port
   10102 console is unauthenticated on the LAN.
+
+## 2026-07-17 — Owner-verified two-way climate sync; deployment gotcha found
+
+### Live verification with the owner (Daniel's Study, L1.104)
+
+- App **+/−** → CoolMaster bridge: setpoint landed within seconds, every time.
+- App **Off** → unit off instantly; watched the bridge for 3½ minutes —
+  **no re-assert from Control4/KNX**. Bypassing Control4 for on/off is safe.
+- App setpoint → **KNX wall panel display followed** (via
+  CoolAutomation→Control4 state sync).
+- **Wall panel +/−** → bridge, HA, and app all followed within seconds. The
+  panel→zone path was never broken — only Home Assistant's write path
+  through the Control4 climate entity was.
+- Net result: the CoolMaster bridge is the single source of truth; app, wall
+  panels, HA, and the bridge console stay in agreement in both directions.
+- CoolMaster console screen (electricity cupboard) refreshes its display
+  lazily — up to ~a minute behind. Cosmetic only.
+
+### Deployment gotcha: Railway does not deploy `main`
+
+Why the fix "didn't work" at first: the Railway service builds the
+**`claude/home-assistant-setup-sskcuf` branch**, not `main`. The climate fix
+sat merged on main while the phone kept getting the stale branch build (the
+service had also been crash-looping 06:52–12:15 and serving its last healthy
+deploy; resolved by the branch's own 698818b deploy at 14:50). Fixed by
+merging main into the branch (`c4e860a`, deployed SUCCESS, then merged back
+as PR #19).
+
+**Standing recommendation:** point the Railway service at `main`
+(dashboard → smarthome service → Settings → Source → branch), so
+"merged to main" and "deployed" mean the same thing.

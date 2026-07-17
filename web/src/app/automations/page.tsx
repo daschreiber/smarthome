@@ -47,6 +47,12 @@ const DAY_CHIPS = ["S", "M", "T", "W", "T", "F", "S"]; // 0=Sunday .. 6=Saturday
 
 const DEVICE_COMMANDS: Record<string, Array<{ value: string; label: string }>> = {
   cover: [{ value: "open", label: "Open" }, { value: "close", label: "Close" }],
+  climate: [
+    { value: "on_at", label: "On at °C…" },
+    { value: "turn_on", label: "On" },
+    { value: "turn_off", label: "Off" },
+    { value: "set_temp", label: "Set °C only" },
+  ],
   default: [{ value: "turn_on", label: "On" }, { value: "turn_off", label: "Off" }],
 };
 
@@ -60,6 +66,7 @@ function describeStep(s: Step, deviceLabel: (id: string) => string): string {
     .map((a) => {
       if (a.type === "scene") return `scene "${a.sceneId}"`;
       if (a.type === "room") return `${a.room} lights ${a.command === "lights_on" ? "on" : "off"}`;
+      if (a.command.command === "set_temperature") return `${deviceLabel(a.deviceId)} to ${a.command.temperature}°`;
       const verb = String(a.command.command).replace("turn_", "").replace("_", " ");
       return `${deviceLabel(a.deviceId)} ${verb}`;
     })
@@ -89,6 +96,7 @@ export default function Automations() {
   const [actScene, setActScene] = useState("");
   const [actDevice, setActDevice] = useState("");
   const [actCommand, setActCommand] = useState("turn_on");
+  const [actTemp, setActTemp] = useState(24);
   const [targets, setTargets] = useState<TargetDevice[]>([]);
 
   // auto-off timers
@@ -161,8 +169,17 @@ export default function Automations() {
   const addStep = () => {
     let actions: Step["actions"] = [];
     if (actKind === "scene" && actScene) actions = [{ type: "scene", sceneId: actScene }];
-    else if (actKind === "device" && actDevice)
-      actions = [{ type: "device", deviceId: actDevice, command: { command: actCommand } }];
+    else if (actKind === "device" && actDevice) {
+      if (actCommand === "on_at")
+        // Two actions, one step: wake the zone, then set its target.
+        actions = [
+          { type: "device", deviceId: actDevice, command: { command: "turn_on" } },
+          { type: "device", deviceId: actDevice, command: { command: "set_temperature", temperature: actTemp } },
+        ];
+      else if (actCommand === "set_temp")
+        actions = [{ type: "device", deviceId: actDevice, command: { command: "set_temperature", temperature: actTemp } }];
+      else actions = [{ type: "device", deviceId: actDevice, command: { command: actCommand } }];
+    }
     else if ((actKind === "shades_open" || actKind === "shades_close") && actRoom)
       // One step, one action per shade in the room — the engine fans out.
       actions = targets
@@ -406,6 +423,20 @@ export default function Automations() {
                 style={{ padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}>
                 {commandsFor(actDevice).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
+              {(actCommand === "on_at" || actCommand === "set_temp") && (
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
+                  <input
+                    type="number"
+                    min={10}
+                    max={32}
+                    step={0.5}
+                    value={actTemp}
+                    onChange={(e) => setActTemp(Number(e.target.value))}
+                    style={{ width: 70, padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}
+                  />
+                  °C
+                </label>
+              )}
             </>
           )}
           <button className="mini-btn" onClick={addStep}>+ Add step</button>

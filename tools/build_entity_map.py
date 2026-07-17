@@ -71,7 +71,31 @@ LIGHT_RULES = [
 # from the app's default view (and hidden in HA). Flip here to resurface.
 HIDDEN_CATEGORIES = {
     "floor_heating", "kitchen_appliance", "controlled_socket",
-    "hvac_master_switch", "infrastructure_climate",
+    "hvac_master_switch", "infrastructure_climate", "coolmaster_setpoint_unit",
+}
+
+# CoolMaster indoor-unit ids per climate zone. ALL climate commands (on/off
+# and setpoints) target these units via the HA `coolmaster` integration
+# (bridge at 10.0.0.90:10102, S/N 05116051): the Control4->CoolAutomation
+# proxy drops setpoint reads AND writes (verified 2026-07-17: HA accepts
+# climate.set_temperature, entity never updates, wall unit unaffected).
+# Room->unit mapping established by temperature correlation plus per-zone
+# on/off toggles watched live on the bridge's ASCII console; open-plan zones
+# drive several units.
+COOLMASTER_UNITS = {
+    "climate.ac_heating_a_c_den": ["L1.101"],
+    "climate.ac_heating_a_c_medium_guest_room": ["L1.102"],
+    "climate.ac_heating_a_c_sauna": ["L1.103"],
+    "climate.ac_heating_a_c_daniel_s_study": ["L1.104"],
+    "climate.ac_heating_a_c_daniella_s_study": ["L1.105"],
+    "climate.ac_heating_a_c_gym": ["L1.106"],
+    "climate.ac_heating_a_c_small_guset_room": ["L1.107"],
+    "climate.ac_heating_a_c_large_guest_room": ["L1.108"],
+    "climate.rack_unit_109": ["L1.109"],
+    "climate.ac_heating_a_c_utility_room": ["L1.110"],
+    "climate.ac_heating_a_c_kitchen": ["L1.111", "L1.114", "L1.115"],
+    "climate.ac_heating_a_c_master_bedroom": ["L1.112"],
+    "climate.ac_heating_a_c_lounge": ["L1.201", "L1.202"],
 }
 VISIBILITY_OVERRIDES = {
     "light.knx_switch_stir_pump": False,
@@ -161,6 +185,10 @@ def clean_name(name, room):
 def classify(e):
     domain, low = e["domain"], e["name"].lower()
     if domain == "climate":
+        # Raw CoolMaster unit entities (once the owner adds the `coolmaster`
+        # integration and re-exports): setpoint plumbing, never room cards.
+        if re.match(r"^climate\.l\d+_\d+$", e["entity_id"]):
+            return "coolmaster_setpoint_unit"
         return "infrastructure_climate" if "rack" in low else "climate_zone"
     if domain == "cover":
         return "shade"
@@ -204,6 +232,8 @@ def main():
             "visible": VISIBILITY_OVERRIDES.get(
                 e["entity_id"], category not in HIDDEN_CATEGORIES),
         }
+        if e["entity_id"] in COOLMASTER_UNITS:
+            row["coolmaster_units"] = COOLMASTER_UNITS[e["entity_id"]]
         out.append(row)
         categories.setdefault(category, []).append(row)
 

@@ -76,6 +76,15 @@ The Home Assistant application user should be a non-administrator user. Be aware
 - Do not automatically retry non-idempotent compound scenes.
 - Disable locks, alarms, gates, and garage controls until separately reviewed.
 
+### Known LAN exposure: CoolMaster console
+
+The CoolMaster HVAC bridge (10.0.0.90) accepts **unauthenticated** ASCII
+commands on TCP port 10102 — anyone on the house WiFi can read and command
+every A/C unit. This is how the device ships; it is the same channel Home
+Assistant's `coolmaster` integration uses. The app never talks to it directly
+(only via Home Assistant), but treat LAN access as HVAC control: keep guests
+on a guest SSID, and never port-forward 10102.
+
 ## 8. Logging
 
 Record:

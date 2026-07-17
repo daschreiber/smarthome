@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStates } from "@/lib/ha";
 import { registry } from "@/lib/registry";
 import { authenticate } from "@/lib/auth";
+import { coolmasterEntityId } from "@/lib/coolmaster";
 import { saunaConfigured, saunaStatus } from "@/lib/sauna";
 
 /**
@@ -52,6 +53,15 @@ export async function GET(req: NextRequest) {
         const s = states.get(d.entityId);
         const attr = (k: string) =>
           s && typeof s.attributes[k] === "number" ? (s.attributes[k] as number) : null;
+        // The Control4 zone entity never carries a real setpoint; the zone's
+        // first CoolMaster unit does, once the coolmaster integration exists.
+        const unit = d.coolmasterUnits?.length
+          ? states.get(coolmasterEntityId(d.coolmasterUnits[0]))
+          : undefined;
+        const unitTarget =
+          unit && typeof unit.attributes.temperature === "number"
+            ? (unit.attributes.temperature as number)
+            : null;
         return {
           id: d.id,
           label: d.label,
@@ -67,7 +77,7 @@ export async function GET(req: NextRequest) {
           brightnessPct:
             attr("brightness") != null ? Math.round((attr("brightness")! / 255) * 100) : null,
           currentTemperature: attr("current_temperature"),
-          targetTemperature: attr("temperature"),
+          targetTemperature: unitTarget ?? attr("temperature"),
           hvacMode: d.kind === "climate" ? s?.state ?? null : null,
           lastUpdated: s?.last_updated ?? null,
         };

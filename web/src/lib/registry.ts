@@ -27,6 +27,8 @@ export interface MapRow {
   category: string;
   group: string;
   visible: boolean;
+  /** CoolMaster indoor units behind this zone (climate commands bypass Control4). */
+  coolmaster_units?: string[];
 }
 
 export interface Device {
@@ -42,6 +44,8 @@ export interface Device {
   capabilities: Capability[];
   /** Safety-sensitive devices require an explicit confirm on every command. */
   requiresConfirmation?: boolean;
+  /** See MapRow.coolmaster_units. */
+  coolmasterUnits?: string[];
 }
 
 function slug(s: string): string {
@@ -121,6 +125,7 @@ export function buildDevices(rows: MapRow[]): Device[] {
       category: row.category,
       visible: row.visible,
       capabilities: capabilitiesFor(row),
+      ...(row.coolmaster_units?.length ? { coolmasterUnits: row.coolmaster_units } : {}),
     };
   });
 }

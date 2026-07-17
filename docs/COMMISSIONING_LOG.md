@@ -121,3 +121,87 @@ Notable: `media_player.balcony` ("Balcony Speakers 1") is a VSSL A3x via Google 
   promote the sauna to HA entities so automations/scenes can target it.
 - Owner requirement recorded: room synonyms for natural language
   (`data/room_aliases.json`).
+
+## 2026-07-17 — Climate setpoints: root cause found, CoolMaster bridge mapped
+
+Owner symptom: the app turned the gym A/C on/off fine, but showed a wrong
+setpoint (placeholder 24) and +/- changed nothing — the unit woke at its last
+wall-panel setpoint (16°C).
+
+### Root cause (verified live)
+
+The Control4→CoolAutomation proxy neither reports nor applies setpoints:
+
+- Every one of the 13 `climate.*` zone entities reports `temperature: null`
+  when off and a bogus `0` when running — HA never receives a real setpoint,
+  house-wide. (`supported_features` still claims target-temperature support,
+  so nothing errors.)
+- A direct `climate.set_temperature` to the gym zone returned HTTP 200 and
+  was silently dropped: the entity's attributes and `last_updated` never
+  moved, and the wall unit stayed at 16°C. On/off (hvac-mode) commands do
+  propagate — which is why only setpoints looked broken.
+
+### CoolMaster bridge found and mapped
+
+The CoolAutomation bridge the zones hang off is a **CoolMaster, S/N 05116051,
+firmware 1.2.2, at `10.0.0.90:10102`** (ASCII protocol; found by a LAN sweep
+for the CoolMasterNet port). Its `ls` console reads and writes every unit's
+real setpoint — including the gym's stranded 16°C.
+
+Room→unit mapping established by (a) instant-of-time temperature correlation
+between HA zone entities and the bridge console, then (b) confirming the
+ambiguous ones by toggling zones via HA while watching the console live:
+
+| Unit(s) | Zone |
+|---|---|
+| L1.101 | Den |
+| L1.102 | Medium Guest Room |
+| L1.103 | Sauna |
+| L1.104 | Daniel's Study (confirmed by toggle) |
+| L1.105 | Daniella's Study |
+| L1.106 | Gym (setpoint 16 = owner's test) |
+| L1.107 | Small Guest Room |
+| L1.108 | Large Guest Room |
+| L1.109 | Rack cooling (name "Rack UNIT 109") |
+| L1.110 | Utility Room |
+| L1.111 + L1.114 + L1.115 | Kitchen (confirmed by toggle; open plan, 3 units) |
+| L1.112 | Master Bedroom |
+| L1.201 + L1.202 | Lounge (confirmed by toggle) |
+
+The mapping lives in `tools/build_entity_map.py` (`COOLMASTER_UNITS`) and
+flows into `data/entity_map.json` as `coolmaster_units` per climate row.
+
+### Fix shape
+
+Home Assistant's native **`coolmaster` integration** talks to the bridge
+directly and gets working on/off and setpoint read/write per unit. The app
+routes **all climate commands** to a zone's unit entities (one service call
+fans out to every unit; kitchen sets 3 at once). Zone state and current
+temperature are still read from the Control4 entity, which mirrors the bridge
+within ~4s and keeps multi-unit zones grouped; the target temperature is read
+from the zone's first unit. Zones with no mapped units — and any install
+where the coolmaster integration is missing — degrade to the old behavior.
+
+### Owner action (done same day, see next entry)
+
+The `smarthome-app` token is deliberately non-admin, so the integration had
+to be added with an owner login: HA → Settings → Devices & Services → Add
+Integration → "CoolMasterNet" → host `10.0.0.90`. (Attempted via browser
+automation from the dev Mac first — blocked by macOS's per-app Local Network
+permission, worth granting to Chrome one day.)
+
+## 2026-07-17 — CoolMaster integration live; climate verified end-to-end
+
+- Owner added the CoolMasterNet integration (host `10.0.0.90`, all modes,
+  no swing). All 16 unit entities appeared with the exact predicted ids
+  (`climate.l1_101` … `climate.l1_202`), each reporting a real target
+  temperature — including the gym's stranded 16°C from the owner's test.
+- Write path verified live: `climate.set_temperature` on `climate.l1_106`
+  to 22.5° changed the physical bridge setpoint within ~3s (bridge console
+  read back 22°); restored to 24°. Note: wall units display whole degrees,
+  so half-degree setpoints round on the physical display.
+- Owner decision: route climate **on/off** through the CoolMaster units as
+  well, not just setpoints — Control4 is now fully out of the A/C command
+  path (it remains the state/telemetry source for zone cards).
+- Security note recorded (SECURITY_AND_OPERATIONS §7): the bridge's port
+  10102 console is unauthenticated on the LAN.

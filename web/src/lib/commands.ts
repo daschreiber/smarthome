@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { unitEntityIds } from "./coolmaster";
 import type { Device } from "./registry";
 
 /**
@@ -119,14 +120,17 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
     throw new Error("sauna commands are executed by the sauna adapter, not Home Assistant");
   }
   const target = { entity_id: device.entityId };
+  // Climate zones command their CoolMaster units directly — the bridge is the
+  // authority; the Control4 proxy only ever handled on/off and drops setpoints.
+  const climateTarget = () => ({ entity_id: unitEntityIds(device) ?? device.entityId });
   switch (cmd.command) {
     case "turn_on":
-      if (device.kind === "climate") return { domain: "climate", service: "turn_on", data: target };
+      if (device.kind === "climate") return { domain: "climate", service: "turn_on", data: climateTarget() };
       return device.kind === "media_player"
         ? { domain: "media_player", service: "turn_on", data: target }
         : { domain: "light", service: "turn_on", data: target };
     case "turn_off":
-      if (device.kind === "climate") return { domain: "climate", service: "turn_off", data: target };
+      if (device.kind === "climate") return { domain: "climate", service: "turn_off", data: climateTarget() };
       return device.kind === "media_player"
         ? { domain: "media_player", service: "turn_off", data: target }
         : { domain: "light", service: "turn_off", data: target };
@@ -152,7 +156,7 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
       return {
         domain: "climate",
         service: "set_temperature",
-        data: { ...target, temperature: cmd.temperature },
+        data: { ...climateTarget(), temperature: cmd.temperature },
       };
     case "set_volume":
       return {

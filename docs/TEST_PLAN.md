@@ -46,11 +46,17 @@ Run against selected reversible devices only.
 
 ### Climate
 
-- Read current temperature
-- Read target temperature
-- Set target temperature within configured safe bounds
+- Read current temperature (Control4 zone entity)
+- Read target temperature (zone's first CoolMaster unit entity — the Control4
+  entity never reports a real setpoint)
+- Set target temperature within configured safe bounds; verify the write
+  lands on ALL of the zone's CoolMaster units (kitchen has 3, lounge 2)
+- On/off routes to the CoolMaster units; verify the Control4 zone state
+  follows within ~4-8s (that is what the read-back confirms against)
+- Setpoint read-back: "confirmed" only when the unit reports the requested
+  target; "sent" when the coolmaster integration is absent
 - Reject unsupported HVAC modes
-- Confirm unit conversion is not occurring unexpectedly
+- Confirm unit conversion is not occurring unexpectedly (bridge is °C)
 
 ### Scene/script
 

@@ -4,6 +4,7 @@ import { callService, getState } from "@/lib/ha";
 import { getDevice } from "@/lib/registry";
 import { audit } from "@/lib/audit";
 import { authenticate } from "@/lib/auth";
+import { unitEntityIds } from "@/lib/coolmaster";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
 
 /**
@@ -97,18 +98,30 @@ export async function POST(
     // ~4s is normal (observed 3.7s in commissioning); poll up to 8s.
     // "confirmed" is ONLY claimed when the observed state proves the command
     // (PRODUCT_SPEC §6); otherwise the command is reported as "sent".
+    // Setpoints are the exception state can't prove: they verify against the
+    // CoolMaster unit's reported target temperature instead.
+    const wantedTemp = cmd.command === "set_temperature" ? cmd.temperature : null;
+    const setpointUnits = wantedTemp != null ? unitEntityIds(device) : null;
+    const readbackId = setpointUnits?.[0] ?? device.entityId;
+    const setpointReached = (s: { attributes: Record<string, unknown> } | null) =>
+      !!setpointUnits && !!s && s.attributes.temperature === wantedTemp;
     const expected = expectedStates(cmd, device.kind);
     const deadline = Date.now() + 8000;
     let after = null;
     for (;;) {
       await new Promise((r) => setTimeout(r, 700));
-      after = await getState(device.entityId);
-      if (!expected) break;
-      if (after && expected.includes(after.state)) break;
+      after = await getState(readbackId);
+      if (setpointUnits) {
+        if (setpointReached(after)) break;
+        if (!after) break; // unit entity absent — integration not added yet
+      } else if (!expected) break;
+      else if (after && expected.includes(after.state)) break;
       if (Date.now() >= deadline) break;
     }
-    const verified = !!expected && !!after && expected.includes(after.state);
-    const status = expected ? (verified ? "confirmed" : "sent") : "sent";
+    const verified = setpointUnits
+      ? setpointReached(after)
+      : !!expected && !!after && expected.includes(after.state);
+    const status = verified ? "confirmed" : "sent";
 
     const durationMs = Date.now() - started;
     audit({

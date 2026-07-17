@@ -144,6 +144,37 @@ describe("expectedStates (read-back verification)", () => {
   });
 });
 
+describe("CoolMaster command routing", () => {
+  const zone: Device = { ...climate, coolmasterUnits: ["L1.111", "L1.114", "L1.115"] };
+  const units = ["climate.l1_111", "climate.l1_114", "climate.l1_115"];
+
+  it("writes setpoints to the zone's CoolMaster unit entities", () => {
+    expect(buildServiceCall(zone, { command: "set_temperature", temperature: 23 })).toEqual({
+      domain: "climate",
+      service: "set_temperature",
+      data: { entity_id: units, temperature: 23 },
+    });
+  });
+
+  it("routes on/off to the CoolMaster units as well", () => {
+    expect(buildServiceCall(zone, { command: "turn_on" })).toEqual({
+      domain: "climate", service: "turn_on", data: { entity_id: units },
+    });
+    expect(buildServiceCall(zone, { command: "turn_off" })).toEqual({
+      domain: "climate", service: "turn_off", data: { entity_id: units },
+    });
+  });
+
+  it("falls back to the Control4 zone entity when no units are mapped", () => {
+    expect(
+      buildServiceCall(climate, { command: "set_temperature", temperature: 23 }).data,
+    ).toEqual({ entity_id: climate.entityId, temperature: 23 });
+    expect(buildServiceCall(climate, { command: "turn_on" }).data).toEqual({
+      entity_id: climate.entityId,
+    });
+  });
+});
+
 describe("buildServiceCall", () => {
   it("maps turn_on for a light", () => {
     expect(buildServiceCall(dimmer, { command: "turn_on" })).toEqual({

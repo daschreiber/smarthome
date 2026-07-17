@@ -29,11 +29,9 @@ network-scoped, only the login restriction was.
    `daschreiber/smarthome` (authorize GitHub access if asked).
 2. When the service is created, open **Settings**:
    - **Root Directory**: `web`
-   - **Branch**: `main`. ⚠️ As of 2026-07-17 the live service still tracks
-     `claude/home-assistant-setup-sskcuf` — this bit us: a fix merged to
-     main sat undeployed while the phone served the stale branch build
-     (COMMISSIONING_LOG, 2026-07-17). Until the setting is flipped, anything
-     that must go live has to be merged into that branch too.
+   - **Branch**: `main` (owner switched the service to main on 2026-07-17
+     after the branch mixup described in COMMISSIONING_LOG — merged-to-main
+     now means deployed).
    - Build/start commands: leave auto-detected (Next.js; start script
      already binds Railway's `PORT`).
 3. **Add a Volume** (service → right-click/Settings → Attach Volume), mount

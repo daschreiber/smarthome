@@ -67,6 +67,48 @@ export function roomLights(room: string): Device[] {
   );
 }
 
+/**
+ * House-wide systems (the /systems screens). Membership is intentionally
+ * narrow: "lighting" is real lights only (group Lighting — fans, vents, and
+ * towel rails ride the light domain but are NOT lights), "climate" is A/C
+ * zones only (never the sauna), "shades" is every cover.
+ */
+export type SystemKey = "lighting" | "climate" | "shades";
+
+export const SYSTEM_COMMANDS: Record<SystemKey, Command["command"][]> = {
+  lighting: ["turn_on", "turn_off"],
+  climate: ["turn_on", "turn_off"],
+  shades: ["open", "close", "stop"],
+};
+
+export function systemDevices(system: SystemKey): Device[] {
+  const all = registry().devices.filter((d) => d.visible);
+  switch (system) {
+    case "lighting":
+      return all.filter((d) => d.kind === "light" && d.group === "Lighting" && d.category !== "scene_switch");
+    case "climate":
+      return all.filter((d) => d.kind === "climate");
+    case "shades":
+      return all.filter((d) => d.kind === "cover");
+  }
+}
+
+/** Fan a simple command across a system, optionally limited to given rooms. */
+export async function executeSystemCommand(
+  system: SystemKey,
+  command: Command["command"],
+  rooms?: string[],
+): Promise<BatchResult> {
+  if (!SYSTEM_COMMANDS[system].includes(command)) {
+    throw new Error(`${command} is not a ${system} system command`);
+  }
+  let targets = systemDevices(system);
+  if (rooms && rooms.length > 0) targets = targets.filter((d) => rooms.includes(d.room));
+  if (targets.length === 0) return { total: 0, failed: [{ target: system, error: "no matching devices" }] };
+  const cmd = { command } as Command;
+  return runBatch(targets.map((d) => ({ target: d.id, run: () => executeOnDevice(d, cmd) })));
+}
+
 export async function executeAction(action: Action): Promise<BatchResult> {
   if (action.type === "scene") {
     return applySceneById(action.sceneId);

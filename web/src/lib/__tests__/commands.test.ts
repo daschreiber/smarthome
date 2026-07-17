@@ -28,6 +28,38 @@ const shade: Device = {
   capabilities: ["open_close_stop", "position"],
 };
 
+const climate: Device = {
+  id: "kitchen__a_c_heating",
+  entityId: "climate.ac_heating_a_c_kitchen",
+  kind: "climate",
+  label: "A/C & Heating",
+  room: "Kitchen",
+  floor: 6,
+  group: "Climate & Comfort",
+  category: "climate_zone",
+  visible: true,
+  capabilities: ["set_temperature", "hvac_mode"],
+};
+
+describe("climate zone on/off (hvac_mode capability)", () => {
+  it("allows turn_on/turn_off and maps them to the climate domain", () => {
+    expect(buildServiceCall(climate, { command: "turn_on" })).toEqual({
+      domain: "climate", service: "turn_on", data: { entity_id: climate.entityId },
+    });
+    expect(buildServiceCall(climate, { command: "turn_off" })).toEqual({
+      domain: "climate", service: "turn_off", data: { entity_id: climate.entityId },
+    });
+  });
+  it("still rejects on/off for devices with neither on_off nor hvac_mode", () => {
+    expect(() => assertCommandAllowed(shade, { command: "turn_on" })).toThrow();
+  });
+  it("verifies climate turn_off by state but declines to verify turn_on", () => {
+    expect(expectedStates({ command: "turn_off" }, "climate")).toEqual(["off"]);
+    expect(expectedStates({ command: "turn_on" }, "climate")).toBeNull();
+    expect(expectedStates({ command: "turn_on" }, "light")).toEqual(["on"]);
+  });
+});
+
 describe("CommandSchema", () => {
   it("accepts a valid brightness command", () => {
     expect(

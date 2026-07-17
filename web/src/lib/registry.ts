@@ -34,7 +34,7 @@ export interface MapRow {
 export interface Device {
   id: string;
   entityId: string;
-  kind: MapRow["domain"] | "sauna";
+  kind: MapRow["domain"] | "sauna" | "heating";
   label: string;
   room: string;
   floor: 5 | 6 | null;
@@ -91,6 +91,25 @@ function loadRows(): MapRow[] {
 export function buildDevices(rows: MapRow[]): Device[] {
   const seen = new Map<string, number>();
   return rows.map((row) => {
+    // App-level policy: underfloor heating valve relays are hidden in the
+    // entity map as raw KNX plumbing, but the app surfaces them as a clean
+    // per-room heating control. kind "heating" keeps them out of every
+    // lights fan-out ("all lights off" must never touch the floor).
+    if (row.category === "floor_heating") {
+      const room = row.room || "whole_house";
+      return {
+        id: `${slug(room)}__underfloor_heating`,
+        entityId: row.entity_id,
+        kind: "heating" as const,
+        label: "Underfloor heating",
+        room: row.room,
+        floor: row.floor,
+        group: "Climate & Comfort",
+        category: row.category,
+        visible: true,
+        capabilities: ["on_off" as const],
+      };
+    }
     let id = `${slug(row.room || "whole_house")}__${slug(row.display_name)}`;
     const n = seen.get(id) ?? 0;
     seen.set(id, n + 1);

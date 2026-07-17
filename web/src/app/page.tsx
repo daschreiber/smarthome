@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FloorPlan from "./FloorPlan";
 import NavBar from "./NavBar";
-import { BlindsIcon, BulbIcon, GridIcon, MapIcon, SnowIcon } from "./icons";
+import { BlindsIcon, BulbIcon, FlameIcon, GridIcon, MapIcon, SnowIcon } from "./icons";
 
 /**
  * Phase C app shell in the decided design direction (docs/DESIGN_DIRECTION.md):
@@ -29,6 +29,8 @@ interface UiDevice {
   currentTemperature: number | null;
   targetTemperature: number | null;
   hvacMode: string | null;
+  /** Sauna only: why the card is unavailable, when it is. */
+  note?: string | null;
 }
 
 type View = { t: "home" } | { t: "room"; room: string };
@@ -43,6 +45,13 @@ interface CustomScene {
 
 const GROUP_ORDER = ["Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
 
+/** A room's A/C (or sauna) counts as running for the card indicators. */
+function climateActive(c: UiDevice | null): boolean {
+  return (
+    c != null && c.available && c.state !== "off" && c.state !== "unavailable" && c.state !== "unknown"
+  );
+}
+
 export default function Page() {
   const [devices, setDevices] = useState<UiDevice[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +65,7 @@ export default function Page() {
   const [authNeeded, setAuthNeeded] = useState(false);
   const [layout, setLayout] = useState<"grid" | "plan">("grid");
   const [role, setRole] = useState<"admin" | "member" | "guest">("member");
+  const [floorHeating, setFloorHeating] = useState<string[]>([]);
   const keyRef = useRef("");
   const canProgram = role !== "guest";
 
@@ -111,9 +121,14 @@ export default function Page() {
       }
       if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
       setAuthNeeded(false);
-      const out = (await res.json()) as { devices: UiDevice[]; role?: "admin" | "member" | "guest" };
+      const out = (await res.json()) as {
+        devices: UiDevice[];
+        role?: "admin" | "member" | "guest";
+        floorHeatingRooms?: string[];
+      };
       setDevices(out.devices);
       if (out.role) setRole(out.role);
+      setFloorHeating(out.floorHeatingRooms ?? []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed to load");
@@ -233,6 +248,11 @@ export default function Page() {
     [devices],
   );
 
+  const heatingOnTotal = useMemo(
+    () => devices.filter((d) => d.kind === "heating" && d.state === "on").length,
+    [devices],
+  );
+
   const roomDevices = useMemo(() => {
     if (view.t !== "room") return [];
     return devices.filter((d) => d.room === view.room);
@@ -326,7 +346,14 @@ export default function Page() {
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([name, r]) => (
                   <button key={name} className="room-card" onClick={() => openRoom(name)}>
-                    <div className="rn">{name}</div>
+                    <div className="rn" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                      <span>{name}</span>
+                      <span style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                        {r.lightsOn > 0 && <span style={{ color: "var(--active)", display: "flex" }}><BulbIcon size={15} /></span>}
+                        {climateActive(r.climate) && <span style={{ color: "var(--accent)", display: "flex" }}><SnowIcon size={15} /></span>}
+                        {floorHeating.includes(name) && <span style={{ color: "var(--danger)", display: "flex" }}><FlameIcon size={15} /></span>}
+                      </span>
+                    </div>
                     <div className={`rs ${r.lightsOn > 0 ? "on" : ""}`}>
                       {r.lightsOn > 0 ? `${r.lightsOn} light${r.lightsOn === 1 ? "" : "s"} on` : "all off"}
                       {r.climate?.currentTemperature != null ? ` · ${r.climate.currentTemperature}°` : ""}
@@ -348,6 +375,12 @@ export default function Page() {
               <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><SnowIcon size={18} /> Climate</div>
               <div className={`rs ${climateOnTotal > 0 ? "on" : ""}`}>
                 {climateOnTotal > 0 ? `${climateOnTotal} zone${climateOnTotal === 1 ? "" : "s"} active` : "all off"}
+              </div>
+            </a>
+            <a className="room-card" href="/systems/heating" style={{ textDecoration: "none", display: "block" }}>
+              <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><FlameIcon size={18} /> Heating</div>
+              <div className={`rs ${heatingOnTotal > 0 ? "on" : ""}`}>
+                {heatingOnTotal > 0 ? `${heatingOnTotal} room${heatingOnTotal === 1 ? "" : "s"}` : "all off"}
               </div>
             </a>
             <a className="room-card" href="/systems/shades" style={{ textDecoration: "none", display: "block" }}>
@@ -839,7 +872,7 @@ function SaunaCard({
           <div className="st">
             {d.available
               ? `${on ? "heating" : "off"} · cabin ${d.currentTemperature ?? "—"}° · target ${d.targetTemperature ?? "—"}°`
-              : "unavailable"}
+              : `unavailable${d.note ? ` — ${d.note}` : ""}`}
           </div>
         </div>
       </div>

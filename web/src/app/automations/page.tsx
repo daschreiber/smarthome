@@ -98,8 +98,12 @@ export default function Automations() {
       }).devices;
       const lightDevs = devs.filter((d) => d.kind === "light" && d.category !== "scene_switch");
       setRooms([...new Set(lightDevs.map((d) => d.room))].sort());
+      // Timers apply to lights AND underfloor heating ("never longer than 2h").
+      const timeable = devs.filter(
+        (d) => (d.kind === "light" && d.category !== "scene_switch") || d.kind === "heating",
+      );
       setLights(
-        lightDevs
+        timeable
           .map((d) => ({ id: d.id, label: d.label, room: d.room }))
           .sort((a, b) => `${a.room} ${a.label}`.localeCompare(`${b.room} ${b.label}`)),
       );
@@ -240,7 +244,7 @@ export default function Automations() {
             onChange={(e) => setTimerDevice(e.target.value)}
             style={{ flex: "1 1 220px", padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}
           >
-            <option value="">choose a light…</option>
+            <option value="">choose a device…</option>
             {lights.map((l) => (
               <option key={l.id} value={l.id}>{l.room} — {l.label}</option>
             ))}

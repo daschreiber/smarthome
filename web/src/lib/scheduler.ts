@@ -1,5 +1,7 @@
 import { dueSteps, listAutomations, markFired, nowParts } from "./automations";
-import { executeAction } from "./execute";
+import { executeAction, executeOnDevice } from "./execute";
+import { dueTimers, listTimers } from "./timers";
+import { getStates } from "./ha";
 import { audit } from "./audit";
 
 /**
@@ -60,5 +62,47 @@ export async function tick(): Promise<void> {
       `[scheduler] ${automation.name} step ${stepIndex} fired at ${now.hhmm}` +
       (failures.length ? ` with ${failures.length} failure(s)` : ""),
     );
+  }
+
+  await tickTimers();
+}
+
+/**
+ * Auto-off timers: turn devices off once they've been on longer than their
+ * rule allows. No fired-state to track — once the device is off it stops
+ * being due, and if a command is lost the rule retries next tick.
+ */
+async function tickTimers(): Promise<void> {
+  let rules: ReturnType<typeof listTimers>;
+  try {
+    rules = listTimers().filter((r) => r.enabled);
+  } catch (err) {
+    console.error("[scheduler] timers load failed:", err);
+    return;
+  }
+  if (rules.length === 0) return; // don't poll HA for nothing
+  try {
+    const states = new Map((await getStates()).map((s) => [s.entity_id, s]));
+    for (const { rule, device } of dueTimers(rules, states, Date.now())) {
+      const started = Date.now();
+      try {
+        await executeOnDevice(device, { command: "turn_off" });
+        audit({
+          ts: new Date().toISOString(), user: `timer:${rule.id}`, deviceId: device.id,
+          entityId: device.entityId, command: "auto_off",
+          args: { afterMinutes: rule.afterMinutes }, ok: true, durationMs: Date.now() - started,
+        });
+        console.log(`[scheduler] auto-off: ${device.id} after ${rule.afterMinutes}min`);
+      } catch (err) {
+        audit({
+          ts: new Date().toISOString(), user: `timer:${rule.id}`, deviceId: device.id,
+          entityId: device.entityId, command: "auto_off",
+          args: { afterMinutes: rule.afterMinutes }, ok: false, durationMs: Date.now() - started,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[scheduler] timers tick failed:", err);
   }
 }

@@ -11,6 +11,8 @@ export interface HaState {
   state: string;
   attributes: Record<string, unknown>;
   last_updated: string;
+  /** Changes only on real state transitions (on↔off), not attribute updates. */
+  last_changed: string;
 }
 
 function baseUrl(): string {

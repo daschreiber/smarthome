@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import NavBar from "../NavBar";
 
 type Role = "admin" | "member" | "guest";
 
@@ -57,7 +58,7 @@ export default function Users() {
 
   return (
     <main className="shell">
-      <a className="h-back" href="/">‹ Home</a>
+      <a className="h-back" href="/more">‹ More</a>
       <h1 className="h-title">Users</h1>
       <p className="h-sub">
         Who can sign in, and with what role. Admins manage users; members control and program the
@@ -153,6 +154,7 @@ export default function Users() {
           Add user
         </button>
       </form>
+      <NavBar />
     </main>
   );
 }

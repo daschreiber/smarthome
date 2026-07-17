@@ -1,5 +1,6 @@
 "use client";
 
+import NavBar from "../NavBar";
 import { useEffect, useState } from "react";
 
 interface Ev {
@@ -30,9 +31,12 @@ export default function Activity() {
 
   return (
     <main className="shell">
-      <a className="h-back" href="/">‹ Home</a>
+      <a className="h-back" href="/more">‹ More</a>
       <h1 className="h-title">Activity</h1>
-      <p className="h-sub">Every command the app has issued, newest first.</p>
+      <p className="h-sub">
+        Every command the app has issued, newest first. In the app, a green flash means the change
+        was confirmed by the house; amber means sent and awaiting KNX feedback.
+      </p>
       {error && <div className="error-banner">{error}</div>}
       {events.map((e, i) => (
         <div key={i} className="dev" style={{ alignItems: "flex-start" }}>
@@ -40,7 +44,7 @@ export default function Activity() {
             <div className="nm">
               {e.command.replace(/_/g, " ")} · {e.deviceId.split("__").pop()?.replace(/_/g, " ")}
             </div>
-            <div className="st">
+            <div className="st" style={{ fontVariantNumeric: "tabular-nums" }}>
               {new Date(e.ts).toLocaleString()} · {e.user ?? "unknown"} ·{" "}
               {(e.durationMs / 1000).toFixed(1)}s
               {e.resultState ? ` · ${e.resultState}` : ""}
@@ -53,6 +57,7 @@ export default function Activity() {
         </div>
       ))}
       {events.length === 0 && !error && <p className="h-sub">No commands recorded yet.</p>}
+      <NavBar />
     </main>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FloorPlan from "./FloorPlan";
+import NavBar from "./NavBar";
+import { BlindsIcon, BulbIcon, GridIcon, MapIcon, SnowIcon } from "./icons";
 
 /**
  * Phase C app shell in the decided design direction (docs/DESIGN_DIRECTION.md):
@@ -52,19 +54,39 @@ export default function Page() {
   const [customScenes, setCustomScenes] = useState<CustomScene[]>([]);
   const [editScenes, setEditScenes] = useState(false);
   const [authNeeded, setAuthNeeded] = useState(false);
-  const [appKey, setAppKey] = useState("");
-  const [mounted, setMounted] = useState(false);
   const [layout, setLayout] = useState<"grid" | "plan">("grid");
   const [role, setRole] = useState<"admin" | "member" | "guest">("member");
   const keyRef = useRef("");
   const canProgram = role !== "guest";
 
   useEffect(() => {
-    const k = localStorage.getItem("appKey") ?? "";
-    setAppKey(k);
-    keyRef.current = k;
-    if (localStorage.getItem("homeLayout") === "plan") setLayout("plan");
-    setMounted(true);
+    keyRef.current = localStorage.getItem("appKey") ?? "";
+    // Explicit choice wins; otherwise the plan suits wide screens, the grid phones.
+    const stored = localStorage.getItem("homeLayout");
+    if (stored === "plan" || stored === "grid") setLayout(stored);
+    else if (window.innerWidth >= 720) setLayout("plan");
+  }, []);
+
+  // Rooms are URLs (/?room=Kitchen): browser/PWA back returns Home instead
+  // of leaving the app, and room views can be shared or reopened.
+  useEffect(() => {
+    const applyUrl = () => {
+      const room = new URLSearchParams(location.search).get("room");
+      setView(room ? { t: "room", room } : { t: "home" });
+    };
+    applyUrl();
+    window.addEventListener("popstate", applyUrl);
+    return () => window.removeEventListener("popstate", applyUrl);
+  }, []);
+
+  const openRoom = useCallback((room: string) => {
+    setView({ t: "room", room });
+    history.pushState({ room }, "", `/?room=${encodeURIComponent(room)}`);
+  }, []);
+
+  const goHome = useCallback(() => {
+    setView({ t: "home" });
+    history.pushState({}, "", "/");
   }, []);
 
   const headers = useCallback(
@@ -243,29 +265,6 @@ export default function Page() {
             {devices.length === 0 && !error
               ? "Connecting…"
               : `${lightsOnTotal} light${lightsOnTotal === 1 ? "" : "s"} on`}
-            {" · "}
-            <a href="/assistant" style={{ color: "var(--dim)" }}>ask</a>
-            {canProgram && (
-              <>
-                {" · "}
-                <a href="/automations" style={{ color: "var(--dim)" }}>automations</a>
-              </>
-            )}
-            {" · "}
-            <a href="/activity" style={{ color: "var(--dim)" }}>activity</a>
-            {role === "admin" && (
-              <>
-                {" · "}
-                <a href="/users" style={{ color: "var(--dim)" }}>users</a>
-              </>
-            )}
-            {" · "}
-            <button
-              onClick={() => fetch("/api/auth/logout", { method: "POST" }).then(() => location.reload())}
-              style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", padding: 0, cursor: "pointer", textDecoration: "underline" }}
-            >
-              sign out
-            </button>
           </p>
 
           {error && <div className="error-banner">{error}</div>}
@@ -292,30 +291,41 @@ export default function Page() {
                 Floor {f}
               </button>
             ))}
-            <button
-              className="floor-tab"
-              style={{ flex: "0 0 auto", padding: "10px 14px" }}
-              aria-pressed={layout === "plan"}
-              aria-label={layout === "grid" ? "Switch to floor plan view" : "Switch to grid view"}
-              onClick={() => {
-                const next = layout === "grid" ? "plan" : "grid";
-                setLayout(next);
-                localStorage.setItem("homeLayout", next);
-              }}
-            >
-              {layout === "grid" ? "⌂" : "▦"}
-            </button>
+            <div className="view-toggle" role="group" aria-label="Room view style">
+              {(["grid", "plan"] as const).map((v) => (
+                <button
+                  key={v}
+                  aria-pressed={layout === v}
+                  onClick={() => {
+                    setLayout(v);
+                    localStorage.setItem("homeLayout", v);
+                  }}
+                >
+                  {v === "grid" ? <GridIcon size={15} /> : <MapIcon size={15} />}
+                  {v === "grid" ? "Grid" : "Plan"}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {layout === "plan" ? (
-            <FloorPlan floor={floor} rooms={rooms} onOpen={(room) => setView({ t: "room", room })} />
+          {devices.length === 0 && !error ? (
+            <div className="rooms">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="room-card skeleton" aria-hidden>
+                  <div className="sk-line" style={{ width: "60%" }} />
+                  <div className="sk-line" style={{ width: "40%", marginTop: 8 }} />
+                </div>
+              ))}
+            </div>
+          ) : layout === "plan" ? (
+            <FloorPlan floor={floor} rooms={rooms} onOpen={openRoom} />
           ) : (
             <div className="rooms">
               {[...rooms.entries()]
                 .filter(([, r]) => r.floor === floor)
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([name, r]) => (
-                  <button key={name} className="room-card" onClick={() => setView({ t: "room", room: name })}>
+                  <button key={name} className="room-card" onClick={() => openRoom(name)}>
                     <div className="rn">{name}</div>
                     <div className={`rs ${r.lightsOn > 0 ? "on" : ""}`}>
                       {r.lightsOn > 0 ? `${r.lightsOn} light${r.lightsOn === 1 ? "" : "s"} on` : "all off"}
@@ -329,19 +339,19 @@ export default function Page() {
           <div className="section-label">Systems</div>
           <div className="rooms">
             <a className="room-card" href="/systems/lighting" style={{ textDecoration: "none", display: "block" }}>
-              <div className="rn">💡 Lighting</div>
+              <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><BulbIcon size={18} /> Lighting</div>
               <div className={`rs ${lightsOnTotal > 0 ? "on" : ""}`}>
                 {lightsOnTotal > 0 ? `${lightsOnTotal} on` : "all off"}
               </div>
             </a>
             <a className="room-card" href="/systems/climate" style={{ textDecoration: "none", display: "block" }}>
-              <div className="rn">❄️ Climate</div>
+              <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><SnowIcon size={18} /> Climate</div>
               <div className={`rs ${climateOnTotal > 0 ? "on" : ""}`}>
                 {climateOnTotal > 0 ? `${climateOnTotal} zone${climateOnTotal === 1 ? "" : "s"} active` : "all off"}
               </div>
             </a>
             <a className="room-card" href="/systems/shades" style={{ textDecoration: "none", display: "block" }}>
-              <div className="rn">🪟 Shades</div>
+              <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><BlindsIcon size={18} /> Shades</div>
               <div className={`rs ${shadesOpenTotal > 0 ? "on" : ""}`}>
                 {shadesOpenTotal > 0 ? `${shadesOpenTotal} open` : "all closed"}
               </div>
@@ -392,21 +402,6 @@ export default function Page() {
             </>
           )}
 
-          <details className="appkey">
-            <summary>App key</summary>
-            {mounted && (
-              <input
-                type="password"
-                value={appKey}
-                placeholder="only needed if APP_KEY is set"
-                onChange={(e) => {
-                  setAppKey(e.target.value);
-                  keyRef.current = e.target.value;
-                  localStorage.setItem("appKey", e.target.value);
-                }}
-              />
-            )}
-          </details>
         </>
       ) : (
         <RoomView
@@ -425,9 +420,10 @@ export default function Page() {
                 }
               : null
           }
-          back={() => setView({ t: "home" })}
+          back={goHome}
         />
       )}
+      <NavBar />
     </main>
   );
 }
@@ -696,24 +692,45 @@ function Device({
     <div className={`dev-block ${flashClass(flash)}`}>
       {row}
       <div className="slider-row">
-        <input
-          type="range"
-          min={1}
-          max={100}
-          defaultValue={d.brightnessPct ?? 50}
-          aria-label={`${d.label} brightness`}
-          disabled={busy || !d.available}
-          onPointerUp={(e) =>
-            send(d.id, { command: "set_brightness", brightnessPct: Number((e.target as HTMLInputElement).value) })
-          }
-          onKeyUp={(e) => {
-            if (e.key === "Enter") {
-              send(d.id, { command: "set_brightness", brightnessPct: Number((e.target as HTMLInputElement).value) });
-            }
-          }}
-        />
+        <Dimmer d={d} on={on} busy={busy} send={send} />
       </div>
     </div>
+  );
+}
+
+/**
+ * The slider shows the truth: 0 when the light is off, the reported
+ * brightness when on. Local state only exists while dragging.
+ */
+function Dimmer({
+  d, on, busy, send,
+}: {
+  d: UiDevice;
+  on: boolean;
+  busy: boolean;
+  send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const value = drag ?? (on ? d.brightnessPct ?? 100 : 0);
+  const commit = (v: number) => {
+    setDrag(null);
+    if (v === 0) send(d.id, { command: "turn_off" });
+    else send(d.id, { command: "set_brightness", brightnessPct: v });
+  };
+  return (
+    <input
+      type="range"
+      min={0}
+      max={100}
+      value={value}
+      aria-label={`${d.label} brightness`}
+      disabled={busy || !d.available}
+      onChange={(e) => setDrag(Number(e.target.value))}
+      onPointerUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
+      onKeyUp={(e) => {
+        if (e.key === "Enter") commit(Number((e.target as HTMLInputElement).value));
+      }}
+    />
   );
 }
 
@@ -730,7 +747,12 @@ function ClimateCard({
   // KNX reports a 0 setpoint when none is known — treat it as unknown, not 0°.
   const known =
     d.targetTemperature != null && d.targetTemperature >= 10 ? d.targetTemperature : null;
-  const shown = target ?? known ?? 24;
+  // With no setpoint, start stepping from the room's actual temperature.
+  const seed =
+    d.currentTemperature != null
+      ? Math.min(32, Math.max(10, Math.round(d.currentTemperature * 2) / 2))
+      : 24;
+  const shown = target ?? known ?? seed;
   const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const step = (delta: number) => {

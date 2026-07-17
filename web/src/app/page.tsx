@@ -883,9 +883,13 @@ function SaunaCard({
   };
 
   // KLAFS target (40-100°C, 5° steps). Preference: mid-adjustment value,
-  // then the cabin's reported target, then the last target we sent.
+  // then — for a grace window after we send a change, because KLAFS's
+  // GetData lags behind ChangeTemperature — the target we sent, then the
+  // cabin's reported target.
+  const committedAt = useRef(0);
   const reported = d.targetTemperature != null && d.targetTemperature >= 40 ? d.targetTemperature : null;
-  const shownTarget = pendingTemp ?? reported ?? committedTemp;
+  const commitFresh = Date.now() - committedAt.current < 90_000;
+  const shownTarget = pendingTemp ?? (commitFresh ? committedTemp ?? reported : reported ?? committedTemp);
 
   const stepTemp = (delta: number) => {
     const base = shownTarget ?? 85;
@@ -895,8 +899,10 @@ function SaunaCard({
     tempTimer.current = setTimeout(() => {
       send(d.id, { command: "set_temperature", temperature: next, confirm: true }).then((r) => {
         setPendingTemp(null);
-        if (r.ok) setCommittedTemp(next);
-        else {
+        if (r.ok) {
+          setCommittedTemp(next);
+          committedAt.current = Date.now();
+        } else {
           setLabel(r.error ?? "temperature change failed");
           setTimeout(() => setLabel(null), 6000);
         }

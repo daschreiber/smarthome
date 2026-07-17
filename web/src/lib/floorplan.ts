@@ -64,7 +64,9 @@ export const FLOOR_GEOMETRY: Record<5 | 6, FloorGeometry> = {
     ],
     rooms: [
       { room: "Entrance", rect: { x: 16, y: 5.6, w: 24, h: 5.7 } },
-      { room: "Entrance", rect: { x: 27, y: 1.1, w: 11, h: 4.5 }, unlabeled: true }, // guest WC nook
+      // The guest WC is physically its own room, but its lights live under
+      // Entrance in the KNX inventory — labeled honestly, opens Entrance.
+      { room: "Entrance", label: "WC", rect: { x: 27, y: 1.1, w: 11, h: 4.5 } },
       { room: "Lounge", rect: { x: 3, y: 11.3, w: 18, h: 21.3 } },
       // x21-40 above dining is the stair core — footprint, not a room.
       { room: "Dining", rect: { x: 21, y: 18.6, w: 19, h: 14 } },

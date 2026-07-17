@@ -236,3 +236,21 @@ as PR #19).
 **Resolved same day:** the owner pointed the Railway service at `main`
 (first main deploy `de3837f`, SUCCESS) — "merged to main" and "deployed"
 now mean the same thing.
+
+## 2026-07-17 (later) — Sauna live in the app
+
+The sauna card's "unavailable"/"Command failed" saga ended as a token
+mismatch: the Sauna app's `/api/quick/*` endpoints authenticate against its
+`API_TOKEN` env var (fail-closed — an UNSET token also answers
+"Invalid token"), and Railway's `SAUNA_API_TOKEN` didn't match it. Owner
+aligned the two; card reports live cabin state and hold-to-start works.
+
+Two related fixes shipped on the way to the diagnosis:
+- Gateway timeouts during `/api/quick/start` are reported as "sent —
+  watchdog verifying" (amber), not failure: the Sauna app verifies real
+  heating for up to ~2 minutes, longer than its serverless platform
+  allows, and arms a watchdog cron BEFORE verifying — the start
+  survives the killed HTTP call by design.
+- Error surfacing: the card now shows the server's actual reason
+  (`unavailable — Invalid token` is what cracked the case) instead of a
+  mute label. Diagnosability is a feature.

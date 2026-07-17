@@ -43,6 +43,13 @@ interface CustomScene {
 
 const GROUP_ORDER = ["Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
 
+/** A room's A/C (or sauna) counts as running for the card indicators. */
+function climateActive(c: UiDevice | null): boolean {
+  return (
+    c != null && c.available && c.state !== "off" && c.state !== "unavailable" && c.state !== "unknown"
+  );
+}
+
 export default function Page() {
   const [devices, setDevices] = useState<UiDevice[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -326,7 +333,13 @@ export default function Page() {
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([name, r]) => (
                   <button key={name} className="room-card" onClick={() => openRoom(name)}>
-                    <div className="rn">{name}</div>
+                    <div className="rn" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                      <span>{name}</span>
+                      <span style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                        {r.lightsOn > 0 && <span style={{ color: "var(--active)", display: "flex" }}><BulbIcon size={15} /></span>}
+                        {climateActive(r.climate) && <span style={{ color: "var(--accent)", display: "flex" }}><SnowIcon size={15} /></span>}
+                      </span>
+                    </div>
                     <div className={`rs ${r.lightsOn > 0 ? "on" : ""}`}>
                       {r.lightsOn > 0 ? `${r.lightsOn} light${r.lightsOn === 1 ? "" : "s"} on` : "all off"}
                       {r.climate?.currentTemperature != null ? ` · ${r.climate.currentTemperature}°` : ""}

@@ -245,9 +245,11 @@ export default function Page() {
           {favDevices.length > 0 && (
             <>
               <div className="section-label">Favorites</div>
-              {favDevices.map((d) => (
-                <Device key={d.id} d={d} flash={flash[d.id]} busy={!!busy[d.id]} send={send} fav={true} onFav={toggleFav} />
-              ))}
+              <div className="dev-list">
+                {favDevices.map((d) => (
+                  <Device key={d.id} d={d} flash={flash[d.id]} busy={!!busy[d.id]} send={send} fav={true} onFav={toggleFav} />
+                ))}
+              </div>
             </>
           )}
 
@@ -408,7 +410,7 @@ function Login({ onDone }: { onDone: () => void }) {
 
   if (forgot) {
     return (
-      <form onSubmit={requestReset} style={{ marginTop: "18vh" }}>
+      <form className="auth-form" onSubmit={requestReset}>
         <h1 className="h-title">Reset password</h1>
         <p className="h-sub">Enter your email and we&apos;ll get you a reset link.</p>
         {err && <div className="error-banner">{err}</div>}
@@ -430,7 +432,7 @@ function Login({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} style={{ marginTop: "18vh" }}>
+    <form className="auth-form" onSubmit={submit}>
       <h1 className="h-title">Home</h1>
       <p className="h-sub">Sign in to control the house.</p>
       {err && <div className="error-banner">{err}</div>}
@@ -492,17 +494,19 @@ function RoomView({
       {groups.map(([group, ds]) => (
         <section key={group}>
           <div className="section-label">{group}</div>
-          {ds.map((d) => (
-            <Device
-              key={d.id}
-              d={d}
-              flash={flash[d.id]}
-              busy={!!busy[d.id]}
-              send={send}
-              fav={favs.includes(d.id)}
-              onFav={onFav}
-            />
-          ))}
+          <div className="dev-list">
+            {ds.map((d) => (
+              <Device
+                key={d.id}
+                d={d}
+                flash={flash[d.id]}
+                busy={!!busy[d.id]}
+                send={send}
+                fav={favs.includes(d.id)}
+                onFav={onFav}
+              />
+            ))}
+          </div>
         </section>
       ))}
     </>

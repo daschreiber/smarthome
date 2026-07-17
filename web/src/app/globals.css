@@ -15,6 +15,7 @@
   --chip-ink: #6b6458;
   --radius: 16px;
   --font: ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --shell-max: 480px; /* phone; widened by the breakpoints at the bottom */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -46,7 +47,14 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-.shell { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+.shell { max-width: var(--shell-max); margin: 0 auto; padding: 20px 16px 40px; }
+
+/* Device lists: single column on phones, two columns from tablet width up. */
+.dev-list { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 8px; align-items: start; }
+.dev-list .dev, .dev-list .dev-block, .dev-list .climate-card { margin-bottom: 0; }
+
+/* Sign-in / reset forms stay a comfortable reading width on big screens. */
+.auth-form { max-width: 400px; margin: 18vh auto 0; }
 
 .h-title { font-size: 22px; font-weight: 700; margin: 0 0 2px; letter-spacing: -0.01em; }
 .h-sub { font-size: 13px; color: var(--dim); margin: 0 0 14px; }
@@ -164,4 +172,30 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .toggle, .toggle::after { transition: none; }
+}
+
+/* ---- Tablet (iPad portrait and up) ---- */
+@media (min-width: 720px) {
+  :root { --shell-max: 768px; }
+  .shell { padding: 28px 24px 48px; }
+  .rooms { grid-template-columns: repeat(3, 1fr); }
+  .dev-list { grid-template-columns: 1fr 1fr; }
+  .floors { max-width: 420px; }
+}
+
+/* ---- Laptop / desktop ---- */
+@media (min-width: 1120px) {
+  :root { --shell-max: 1024px; }
+  .rooms { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ---- Mouse / trackpad: hover affordances (never fire on touch) ---- */
+@media (hover: hover) and (pointer: fine) {
+  .room-card { transition: border-color 0.12s, transform 0.12s; }
+  .room-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .mini-btn:hover:not(:disabled), .round-btn:hover:not(:disabled) { border-color: var(--accent); }
+  .scene-pill:hover:not(:disabled) { filter: brightness(1.08); }
+  .floor-tab:hover:not([aria-pressed="true"]) { color: var(--ink); }
+  .h-back:hover, .appkey summary:hover { color: var(--ink); }
+  .dev-list .dev:hover, .dev-list .dev-block:hover, .climate-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-line)); }
 }

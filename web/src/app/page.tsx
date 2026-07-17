@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FloorPlan from "./FloorPlan";
 import NavBar from "./NavBar";
-import { BlindsIcon, BulbIcon, GridIcon, MapIcon, SnowIcon } from "./icons";
+import { BlindsIcon, BulbIcon, FlameIcon, GridIcon, MapIcon, SnowIcon } from "./icons";
 
 /**
  * Phase C app shell in the decided design direction (docs/DESIGN_DIRECTION.md):
@@ -63,6 +63,7 @@ export default function Page() {
   const [authNeeded, setAuthNeeded] = useState(false);
   const [layout, setLayout] = useState<"grid" | "plan">("grid");
   const [role, setRole] = useState<"admin" | "member" | "guest">("member");
+  const [floorHeating, setFloorHeating] = useState<string[]>([]);
   const keyRef = useRef("");
   const canProgram = role !== "guest";
 
@@ -118,9 +119,14 @@ export default function Page() {
       }
       if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
       setAuthNeeded(false);
-      const out = (await res.json()) as { devices: UiDevice[]; role?: "admin" | "member" | "guest" };
+      const out = (await res.json()) as {
+        devices: UiDevice[];
+        role?: "admin" | "member" | "guest";
+        floorHeatingRooms?: string[];
+      };
       setDevices(out.devices);
       if (out.role) setRole(out.role);
+      setFloorHeating(out.floorHeatingRooms ?? []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed to load");
@@ -338,6 +344,7 @@ export default function Page() {
                       <span style={{ display: "flex", gap: 5, flexShrink: 0 }}>
                         {r.lightsOn > 0 && <span style={{ color: "var(--active)", display: "flex" }}><BulbIcon size={15} /></span>}
                         {climateActive(r.climate) && <span style={{ color: "var(--accent)", display: "flex" }}><SnowIcon size={15} /></span>}
+                        {floorHeating.includes(name) && <span style={{ color: "var(--danger)", display: "flex" }}><FlameIcon size={15} /></span>}
                       </span>
                     </div>
                     <div className={`rs ${r.lightsOn > 0 ? "on" : ""}`}>

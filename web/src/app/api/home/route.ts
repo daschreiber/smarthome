@@ -65,9 +65,21 @@ export async function GET(req: NextRequest) {
           lastUpdated: s?.last_updated ?? null,
         };
       });
+    // The underfloor-heating valve relays are hidden as CONTROLS (plumbing,
+    // per the entity map), but their state makes an honest read-only
+    // indicator: which rooms have warm floors right now.
+    const floorHeatingRooms = [
+      ...new Set(
+        registry()
+          .devices.filter((d) => d.category === "floor_heating" && d.room)
+          .filter((d) => states.get(d.entityId)?.state === "on")
+          .map((d) => d.room),
+      ),
+    ];
+
     // The role rides along so the UI can hide programming affordances for
     // guests; enforcement lives in the API routes, never in the browser.
-    return NextResponse.json({ devices, role: auth.role });
+    return NextResponse.json({ devices, role: auth.role, floorHeatingRooms });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "upstream failure" },

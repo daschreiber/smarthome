@@ -55,7 +55,9 @@ export default function Page() {
   const [appKey, setAppKey] = useState("");
   const [mounted, setMounted] = useState(false);
   const [layout, setLayout] = useState<"grid" | "plan">("grid");
+  const [role, setRole] = useState<"admin" | "member" | "guest">("member");
   const keyRef = useRef("");
+  const canProgram = role !== "guest";
 
   useEffect(() => {
     const k = localStorage.getItem("appKey") ?? "";
@@ -87,7 +89,9 @@ export default function Page() {
       }
       if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
       setAuthNeeded(false);
-      setDevices(((await res.json()) as { devices: UiDevice[] }).devices);
+      const out = (await res.json()) as { devices: UiDevice[]; role?: "admin" | "member" | "guest" };
+      setDevices(out.devices);
+      if (out.role) setRole(out.role);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed to load");
@@ -241,12 +245,20 @@ export default function Page() {
               : `${lightsOnTotal} light${lightsOnTotal === 1 ? "" : "s"} on`}
             {" · "}
             <a href="/assistant" style={{ color: "var(--dim)" }}>ask</a>
-            {" · "}
-            <a href="/automations" style={{ color: "var(--dim)" }}>automations</a>
+            {canProgram && (
+              <>
+                {" · "}
+                <a href="/automations" style={{ color: "var(--dim)" }}>automations</a>
+              </>
+            )}
             {" · "}
             <a href="/activity" style={{ color: "var(--dim)" }}>activity</a>
-            {" · "}
-            <a href="/users" style={{ color: "var(--dim)" }}>users</a>
+            {role === "admin" && (
+              <>
+                {" · "}
+                <a href="/users" style={{ color: "var(--dim)" }}>users</a>
+              </>
+            )}
             {" · "}
             <button
               onClick={() => fetch("/api/auth/logout", { method: "POST" }).then(() => location.reload())}
@@ -340,7 +352,7 @@ export default function Page() {
             <>
               <div className="section-label">
                 Scenes{" "}
-                {customScenes.length > 0 && (
+                {canProgram && customScenes.length > 0 && (
                   <button
                     onClick={() => setEditScenes((v) => !v)}
                     style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", fontSize: 11, cursor: "pointer", textDecoration: "underline", textTransform: "none", letterSpacing: 0 }}
@@ -405,10 +417,14 @@ export default function Page() {
           send={send}
           favs={favs}
           onFav={toggleFav}
-          onCapture={(room) => {
-            const name = window.prompt(`Save ${room} as a scene — name it:`);
-            if (name?.trim()) sceneOp({ action: "capture", name: name.trim(), room });
-          }}
+          onCapture={
+            canProgram
+              ? (room) => {
+                  const name = window.prompt(`Save ${room} as a scene — name it:`);
+                  if (name?.trim()) sceneOp({ action: "capture", name: name.trim(), room });
+                }
+              : null
+          }
           back={() => setView({ t: "home" })}
         />
       )}
@@ -531,21 +547,23 @@ function RoomView({
   send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
   favs: string[];
   onFav: (id: string) => void;
-  onCapture: (room: string) => void;
+  onCapture: ((room: string) => void) | null;
   back: () => void;
 }) {
   return (
     <>
       <button className="h-back" onClick={back}>‹ Home</button>
       <h1 className="h-title">{room}</h1>
-      <p className="h-sub">
-        <button
-          onClick={() => onCapture(room)}
-          style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", padding: 0, cursor: "pointer", textDecoration: "underline" }}
-        >
-          save current look as a scene
-        </button>
-      </p>
+      {onCapture && (
+        <p className="h-sub">
+          <button
+            onClick={() => onCapture(room)}
+            style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+          >
+            save current look as a scene
+          </button>
+        </p>
+      )}
       {groups.map(([group, ds]) => (
         <section key={group}>
           <div className="section-label">{group}</div>

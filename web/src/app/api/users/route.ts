@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
-import { addUser, createResetToken, listUsers, removeUser } from "@/lib/users";
+import { addUser, createResetToken, listUsers, removeUser, setRole, type Role } from "@/lib/users";
 import { audit } from "@/lib/audit";
 
 function admin(req: NextRequest) {
@@ -20,11 +20,17 @@ export async function POST(req: NextRequest) {
   const { err, auth } = admin(req);
   if (err) return err;
   const body = (await req.json().catch(() => null)) as
-    | { action?: string; email?: string; password?: string; role?: "admin" | "member" }
+    | { action?: string; email?: string; password?: string; role?: string }
     | null;
   if (!body?.email) return NextResponse.json({ error: "email required" }, { status: 400 });
+  const role: Role = body.role === "admin" ? "admin" : body.role === "guest" ? "guest" : "member";
 
   try {
+    if (body.action === "set-role") {
+      setRole(body.email, role);
+      audit({ ts: new Date().toISOString(), user: auth.user, deviceId: "users", entityId: "app.users", command: "set_role", args: { email: body.email, role }, ok: true, durationMs: 0 });
+      return NextResponse.json({ ok: true, users: listUsers() });
+    }
     if (body.action === "remove") {
       removeUser(body.email);
       audit({ ts: new Date().toISOString(), user: auth.user, deviceId: "users", entityId: "app.users", command: "remove_user", args: { email: body.email }, ok: true, durationMs: 0 });
@@ -38,8 +44,8 @@ export async function POST(req: NextRequest) {
     }
     // default: add
     if (!body.password) return NextResponse.json({ error: "password required" }, { status: 400 });
-    addUser(body.email, body.password, body.role === "admin" ? "admin" : "member");
-    audit({ ts: new Date().toISOString(), user: auth.user, deviceId: "users", entityId: "app.users", command: "add_user", args: { email: body.email, role: body.role ?? "member" }, ok: true, durationMs: 0 });
+    addUser(body.email, body.password, role);
+    audit({ ts: new Date().toISOString(), user: auth.user, deviceId: "users", entityId: "app.users", command: "add_user", args: { email: body.email, role }, ok: true, durationMs: 0 });
     return NextResponse.json({ ok: true, users: listUsers() });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "failed" }, { status: 400 });

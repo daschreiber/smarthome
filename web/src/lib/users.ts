@@ -8,12 +8,12 @@ import path from "node:path";
  * when it is empty — the first entry becomes the admin — after which the
  * store is the source of truth and the env var is ignored.
  *
- * Roles: "admin" manages users; "member" controls the house. A future
- * "guest" tier (restricted devices, nothing programmable) extends this
- * field — see docs/CONVERSATIONAL_LAYER_AND_EXPANSION.md.
+ * Roles: "admin" manages users; "member" controls and programs the house;
+ * "guest" controls devices but can't program anything (see
+ * lib/permissions.ts for the capability matrix).
  */
 
-export type Role = "admin" | "member";
+export type Role = "admin" | "member" | "guest";
 
 export interface UserRecord {
   email: string;
@@ -105,6 +105,22 @@ export function removeUser(email: string): void {
     throw new Error("cannot remove the last admin");
   }
   save(users.filter((u) => u.email !== norm));
+}
+
+export function setRole(email: string, role: Role): void {
+  const norm = email.trim().toLowerCase();
+  const users = load();
+  const target = users.find((u) => u.email === norm);
+  if (!target) throw new Error("no such user");
+  if (
+    target.role === "admin" &&
+    role !== "admin" &&
+    users.filter((u) => u.role === "admin").length === 1
+  ) {
+    throw new Error("cannot demote the last admin");
+  }
+  target.role = role;
+  save(users);
 }
 
 export function setPassword(email: string, password: string): void {

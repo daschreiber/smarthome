@@ -233,6 +233,6 @@ deploy; resolved by the branch's own 698818b deploy at 14:50). Fixed by
 merging main into the branch (`c4e860a`, deployed SUCCESS, then merged back
 as PR #19).
 
-**Standing recommendation:** point the Railway service at `main`
-(dashboard → smarthome service → Settings → Source → branch), so
-"merged to main" and "deployed" mean the same thing.
+**Resolved same day:** the owner pointed the Railway service at `main`
+(first main deploy `de3837f`, SUCCESS) — "merged to main" and "deployed"
+now mean the same thing.

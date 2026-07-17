@@ -47,6 +47,9 @@ network-scoped, only the login restriction was.
    | `USERS_PATH` | `/data/users.json` |
    | `FAVORITES_PATH` | `/data/favorites.json` |
    | `AUDIT_LOG_PATH` | `/data/audit.log` |
+   | `SCENES_PATH` | `/data/scenes.json` |
+   | `AUTOMATIONS_PATH` | `/data/automations.json` |
+   | `APP_TZ` | `Asia/Jerusalem` — house timezone for automation schedules (cloud hosts run UTC) |
    | `APP_BASE_URL` | the Railway URL (fill in after step 5; used in reset links) |
    | `SAUNA_BASE_URL` | the sauna app's URL (optional, enables the sauna card) |
    | `SAUNA_API_TOKEN` | the sauna app's API token (optional) |

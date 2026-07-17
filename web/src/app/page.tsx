@@ -224,6 +224,8 @@ export default function Page() {
               ? "Connecting…"
               : `${lightsOnTotal} light${lightsOnTotal === 1 ? "" : "s"} on`}
             {" · "}
+            <a href="/automations" style={{ color: "var(--dim)" }}>automations</a>
+            {" · "}
             <a href="/activity" style={{ color: "var(--dim)" }}>activity</a>
             {" · "}
             <a href="/users" style={{ color: "var(--dim)" }}>users</a>

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { CommandSchema, buildServiceCall } from "@/lib/commands";
-import { callService, getStates } from "@/lib/ha";
-import { getDevice, registry } from "@/lib/registry";
-import { buildSceneStates, createScene, deleteScene, getScene, listScenes } from "@/lib/scenes";
+import { getStates } from "@/lib/ha";
+import { registry } from "@/lib/registry";
+import { applySceneById } from "@/lib/execute";
+import { buildSceneStates, createScene, deleteScene, listScenes } from "@/lib/scenes";
 
 export async function GET(req: NextRequest) {
   const auth = authenticate(req);
@@ -52,32 +52,17 @@ export async function POST(req: NextRequest) {
 
     // apply
     if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    const scene = getScene(body.id);
-    if (!scene) return NextResponse.json({ error: "no such scene" }, { status: 404 });
-
-    const results = await Promise.allSettled(
-      scene.states.map(async (st) => {
-        const device = getDevice(st.deviceId);
-        if (!device) throw new Error(`${st.deviceId}: no longer in the registry`);
-        const parsed = CommandSchema.safeParse(st.command);
-        if (!parsed.success) throw new Error(`${st.deviceId}: stored command invalid`);
-        const call = buildServiceCall(device, parsed.data);
-        await callService(call.domain, call.service, call.data);
-      }),
-    );
-    const failed = results
-      .map((r, i) => (r.status === "rejected" ? scene.states[i].deviceId : null))
-      .filter(Boolean) as string[];
+    const result = await applySceneById(body.id);
     audit({
-      ts: new Date().toISOString(), user: auth.user, deviceId: "scenes", entityId: `scene.${scene.id}`,
-      command: "apply_scene", args: { devices: scene.states.length, failed: failed.length },
-      ok: failed.length === 0, durationMs: Date.now() - started,
-      error: failed.length ? `failed: ${failed.join(", ")}` : undefined,
+      ts: new Date().toISOString(), user: auth.user, deviceId: "scenes", entityId: `scene.${body.id}`,
+      command: "apply_scene", args: { devices: result.total, failed: result.failed.length },
+      ok: result.failed.length === 0, durationMs: Date.now() - started,
+      error: result.failed.length ? result.failed.map((f) => `${f.target}: ${f.error}`).join("; ") : undefined,
     });
     return NextResponse.json({
-      ok: failed.length === 0,
-      applied: scene.states.length - failed.length,
-      failed,
+      ok: result.failed.length === 0,
+      applied: result.total - result.failed.length,
+      failed: result.failed.map((f) => f.target),
     });
   } catch (err) {
     return NextResponse.json(

@@ -33,6 +33,9 @@ interface UiDevice {
   note?: string | null;
   /** Sauna only: pending auto-stop time (HH:MM house time). */
   stopAt?: string | null;
+  /** White-noise machine only. */
+  noiseType?: string | null;
+  volumePct?: number | null;
 }
 
 type View = { t: "home" } | { t: "room"; room: string };
@@ -689,6 +692,7 @@ function Device({
 }) {
   const star = onFav ? <Star on={!!fav} onClick={() => onFav(d.id)} label={d.label} /> : null;
   if (d.kind === "sauna") return <SaunaCard d={d} busy={busy} send={send} />;
+  if (d.kind === "noise") return <NoiseCard d={d} busy={busy} />;
   if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} star={star} />;
   if (d.kind === "cover") {
     return (
@@ -839,6 +843,81 @@ function ClimateCard({
         >
           {active ? "Off" : "On"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * White-noise machine: the sound (type + volume) is ours to control; on/off
+ * belongs to the Control4 bedside button, so the card reports playing/idle
+ * honestly from the server's listener count instead of pretending.
+ */
+function NoiseCard({ d, busy }: { d: UiDevice; busy: boolean }) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const playing = d.state === "on";
+  const volume = drag ?? d.volumePct ?? 50;
+
+  const post = (body: Record<string, unknown>) => {
+    setNote(null);
+    fetch("/api/noise", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(async (res) => {
+        const out = await res.json();
+        if (!res.ok) throw new Error(out.error ?? "failed");
+      })
+      .catch((e) => {
+        setNote(e instanceof Error ? e.message : "failed");
+        setTimeout(() => setNote(null), 6000);
+      });
+  };
+
+  return (
+    <div className={`dev-block ${d.available ? "" : "unavailable"}`}>
+      <div className={`dev ${playing ? "on" : ""}`}>
+        <div>
+          <div className="nm">{d.label}</div>
+          <div className="st">
+            {note ??
+              (d.available
+                ? playing
+                  ? `playing · ${d.noiseType ?? "white"}`
+                  : "idle — start from the bedside button"
+                : `unavailable${d.note ? ` — ${d.note}` : ""}`)}
+          </div>
+        </div>
+        <div className="btn-row">
+          {(["white", "brown", "pink"] as const).map((t) => (
+            <button
+              key={t}
+              className="mini-btn"
+              disabled={busy || !d.available}
+              style={d.noiseType === t ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : undefined}
+              onClick={() => post({ noiseType: t })}
+            >
+              {t[0].toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="slider-row">
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={volume}
+          aria-label="Noise volume"
+          disabled={busy || !d.available}
+          onChange={(e) => setDrag(Number(e.target.value))}
+          onPointerUp={(e) => {
+            setDrag(null);
+            post({ volumePct: Number((e.target as HTMLInputElement).value) });
+          }}
+        />
       </div>
     </div>
   );

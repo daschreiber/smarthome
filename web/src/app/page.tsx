@@ -36,6 +36,13 @@ interface UiDevice {
 type View = { t: "home" } | { t: "room"; room: string };
 type Flash = "ok" | "sent" | "fail";
 
+/** Command outcome, with the server's reason when it failed. */
+interface SendResult {
+  ok: boolean;
+  status?: string;
+  error?: string;
+}
+
 interface CustomScene {
   id: string;
   name: string;
@@ -186,7 +193,7 @@ export default function Page() {
   );
 
   const send = useCallback(
-    async (id: string, body: Record<string, unknown>) => {
+    async (id: string, body: Record<string, unknown>): Promise<SendResult> => {
       setBusy((b) => ({ ...b, [id]: true }));
       try {
         const res = await fetch(`/api/devices/${id}/command`, {
@@ -199,10 +206,10 @@ export default function Page() {
           throw new Error(out.error ?? "command failed");
         }
         setFlash((f) => ({ ...f, [id]: out.status === "confirmed" ? "ok" : "sent" }));
-        return true;
-      } catch {
+        return { ok: true, status: out.status, error: undefined };
+      } catch (err) {
         setFlash((f) => ({ ...f, [id]: "fail" }));
-        return false;
+        return { ok: false, error: err instanceof Error ? err.message : "command failed" };
       } finally {
         setBusy((b) => ({ ...b, [id]: false }));
         setTimeout(() => setFlash((f) => { const n = { ...f }; delete n[id]; return n; }), 1500);
@@ -604,7 +611,7 @@ function RoomView({
   groups: [string, UiDevice[]][];
   flash: Record<string, Flash>;
   busy: Record<string, boolean>;
-  send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   favs: string[];
   onFav: (id: string) => void;
   onCapture: ((room: string) => void) | null;
@@ -671,7 +678,7 @@ function Device({
   d: UiDevice;
   flash?: Flash;
   busy: boolean;
-  send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   fav?: boolean;
   onFav?: (id: string) => void;
 }) {
@@ -741,7 +748,7 @@ function Dimmer({
   d: UiDevice;
   on: boolean;
   busy: boolean;
-  send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
 }) {
   const [drag, setDrag] = useState<number | null>(null);
   const value = drag ?? (on ? d.brightnessPct ?? 100 : 0);
@@ -773,19 +780,23 @@ function ClimateCard({
   d: UiDevice;
   flash?: Flash;
   busy: boolean;
-  send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   star?: React.ReactNode;
 }) {
   const [target, setTarget] = useState<number | null>(null);
-  // KNX reports a 0 setpoint when none is known — treat it as unknown, not 0°.
+  // The KNX side doesn't reliably echo the setpoint back (reports 0), so
+  // remember the last target we sent: the thermostat aligns to it, and the
+  // card must keep saying so. HA's echo still wins whenever it reports one.
+  const [committed, setCommitted] = useState<number | null>(null);
   const known =
     d.targetTemperature != null && d.targetTemperature >= 10 ? d.targetTemperature : null;
-  // With no setpoint, start stepping from the room's actual temperature.
+  // With no setpoint at all, start stepping from the room's actual temperature.
   const seed =
     d.currentTemperature != null
       ? Math.min(32, Math.max(10, Math.round(d.currentTemperature * 2) / 2))
       : 24;
-  const shown = target ?? known ?? seed;
+  const shown = target ?? known ?? committed ?? seed;
+  const hasTarget = target != null || known != null || committed != null;
   const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const step = (delta: number) => {
@@ -793,7 +804,10 @@ function ClimateCard({
     setTarget(next);
     if (commitTimer.current) clearTimeout(commitTimer.current);
     commitTimer.current = setTimeout(() => {
-      send(d.id, { command: "set_temperature", temperature: next }).then(() => setTarget(null));
+      send(d.id, { command: "set_temperature", temperature: next }).then((r) => {
+        if (r.ok) setCommitted(next);
+        setTarget(null);
+      });
     }, 900);
   };
 
@@ -811,7 +825,7 @@ function ClimateCard({
       </div>
       <div className="climate-set">
         <button className="round-btn" disabled={busy || !d.available} onClick={() => step(-0.5)} aria-label="Lower target">−</button>
-        <div className="target">{target != null || known != null ? `${shown}°` : "—"}</div>
+        <div className="target">{hasTarget ? `${shown}°` : "—"}</div>
         <button className="round-btn" disabled={busy || !d.available} onClick={() => step(0.5)} aria-label="Raise target">+</button>
         <button
           className="mini-btn"
@@ -830,14 +844,39 @@ function SaunaCard({
 }: {
   d: UiDevice;
   busy: boolean;
-  send: (id: string, body: Record<string, unknown>) => Promise<boolean>;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
 }) {
   const [fill, setFill] = useState(0);
   const [label, setLabel] = useState<string | null>(null);
+  const [pendingTemp, setPendingTemp] = useState<number | null>(null);
+  const [committedTemp, setCommittedTemp] = useState<number | null>(null);
+  const tempTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const raf = useRef<number | null>(null);
   const start = useRef(0);
   const HOLD_MS = 1100;
   const on = d.state === "on";
+
+  // KLAFS target (40-100°C, 5° steps). Preference: mid-adjustment value,
+  // then the cabin's reported target, then the last target we sent.
+  const reported = d.targetTemperature != null && d.targetTemperature >= 40 ? d.targetTemperature : null;
+  const shownTarget = pendingTemp ?? reported ?? committedTemp;
+
+  const stepTemp = (delta: number) => {
+    const base = shownTarget ?? 85;
+    const next = Math.min(100, Math.max(40, base + delta));
+    setPendingTemp(next);
+    if (tempTimer.current) clearTimeout(tempTimer.current);
+    tempTimer.current = setTimeout(() => {
+      send(d.id, { command: "set_temperature", temperature: next, confirm: true }).then((r) => {
+        setPendingTemp(null);
+        if (r.ok) setCommittedTemp(next);
+        else {
+          setLabel(r.error ?? "temperature change failed");
+          setTimeout(() => setLabel(null), 6000);
+        }
+      });
+    }, 900);
+  };
 
   const tick = useCallback(() => {
     const p = Math.min(1, (Date.now() - start.current) / HOLD_MS);
@@ -845,9 +884,10 @@ function SaunaCard({
     if (p >= 1) {
       setFill(0);
       setLabel(on ? "Stopping — verifying…" : "Starting — verifying heating…");
-      send(d.id, { command: on ? "turn_off" : "turn_on", confirm: true }).then((ok) => {
-        setLabel(ok ? null : "Command failed");
-        if (!ok) setTimeout(() => setLabel(null), 2500);
+      send(d.id, { command: on ? "turn_off" : "turn_on", confirm: true }).then((r) => {
+        // Show the server's actual reason, not a mute "Command failed".
+        setLabel(r.ok ? null : r.error ?? "Command failed");
+        if (!r.ok) setTimeout(() => setLabel(null), 8000);
       });
       return;
     }
@@ -871,9 +911,28 @@ function SaunaCard({
           <div className="nm">{d.label}</div>
           <div className="st">
             {d.available
-              ? `${on ? "heating" : "off"} · cabin ${d.currentTemperature ?? "—"}° · target ${d.targetTemperature ?? "—"}°`
+              ? `${on ? "heating" : "off"} · cabin ${d.currentTemperature ?? "—"}°`
               : `unavailable${d.note ? ` — ${d.note}` : ""}`}
           </div>
+        </div>
+        <div className="climate-set">
+          <button
+            className="round-btn"
+            disabled={busy || !d.available}
+            onClick={() => stepTemp(-5)}
+            aria-label="Lower sauna target"
+          >
+            −
+          </button>
+          <div className="target">{shownTarget != null ? `${shownTarget}°` : "—"}</div>
+          <button
+            className="round-btn"
+            disabled={busy || !d.available}
+            onClick={() => stepTemp(5)}
+            aria-label="Raise sauna target"
+          >
+            +
+          </button>
         </div>
       </div>
       <div className="slider-row">

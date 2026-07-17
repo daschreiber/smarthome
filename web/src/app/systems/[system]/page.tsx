@@ -260,8 +260,15 @@ function ClimateRow({
   send: (id: string, body: Record<string, unknown>) => void;
 }) {
   const [pending, setPending] = useState<number | null>(null);
+  // KNX doesn't echo setpoints reliably; keep showing the last target sent.
+  const [committed, setCommitted] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const target = pending ?? d.targetTemperature ?? 21;
+  const reported = d.targetTemperature != null && d.targetTemperature >= 10 ? d.targetTemperature : null;
+  const seed =
+    d.currentTemperature != null
+      ? Math.min(32, Math.max(10, Math.round(d.currentTemperature * 2) / 2))
+      : 21;
+  const target = pending ?? reported ?? committed ?? seed;
   const active = d.available && d.state !== "off" && d.state !== "unavailable";
 
   const step = (delta: number) => {
@@ -270,6 +277,7 @@ function ClimateRow({
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       send(d.id, { command: "set_temperature", temperature: next });
+      setCommitted(next);
       setPending(null);
     }, 800);
   };

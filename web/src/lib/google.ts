@@ -19,9 +19,19 @@ export function googleConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
+/**
+ * Public base URL for building absolute URLs sent to the BROWSER. Behind
+ * Railway's proxy the request origin is the internal bind address
+ * (https://0.0.0.0:8080), which a browser cannot navigate to — so
+ * APP_BASE_URL wins whenever it is set, and the request origin is only a
+ * local-dev fallback.
+ */
+export function appBaseUrl(requestOrigin: string): string {
+  return (process.env.APP_BASE_URL || requestOrigin).replace(/\/+$/, "");
+}
+
 export function redirectUri(requestOrigin: string): string {
-  const base = (process.env.APP_BASE_URL || requestOrigin).replace(/\/+$/, "");
-  return `${base}/api/auth/google/callback`;
+  return `${appBaseUrl(requestOrigin)}/api/auth/google/callback`;
 }
 
 /** Random state value, HMAC-signed so the callback can verify we minted it. */

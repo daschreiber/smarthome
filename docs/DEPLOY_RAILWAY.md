@@ -53,6 +53,7 @@ network-scoped, only the login restriction was.
    | `APP_BASE_URL` | the Railway URL (fill in after step 5; used in reset links) |
    | `SAUNA_BASE_URL` | the sauna app's URL (optional, enables the sauna card) |
    | `SAUNA_API_TOKEN` | the sauna app's API token (optional) |
+   | `ANTHROPIC_API_KEY` | optional — enables the "Ask the house" conversational assistant (console.anthropic.com → API keys); without it the chat screen shows a friendly "not configured" message |
    | `RESEND_API_KEY` | optional — enables password-reset emails (resend.com) |
    | `EMAIL_FROM` | optional — sender for reset emails, needs a verified domain on Resend |
 

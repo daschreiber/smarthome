@@ -133,7 +133,7 @@ export default function Users() {
           <input type="email" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ marginBottom: 8 }} />
           <input
             type="password"
-            placeholder="initial password (min 8 chars)"
+            placeholder="initial password — leave empty for Google sign-in only"
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -149,7 +149,7 @@ export default function Users() {
             <option value="admin">admin — also manages users</option>
           </select>
         </div>
-        <button className="scene-pill" disabled={busy || !email || !password} style={{ width: "100%", marginTop: 12, padding: 12 }}>
+        <button className="scene-pill" disabled={busy || !email} style={{ width: "100%", marginTop: 12, padding: 12 }}>
           Add user
         </button>
       </form>

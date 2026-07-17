@@ -1,11 +1,12 @@
 "use client";
 
-import { FLOOR_PLANS, PLAN_VIEWBOX } from "@/lib/floorplan";
+import { FLOOR_OUTLINES, FLOOR_PLANS, PLAN_VIEWBOX } from "@/lib/floorplan";
 
 /**
  * Clickable schematic of a floor. Each block is a room: tap to open it,
  * tinted when lights are on, with a temperature note where a climate zone
- * is active. A status surface first, navigation second.
+ * is active. Outdoor areas (terrace, balconies) render dashed and lighter.
+ * A status surface first, navigation second.
  */
 
 export interface PlanRoomState {
@@ -30,6 +31,19 @@ export default function FloorPlan({
       role="group"
       aria-label={`Floor ${floor} plan`}
     >
+      {/* Building footprint behind the rooms, so the floor reads as a shape. */}
+      {FLOOR_OUTLINES[floor].map((o, i) => (
+        <rect
+          key={i}
+          x={o.x}
+          y={o.y}
+          width={o.w}
+          height={o.h}
+          rx={2.5}
+          fill="var(--chip)"
+          opacity={0.45}
+        />
+      ))}
       {FLOOR_PLANS[floor].map((r) => {
         const st = rooms.get(r.room);
         const lit = (st?.lightsOn ?? 0) > 0;
@@ -57,17 +71,24 @@ export default function FloorPlan({
               y={r.y}
               width={r.w}
               height={r.h}
-              rx={1.6}
+              rx={1.8}
               fill={lit ? "color-mix(in srgb, var(--active) 22%, var(--card))" : "var(--card)"}
+              fillOpacity={r.outdoor && !lit ? 0.55 : 1}
               stroke={lit ? "var(--active)" : "var(--card-line)"}
               strokeWidth={0.35}
+              strokeDasharray={r.outdoor ? "1.7 1.1" : undefined}
             />
             <text
               x={r.x + r.w / 2}
               y={r.y + r.h / 2 + (sub && !small ? -1.2 : 1.1)}
               textAnchor="middle"
               transform={rotated ? `rotate(90 ${r.x + r.w / 2} ${r.y + r.h / 2})` : undefined}
-              style={{ fill: "var(--ink)", fontSize: small ? 2.6 : 3, fontWeight: 600, fontFamily: "var(--font)" }}
+              style={{
+                fill: r.outdoor && !lit ? "var(--dim)" : "var(--ink)",
+                fontSize: small ? 2.6 : 3,
+                fontWeight: 600,
+                fontFamily: "var(--font)",
+              }}
             >
               {label}
             </text>

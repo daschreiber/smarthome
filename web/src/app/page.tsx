@@ -438,6 +438,24 @@ function Login({ onDone }: { onDone: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [forgot, setForgot] = useState(false);
+  const [googleAvailable, setGoogleAvailable] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/methods")
+      .then((r) => r.json())
+      .then((m: { google?: boolean }) => setGoogleAvailable(!!m.google))
+      .catch(() => {});
+    // Errors bounced back from the Google callback arrive as ?error=…
+    const code = new URLSearchParams(location.search).get("error");
+    if (code === "not-invited") {
+      setErr("That Google account isn't on the user list — ask an admin to add your email.");
+    } else if (code === "google-signin-failed") {
+      setErr("Google sign-in didn't complete — try again, or use your password.");
+    } else if (code === "google-not-configured") {
+      setErr("Google sign-in isn't set up on the server.");
+    }
+    if (code) history.replaceState(null, "", "/");
+  }, []);
   const [note, setNote] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
@@ -507,6 +525,19 @@ function Login({ onDone }: { onDone: () => void }) {
       <h1 className="h-title">Home</h1>
       <p className="h-sub">Sign in to control the house.</p>
       {err && <div className="error-banner">{err}</div>}
+      {googleAvailable && (
+        <>
+          <button
+            type="button"
+            className="scene-pill"
+            style={{ width: "100%", padding: 12, marginBottom: 12, background: "var(--card)", color: "var(--ink)", border: "1px solid var(--card-line)" }}
+            onClick={() => { location.href = "/api/auth/google"; }}
+          >
+            Continue with Google
+          </button>
+          <p className="h-sub" style={{ textAlign: "center", margin: "0 0 12px" }}>or with a password</p>
+        </>
+      )}
       <div className="appkey" style={{ margin: 0 }}>
         <input
           type="email"

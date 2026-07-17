@@ -50,10 +50,29 @@ export async function POST(
       assertCommandAllowed(device, cmd);
       let message = "ok";
       let verified = true;
+      let stopAt: string | null | undefined;
       if (cmd.command === "turn_on" || cmd.command === "turn_off") {
-        const result = cmd.command === "turn_on" ? await saunaStart() : await saunaStop();
-        message = result.message;
-        verified = result.verified;
+        // Start options ride outside CommandSchema (sauna-specific extras):
+        // target °C and an auto-stop the sauna app schedules server-side.
+        const extras = raw as { temperature?: unknown; runForMinutes?: unknown };
+        const temp = typeof extras?.temperature === "number" ? extras.temperature : undefined;
+        const runFor = typeof extras?.runForMinutes === "number" ? extras.runForMinutes : undefined;
+        if (temp != null && (temp < 40 || temp > 100)) {
+          return NextResponse.json({ error: "sauna target must be 40-100°C" }, { status: 400 });
+        }
+        if (runFor != null && (runFor < 15 || runFor > 480)) {
+          return NextResponse.json({ error: "run time must be 15-480 minutes" }, { status: 400 });
+        }
+        if (cmd.command === "turn_on") {
+          const result = await saunaStart({ temp, stopAfterMinutes: runFor });
+          message = result.message;
+          verified = result.verified;
+          stopAt = result.stopAt;
+        } else {
+          const result = await saunaStop();
+          message = result.message;
+          verified = result.verified;
+        }
       } else if (cmd.command === "set_temperature") {
         await saunaSetTemperature(cmd.temperature);
         message = `target ${cmd.temperature}°C`;
@@ -72,6 +91,7 @@ export async function POST(
         status: verified ? "confirmed" : "sent",
         state: after ? (after.poweredOn ? "on" : "off") : "unknown",
         message,
+        stopAt: stopAt ?? null,
         currentTemperature: after?.currentTemperature ?? null,
         durationMs,
       });

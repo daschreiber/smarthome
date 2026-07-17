@@ -3,7 +3,7 @@ import { getStates } from "@/lib/ha";
 import { registry } from "@/lib/registry";
 import { authenticate } from "@/lib/auth";
 import { coolmasterEntityId } from "@/lib/coolmaster";
-import { saunaConfigured, saunaStatus } from "@/lib/sauna";
+import { saunaConfigured, saunaScheduleStatus, saunaStatus } from "@/lib/sauna";
 
 /**
  * Full visible-device snapshot joined with live HA state.
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     // HA bulk states and sauna status in parallel; sauna failure must not
     // break the rest of the home view — but the REASON travels to the card.
     let saunaNote: string | null = saunaConfigured() ? null : "not configured";
-    const [haStates, sauna] = await Promise.all([
+    const [haStates, sauna, saunaSchedule] = await Promise.all([
       getStates(),
       saunaConfigured()
         ? saunaStatus().catch((err: unknown) => {
@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
             return null;
           })
         : Promise.resolve(null),
+      saunaConfigured() ? saunaScheduleStatus() : Promise.resolve({ stopAt: null }),
     ]);
     const states = new Map(haStates.map((s) => [s.entity_id, s]));
     const devices = registry()
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
             brightnessPct: null,
             lastUpdated: null,
             note: sauna && !sauna.connected ? "sauna is offline at KLAFS" : saunaNote,
+            stopAt: sauna?.poweredOn ? saunaSchedule.stopAt : null,
           };
         }
         const s = states.get(d.entityId);

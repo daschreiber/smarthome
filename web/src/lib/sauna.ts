@@ -90,19 +90,49 @@ function sentDespite(err: unknown, message: string): SaunaCommandResult {
   throw err;
 }
 
-/** Starts at the sauna app's default 85°C with server-side heating verification. */
-export async function saunaStart(): Promise<SaunaCommandResult> {
+export interface SaunaStartOptions {
+  /** Target °C (40-100); the sauna app defaults to 85 when omitted. */
+  temp?: number;
+  /** Auto-stop after N minutes (15-480), scheduled by the sauna app. */
+  stopAfterMinutes?: number;
+}
+
+/** Starts with server-side heating verification; options ride the query string. */
+export async function saunaStart(opts: SaunaStartOptions = {}): Promise<SaunaCommandResult & { stopAt?: string | null }> {
+  const params: Record<string, string> = {};
+  if (opts.temp != null) params.temp = String(Math.round(opts.temp));
+  if (opts.stopAfterMinutes != null) params.stop_after = String(Math.round(opts.stopAfterMinutes));
   try {
-    const b = await quick("/api/quick/start", {}, COMMAND_TIMEOUT_MS);
+    const b = await quick("/api/quick/start", params, COMMAND_TIMEOUT_MS);
     if (b.success !== true) {
       throw new Error(String(b.warning ?? "sauna start not confirmed"));
     }
     return {
       verified: b.verified !== false,
       message: String(b.message ?? "sauna starting"),
+      stopAt: typeof b.stop_at === "string" ? b.stop_at : null,
     };
   } catch (err) {
     return sentDespite(err, "start sent — the sauna app's watchdog is verifying ignition");
+  }
+}
+
+/** Schedule (or replace) the app-managed auto-stop for a running sauna. */
+export async function saunaStopIn(minutes: number): Promise<{ stopAt: string }> {
+  const b = await quick("/api/quick/stop-in", { minutes: String(Math.round(minutes)) }, STATUS_TIMEOUT_MS);
+  if (b.success !== true || typeof b.stop_at !== "string") {
+    throw new Error(String(b.error ?? "auto-stop not scheduled"));
+  }
+  return { stopAt: b.stop_at };
+}
+
+/** Pending app-managed auto-stop, if any. Null when the endpoint is absent (older sauna app). */
+export async function saunaScheduleStatus(): Promise<{ stopAt: string | null }> {
+  try {
+    const b = await quick("/api/quick/schedule-status", {}, STATUS_TIMEOUT_MS);
+    return { stopAt: typeof b.stop_at === "string" ? b.stop_at : null };
+  } catch {
+    return { stopAt: null };
   }
 }
 

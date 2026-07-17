@@ -58,4 +58,10 @@ describe("buildDevices", () => {
     const dup = buildDevices([rows[0], { ...rows[0] }]);
     expect(dup[0].id).not.toBe(dup[1].id);
   });
+
+  it("carries coolmaster units through to the device", () => {
+    const [zone] = buildDevices([{ ...rows[1], coolmaster_units: ["L1.111", "L1.114"] }]);
+    expect(zone.coolmasterUnits).toEqual(["L1.111", "L1.114"]);
+    expect(devices[1].coolmasterUnits).toBeUndefined();
+  });
 });

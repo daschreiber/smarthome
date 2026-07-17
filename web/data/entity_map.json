@@ -63,7 +63,10 @@
     "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.104"
+    ]
   },
   {
     "entity_id": "light.knx_switch_5th_fh_daniel_s_study",
@@ -162,7 +165,10 @@
     "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.105"
+    ]
   },
   {
     "entity_id": "light.knx_switch_5th_fh_daniella_s_study",
@@ -261,7 +267,10 @@
     "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.101"
+    ]
   },
   {
     "entity_id": "light.knx_switch_5th_fh_den",
@@ -635,7 +644,10 @@
     "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.106"
+    ]
   },
   {
     "entity_id": "light.knx_switch_5th_fh_gym",
@@ -679,7 +691,12 @@
     "floor": 6,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.111",
+      "L1.114",
+      "L1.115"
+    ]
   },
   {
     "entity_id": "light.knx_switch_mdykh_khlby",
@@ -866,7 +883,10 @@
     "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.108"
+    ]
   },
   {
     "entity_id": "light.knx_switch_large_guest_room_fan",
@@ -1009,7 +1029,11 @@
     "floor": 6,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.201",
+      "L1.202"
+    ]
   },
   {
     "entity_id": "light.knx_switch_6th_fh_lounge_dining",
@@ -1240,7 +1264,10 @@
     "floor": 6,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.112"
+    ]
   },
   {
     "entity_id": "light.knx_switch_6th_fh_mbr",
@@ -1449,7 +1476,10 @@
     "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.102"
+    ]
   },
   {
     "entity_id": "light.knx_switch_medium_guest_room_fan",
@@ -1592,7 +1622,10 @@
     "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.103"
+    ]
   },
   {
     "entity_id": "light.knx_switch_5th_fh_sauna",
@@ -1636,7 +1669,10 @@
     "floor": 5,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.107"
+    ]
   },
   {
     "entity_id": "light.knx_switch_small_guest_room_fan",
@@ -1801,7 +1837,10 @@
     "floor": 6,
     "category": "climate_zone",
     "group": "Climate & Comfort",
-    "visible": true
+    "visible": true,
+    "coolmaster_units": [
+      "L1.110"
+    ]
   },
   {
     "entity_id": "light.knx_switch_5th_controlled_socket",
@@ -1889,7 +1928,10 @@
     "floor": 6,
     "category": "infrastructure_climate",
     "group": "Utilities",
-    "visible": false
+    "visible": false,
+    "coolmaster_units": [
+      "L1.109"
+    ]
   },
   {
     "entity_id": "light.knx_switch_utility_room_hall",

@@ -121,3 +121,70 @@ Notable: `media_player.balcony` ("Balcony Speakers 1") is a VSSL A3x via Google 
   promote the sauna to HA entities so automations/scenes can target it.
 - Owner requirement recorded: room synonyms for natural language
   (`data/room_aliases.json`).
+
+## 2026-07-17 — Climate setpoints: root cause found, CoolMaster bridge mapped
+
+Owner symptom: the app turned the gym A/C on/off fine, but showed a wrong
+setpoint (placeholder 24) and +/- changed nothing — the unit woke at its last
+wall-panel setpoint (16°C).
+
+### Root cause (verified live)
+
+The Control4→CoolAutomation proxy neither reports nor applies setpoints:
+
+- Every one of the 13 `climate.*` zone entities reports `temperature: null`
+  when off and a bogus `0` when running — HA never receives a real setpoint,
+  house-wide. (`supported_features` still claims target-temperature support,
+  so nothing errors.)
+- A direct `climate.set_temperature` to the gym zone returned HTTP 200 and
+  was silently dropped: the entity's attributes and `last_updated` never
+  moved, and the wall unit stayed at 16°C. On/off (hvac-mode) commands do
+  propagate — which is why only setpoints looked broken.
+
+### CoolMaster bridge found and mapped
+
+The CoolAutomation bridge the zones hang off is a **CoolMaster, S/N 05116051,
+firmware 1.2.2, at `10.0.0.90:10102`** (ASCII protocol; found by a LAN sweep
+for the CoolMasterNet port). Its `ls` console reads and writes every unit's
+real setpoint — including the gym's stranded 16°C.
+
+Room→unit mapping established by (a) instant-of-time temperature correlation
+between HA zone entities and the bridge console, then (b) confirming the
+ambiguous ones by toggling zones via HA while watching the console live:
+
+| Unit(s) | Zone |
+|---|---|
+| L1.101 | Den |
+| L1.102 | Medium Guest Room |
+| L1.103 | Sauna |
+| L1.104 | Daniel's Study (confirmed by toggle) |
+| L1.105 | Daniella's Study |
+| L1.106 | Gym (setpoint 16 = owner's test) |
+| L1.107 | Small Guest Room |
+| L1.108 | Large Guest Room |
+| L1.109 | Rack cooling (name "Rack UNIT 109") |
+| L1.110 | Utility Room |
+| L1.111 + L1.114 + L1.115 | Kitchen (confirmed by toggle; open plan, 3 units) |
+| L1.112 | Master Bedroom |
+| L1.201 + L1.202 | Lounge (confirmed by toggle) |
+
+The mapping lives in `tools/build_entity_map.py` (`COOLMASTER_UNITS`) and
+flows into `data/entity_map.json` as `coolmaster_units` per climate row.
+
+### Fix shape
+
+Home Assistant's native **`coolmaster` integration** talks to the bridge
+directly and gets working setpoint read/write per unit. The app now prefers
+those unit entities for climate setpoints (write to all of a zone's units,
+read from the first; on/off stays on the Control4 zone entity, which works
+and keeps multi-unit zones grouped). Until the integration exists the app
+degrades exactly to the old behavior.
+
+### OWNER ACTION REQUIRED (~30s, needs an admin HA login)
+
+The `smarthome-app` token is deliberately non-admin, so the integration must
+be added by hand: HA → Settings → Devices & Services → Add Integration →
+"CoolMasterNet" → host `10.0.0.90`, port `10102`, tick the modes (off / heat /
+cool / heat_cool). 16 climate entities (`climate.l1_101` …) appear; no app
+restart needed. (Attempted via browser automation from the dev Mac — blocked
+by macOS's per-app Local Network permission, worth granting to Chrome one day.)

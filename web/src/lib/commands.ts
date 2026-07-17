@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { setpointEntityIds } from "./coolmaster";
 import type { Device } from "./registry";
 
 /**
@@ -148,12 +149,16 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
         service: "set_cover_position",
         data: { ...target, position: cmd.positionPct },
       };
-    case "set_temperature":
+    case "set_temperature": {
+      // Zones backed by CoolMaster units get the setpoint written to the
+      // units directly — the Control4 zone entity silently drops it.
+      const units = setpointEntityIds(device);
       return {
         domain: "climate",
         service: "set_temperature",
-        data: { ...target, temperature: cmd.temperature },
+        data: { entity_id: units ?? device.entityId, temperature: cmd.temperature },
       };
+    }
     case "set_volume":
       return {
         domain: "media_player",

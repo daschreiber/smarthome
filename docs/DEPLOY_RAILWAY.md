@@ -55,6 +55,8 @@ network-scoped, only the login restriction was.
    | `APP_BASE_URL` | the Railway URL (fill in after step 5; used in reset links) |
    | `SAUNA_BASE_URL` | the sauna app's URL (optional, enables the sauna card) |
    | `SAUNA_API_TOKEN` | the sauna app's API token (optional) |
+   | `WHITENOISE_BASE_URL` | the white-noise machine's URL (optional, enables the Master Bedroom noise card) |
+   | `WHITENOISE_TOKEN` | the white-noise machine's SECRET_TOKEN (optional) |
    | `ANTHROPIC_API_KEY` | optional — enables the "Ask the house" conversational assistant (console.anthropic.com → API keys); without it the chat screen shows a friendly "not configured" message |
    | `GOOGLE_CLIENT_ID` | optional — enables "Continue with Google" on the sign-in screen (Google Cloud Console → OAuth client, redirect URI `<APP_BASE_URL>/api/auth/google/callback`) |
    | `GOOGLE_CLIENT_SECRET` | optional — pairs with `GOOGLE_CLIENT_ID`. Google only proves identity; access still requires the email to be on the app's user list |

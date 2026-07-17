@@ -4,6 +4,7 @@ import { registry } from "@/lib/registry";
 import { authenticate } from "@/lib/auth";
 import { coolmasterEntityId } from "@/lib/coolmaster";
 import { saunaConfigured, saunaScheduleStatus, saunaStatus } from "@/lib/sauna";
+import { noiseConfigured, noiseStatus } from "@/lib/whitenoise";
 
 /**
  * Full visible-device snapshot joined with live HA state.
@@ -26,6 +27,13 @@ export async function GET(req: NextRequest) {
         : Promise.resolve(null),
       saunaConfigured() ? saunaScheduleStatus() : Promise.resolve({ stopAt: null }),
     ]);
+    let noiseNote: string | null = null;
+    const noise = noiseConfigured()
+      ? await noiseStatus().catch((err: unknown) => {
+          noiseNote = err instanceof Error ? err.message : String(err);
+          return null;
+        })
+      : null;
     const states = new Map(haStates.map((s) => [s.entity_id, s]));
     const devices = registry()
       .devices.filter((d) => d.visible)
@@ -50,6 +58,30 @@ export async function GET(req: NextRequest) {
             lastUpdated: null,
             note: sauna && !sauna.connected ? "sauna is offline at KLAFS" : saunaNote,
             stopAt: sauna?.poweredOn ? saunaSchedule.stopAt : null,
+          };
+        }
+        if (d.kind === "noise") {
+          return {
+            id: d.id,
+            label: d.label,
+            room: d.room,
+            floor: d.floor,
+            group: d.group,
+            kind: d.kind,
+            category: d.category,
+            capabilities: d.capabilities,
+            requiresConfirmation: false,
+            // "on" means something is genuinely playing the stream.
+            state: noise ? (noise.listeners > 0 ? "on" : "off") : "unknown",
+            available: !!noise,
+            brightnessPct: null,
+            currentTemperature: null,
+            targetTemperature: null,
+            hvacMode: null,
+            lastUpdated: null,
+            note: noiseNote,
+            noiseType: noise?.noiseType ?? null,
+            volumePct: noise?.volume ?? null,
           };
         }
         const s = states.get(d.entityId);

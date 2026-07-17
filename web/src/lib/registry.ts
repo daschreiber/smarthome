@@ -34,7 +34,7 @@ export interface MapRow {
 export interface Device {
   id: string;
   entityId: string;
-  kind: MapRow["domain"] | "sauna" | "heating";
+  kind: MapRow["domain"] | "sauna" | "heating" | "noise";
   label: string;
   room: string;
   floor: 5 | 6 | null;
@@ -136,9 +136,9 @@ export function buildDevices(rows: MapRow[]): Device[] {
  * layer, audit log, and later the conversational layer treat it uniformly.
  */
 function virtualDevices(): Device[] {
-  if (!process.env.SAUNA_BASE_URL || !process.env.SAUNA_API_TOKEN) return [];
-  return [
-    {
+  const devices: Device[] = [];
+  if (process.env.SAUNA_BASE_URL && process.env.SAUNA_API_TOKEN) {
+    devices.push({
       id: "sauna__klafs_sauna",
       entityId: "virtual.sauna",
       kind: "sauna",
@@ -150,8 +150,26 @@ function virtualDevices(): Device[] {
       visible: true,
       capabilities: ["on_off", "set_temperature"],
       requiresConfirmation: true,
-    },
-  ];
+    });
+  }
+  // The white-noise machine (daschreiber/whitenoise): Control4 owns on/off
+  // via the bedside button; the app controls sound type and volume, and
+  // shows honest playing/idle state from the server's listener count.
+  if (process.env.WHITENOISE_BASE_URL && process.env.WHITENOISE_TOKEN) {
+    devices.push({
+      id: "master_bedroom__white_noise",
+      entityId: "virtual.white_noise",
+      kind: "noise",
+      label: "White noise",
+      room: "Master Bedroom",
+      floor: 6,
+      group: "Media",
+      category: "noise_machine",
+      visible: true,
+      capabilities: ["volume"],
+    });
+  }
+  return devices;
 }
 
 let cache: { devices: Device[]; byId: Map<string, Device> } | null = null;

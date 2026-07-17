@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SYSTEM_COMMANDS, executeSystemCommand, systemDevices } from "../execute";
+import { SYSTEM_COMMANDS, executeSystemCommand, roomLights, systemDevices } from "../execute";
+import { registry } from "../registry";
 
 describe("systemDevices", () => {
   it("lighting is real lights only — no scene switches, fans, vents, or towel rails", () => {
@@ -23,6 +24,24 @@ describe("systemDevices", () => {
     const shades = systemDevices("shades");
     expect(shades.length).toBeGreaterThan(5);
     for (const d of shades) expect(d.kind).toBe("cover");
+  });
+});
+
+describe("roomLights", () => {
+  it("sweeps only group Lighting — never fans, vents, towel rails, or heating", () => {
+    const rooms = new Set(registry().devices.map((d) => d.room));
+    for (const room of rooms) {
+      for (const d of roomLights(room)) {
+        expect(d.group, `${d.id} must not be in a lights fan-out`).toBe("Lighting");
+        expect(d.kind).toBe("light");
+      }
+    }
+    // Sanity: the boundary excludes real comfort devices that ride the light
+    // domain (Master Bathroom has a towel rail and a vent).
+    const bathSweep = roomLights("Master Bathroom").map((d) => d.category);
+    expect(bathSweep).not.toContain("towel_rail");
+    expect(bathSweep).not.toContain("ventilation");
+    expect(bathSweep.length).toBeGreaterThan(0);
   });
 });
 

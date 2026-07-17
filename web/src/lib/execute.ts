@@ -60,10 +60,19 @@ export async function applySceneById(sceneId: string): Promise<BatchResult> {
   );
 }
 
-/** Room fan-out: all visible, real lights in a room (scene switches excluded). */
+/**
+ * Room fan-out: real lights only. Group "Lighting" is the boundary — fans,
+ * vents, towel rails (and future switch-like devices such as a white-noise
+ * trigger) ride the light domain but must NOT be swept up by "lights off".
+ */
 export function roomLights(room: string): Device[] {
   return registry().devices.filter(
-    (d) => d.room === room && d.kind === "light" && d.visible && d.category !== "scene_switch",
+    (d) =>
+      d.room === room &&
+      d.kind === "light" &&
+      d.visible &&
+      d.group === "Lighting" &&
+      d.category !== "scene_switch",
   );
 }
 

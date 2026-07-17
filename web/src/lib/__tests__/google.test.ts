@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  createStateToken, emailFromIdTokenPayload, googleConfigured, redirectUri, verifyStateToken,
+  appBaseUrl, createStateToken, emailFromIdTokenPayload, googleConfigured, redirectUri, verifyStateToken,
 } from "../google";
 
 beforeEach(() => {
@@ -23,6 +23,15 @@ describe("configuration", () => {
     expect(redirectUri("https://fallback.example")).toBe("https://fallback.example/api/auth/google/callback");
     process.env.APP_BASE_URL = "https://harakevet.app/";
     expect(redirectUri("https://fallback.example")).toBe("https://harakevet.app/api/auth/google/callback");
+  });
+
+  it("browser redirects never use the internal proxy origin when APP_BASE_URL is set", () => {
+    process.env.APP_BASE_URL = "https://harakevet.app";
+    // Behind Railway's proxy the request origin is the internal bind address.
+    expect(appBaseUrl("https://0.0.0.0:8080")).toBe("https://harakevet.app");
+    expect(new URL("/?error=x", appBaseUrl("https://0.0.0.0:8080")).href).toBe("https://harakevet.app/?error=x");
+    delete process.env.APP_BASE_URL;
+    expect(appBaseUrl("http://localhost:3000")).toBe("http://localhost:3000");
   });
 });
 

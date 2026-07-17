@@ -727,7 +727,10 @@ function ClimateCard({
   star?: React.ReactNode;
 }) {
   const [target, setTarget] = useState<number | null>(null);
-  const shown = target ?? d.targetTemperature ?? 24;
+  // KNX reports a 0 setpoint when none is known — treat it as unknown, not 0°.
+  const known =
+    d.targetTemperature != null && d.targetTemperature >= 10 ? d.targetTemperature : null;
+  const shown = target ?? known ?? 24;
   const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const step = (delta: number) => {
@@ -753,8 +756,15 @@ function ClimateCard({
       </div>
       <div className="climate-set">
         <button className="round-btn" disabled={busy || !d.available} onClick={() => step(-0.5)} aria-label="Lower target">−</button>
-        <div className="target">{shown}°</div>
+        <div className="target">{target != null || known != null ? `${shown}°` : "—"}</div>
         <button className="round-btn" disabled={busy || !d.available} onClick={() => step(0.5)} aria-label="Raise target">+</button>
+        <button
+          className="mini-btn"
+          disabled={busy || !d.available}
+          onClick={() => send(d.id, { command: active ? "turn_off" : "turn_on" })}
+        >
+          {active ? "Off" : "On"}
+        </button>
       </div>
     </div>
   );

@@ -1,0 +1,74 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import NavBar from "../NavBar";
+import { BlindsIcon, BulbIcon, SnowIcon } from "../icons";
+
+/** Systems index: one card per house-wide function, with live counts. */
+
+interface UiDevice {
+  kind: string;
+  group: string;
+  category: string;
+  state: string;
+  available: boolean;
+}
+
+export default function Systems() {
+  const [devices, setDevices] = useState<UiDevice[]>([]);
+  const keyRef = useRef("");
+
+  useEffect(() => {
+    keyRef.current = localStorage.getItem("appKey") ?? "";
+  }, []);
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/home", {
+        headers: keyRef.current ? { "x-app-key": keyRef.current } : {},
+      });
+      if (res.status === 401) { location.href = "/"; return; }
+      if (res.ok) setDevices(((await res.json()) as { devices: UiDevice[] }).devices);
+    } catch { /* next poll */ }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 3000);
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  const lightsOn = devices.filter((d) => d.kind === "light" && d.group === "Lighting" && d.state === "on").length;
+  const zonesOn = devices.filter(
+    (d) => d.kind === "climate" && d.available && d.state !== "off" && d.state !== "unavailable",
+  ).length;
+  const shadesOpen = devices.filter((d) => d.kind === "cover" && d.state === "open").length;
+
+  const cards = [
+    { href: "/systems/lighting", icon: BulbIcon, title: "Lighting", sub: lightsOn > 0 ? `${lightsOn} on` : "all off", on: lightsOn > 0 },
+    { href: "/systems/climate", icon: SnowIcon, title: "Climate", sub: zonesOn > 0 ? `${zonesOn} zone${zonesOn === 1 ? "" : "s"} active` : "all off", on: zonesOn > 0 },
+    { href: "/systems/shades", icon: BlindsIcon, title: "Shades", sub: shadesOpen > 0 ? `${shadesOpen} open` : "all closed", on: shadesOpen > 0 },
+  ];
+
+  return (
+    <main className="shell">
+      <h1 className="h-title">Systems</h1>
+      <p className="h-sub">One function across the whole house.</p>
+      <div className="dev-list">
+        {cards.map((c) => (
+          <a key={c.href} href={c.href} className="dev" style={{ textDecoration: "none", color: "inherit" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ color: c.on ? "var(--active)" : "var(--dim)", display: "flex" }}><c.icon size={26} /></span>
+              <div>
+                <div className="nm">{c.title}</div>
+                <div className={`st ${c.on ? "on" : ""}`}>{c.sub}</div>
+              </div>
+            </div>
+            <span style={{ color: "var(--dim)", fontSize: 18 }}>›</span>
+          </a>
+        ))}
+      </div>
+      <NavBar />
+    </main>
+  );
+}

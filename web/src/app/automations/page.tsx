@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import NavBar from "../NavBar";
 
 /**
  * Automations screen: list + a pragmatic builder for time-triggered steps.
@@ -174,9 +175,8 @@ export default function Automations() {
 
   return (
     <main className="shell">
-      <a className="h-back" href="/">‹ Home</a>
       <h1 className="h-title">Automations</h1>
-      <p className="h-sub">Times are house time ({tz}). One-shot automations disable themselves after firing.</p>
+      <p className="h-sub">Times are {tz ? `${tz.split("/").pop()!.replace(/_/g, " ")} time` : "house time"}. One-shot automations disable themselves after firing.</p>
       {error && <div className="error-banner">{error}</div>}
 
       {items.map((a) => (
@@ -320,6 +320,7 @@ export default function Automations() {
           Create automation
         </button>
       </div>
+      <NavBar />
     </main>
   );
 }

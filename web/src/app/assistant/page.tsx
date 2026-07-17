@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import NavBar from "../NavBar";
 
 /**
  * "Ask the house": chat that produces reviewable proposal cards.
@@ -111,14 +112,30 @@ export default function Assistant() {
   );
 
   return (
-    <main className="shell" style={{ display: "flex", flexDirection: "column", minHeight: "100vh", paddingBottom: 90 }}>
-      <a className="h-back" href="/">‹ Home</a>
+    <main className="shell" style={{ display: "flex", flexDirection: "column", minHeight: "100vh", paddingBottom: 170 }}>
       <h1 className="h-title">Ask the house</h1>
-      <p className="h-sub">
-        Say what you want — &ldquo;lights off downstairs&rdquo;, &ldquo;kitchen lights on tomorrow at 4, off at 8&rdquo;,
-        &ldquo;save the lounge like this as Cozy&rdquo;. Nothing happens until you confirm.
-      </p>
+      <p className="h-sub">Say what you want. Nothing happens until you confirm.</p>
       {error && <div className="error-banner">{error}</div>}
+
+      {turns.length === 0 && !busy && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+          <div className="section-label" style={{ margin: 0 }}>Try</div>
+          {[
+            "Turn off all the lights",
+            "Set the lounge to 22 degrees",
+            "Kitchen lights on tomorrow at 16:00, off at 20:00",
+          ].map((ex) => (
+            <button
+              key={ex}
+              className="mini-btn"
+              style={{ textAlign: "left", background: "var(--card)" }}
+              onClick={() => setInput(ex)}
+            >
+              &ldquo;{ex}&rdquo;
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ flex: 1 }}>
         {turns.map((t, i) => (
@@ -161,13 +178,7 @@ export default function Assistant() {
         <div ref={bottom} />
       </div>
 
-      <form
-        onSubmit={(e) => { e.preventDefault(); send(); }}
-        style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 16px calc(12px + env(safe-area-inset-bottom))",
-          background: "var(--bg)", borderTop: "1px solid var(--card-line)",
-        }}
-      >
+      <form className="chat-bar" onSubmit={(e) => { e.preventDefault(); send(); }}>
         <div style={{ maxWidth: "var(--shell-max)", margin: "0 auto", display: "flex", gap: 8 }}>
           <input
             value={input}
@@ -180,6 +191,7 @@ export default function Assistant() {
           </button>
         </div>
       </form>
+      <NavBar />
     </main>
   );
 }

@@ -133,6 +133,7 @@ function Block({
       {!r.unlabeled && (
         <>
           <text
+            className="plan-label"
             x={cx}
             y={cy + (sub && !small ? -1.1 : 1)}
             textAnchor="middle"
@@ -148,6 +149,7 @@ function Block({
           </text>
           {sub && !small && (
             <text
+              className="plan-sub"
               x={cx}
               y={cy + 2.6}
               textAnchor="middle"

@@ -5,10 +5,11 @@
   --card: #fffdf9;
   --card-line: #e7e2d8;
   --ink: #26241f;
-  --dim: #8a8377;
+  /* Muted + status colors pass WCAG AA (4.5:1) on bg AND cards. */
+  --dim: #6d675c;
   --accent: #2f6b57;
   --accent-ink: #f4f2ee;
-  --active: #b07a1e;
+  --active: #8f6314;
   --glow: none;
   --danger: #c2452f;
   --chip: #eae6de;
@@ -16,6 +17,12 @@
   --radius: 16px;
   --font: ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --shell-max: 480px; /* phone; widened by the breakpoints at the bottom */
+  /* Type scale — the only font sizes the app uses. */
+  --fs-xs: 12px;
+  --fs-sm: 13.5px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 24px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -47,7 +54,41 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-.shell { max-width: var(--shell-max); margin: 0 auto; padding: 20px 16px 40px; }
+.shell { max-width: var(--shell-max); margin: 0 auto; padding: 20px 16px calc(56px + env(safe-area-inset-bottom) + 28px); }
+
+/* ---- Main navigation: bottom tabs on phones, top bar on wide screens ---- */
+.navbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+  display: flex; background: var(--card); border-top: 1px solid var(--card-line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.navbar a {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 0 7px; min-height: 48px; font-size: 10.5px; font-weight: 600;
+  color: var(--dim); text-decoration: none;
+}
+.navbar a.active { color: var(--accent); }
+@media (min-width: 720px) {
+  .navbar {
+    top: 0; bottom: auto; border-top: none; border-bottom: 1px solid var(--card-line);
+    justify-content: center; gap: 4px; padding: 0 12px;
+  }
+  .navbar a {
+    flex: 0 0 auto; flex-direction: row; gap: 8px; padding: 14px 16px;
+    font-size: var(--fs-sm); min-height: 0;
+  }
+}
+
+/* Chat input bar sits above the bottom tabs on phones, flush on desktop. */
+.chat-bar {
+  position: fixed; left: 0; right: 0; z-index: 30;
+  bottom: calc(56px + env(safe-area-inset-bottom));
+  padding: 12px 16px;
+  background: var(--bg); border-top: 1px solid var(--card-line);
+}
+@media (min-width: 720px) {
+  .chat-bar { bottom: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+}
 
 /* Device lists: single column on phones, two columns from tablet width up. */
 .dev-list { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 8px; align-items: start; }
@@ -56,32 +97,44 @@ body {
 /* Sign-in / reset forms stay a comfortable reading width on big screens. */
 .auth-form { max-width: 400px; margin: 18vh auto 0; }
 
-.h-title { font-size: 22px; font-weight: 700; margin: 0 0 2px; letter-spacing: -0.01em; }
-.h-sub { font-size: 13px; color: var(--dim); margin: 0 0 14px; }
+.h-title { font-size: var(--fs-xl); font-weight: 700; margin: 0 0 2px; letter-spacing: -0.01em; }
+.h-sub { font-size: var(--fs-sm); color: var(--dim); margin: 0 0 14px; }
 .h-back {
-  background: none; border: none; font-family: inherit; font-size: 14px;
-  color: var(--dim); padding: 0; margin: 0 0 6px; cursor: pointer;
+  background: none; border: none; font-family: inherit; font-size: var(--fs-sm);
+  color: var(--dim); padding: 8px 0; margin: 0; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 2px; text-decoration: none;
 }
+
+.view-toggle {
+  flex: 0 0 auto; display: flex; background: var(--chip); border-radius: 12px; padding: 3px;
+}
+.view-toggle button {
+  display: flex; align-items: center; gap: 5px; border: none; background: none;
+  font-family: inherit; font-size: var(--fs-xs); font-weight: 600; color: var(--chip-ink);
+  padding: 7px 10px; border-radius: 9px; cursor: pointer;
+}
+.view-toggle button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
 
 .floors { display: flex; gap: 6px; margin-bottom: 14px; }
 .floor-tab {
-  flex: 1; text-align: center; padding: 10px; border-radius: 12px;
-  font-size: 14px; font-weight: 600; background: var(--chip); color: var(--chip-ink);
-  border: none; font-family: inherit; cursor: pointer;
+  flex: 1; text-align: center; padding: 12px 10px; border-radius: 12px;
+  font-size: var(--fs-sm); font-weight: 600; background: var(--chip); color: var(--chip-ink);
+  border: none; font-family: inherit; cursor: pointer; min-height: 44px;
 }
 .floor-tab[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .floor-tab:focus-visible, .scene-pill:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .section-label {
-  font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--dim); margin: 18px 0 8px;
 }
 
 .scenes { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
 .scene-pill {
   flex-shrink: 0; background: var(--accent); color: var(--accent-ink); border: none;
-  font-family: inherit; border-radius: 999px; padding: 9px 16px; font-size: 13.5px;
-  font-weight: 600; cursor: pointer;
+  font-family: inherit; border-radius: 999px; padding: 11px 16px; font-size: var(--fs-sm);
+  font-weight: 600; cursor: pointer; min-height: 44px;
+  max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .scene-pill:disabled { opacity: 0.6; }
 
@@ -90,8 +143,8 @@ body {
   background: var(--card); border: 1px solid var(--card-line); border-radius: var(--radius);
   padding: 14px; cursor: pointer; text-align: left; font-family: inherit; color: inherit;
 }
-.room-card .rn { font-weight: 650; font-size: 14.5px; }
-.room-card .rs { font-size: 12px; color: var(--dim); margin-top: 3px; }
+.room-card .rn { font-weight: 650; font-size: var(--fs-md); }
+.room-card .rs { font-size: var(--fs-xs); color: var(--dim); margin-top: 3px; }
 .room-card .rs.on { color: var(--active); }
 
 .dev {
@@ -100,8 +153,8 @@ body {
   border-radius: var(--radius); padding: 13px 15px; margin-bottom: 8px;
 }
 .dev.on { box-shadow: var(--glow); }
-.dev .nm { font-weight: 600; font-size: 14.5px; }
-.dev .st { font-size: 12px; color: var(--dim); }
+.dev .nm { font-weight: 600; font-size: var(--fs-md); }
+.dev .st { font-size: var(--fs-xs); color: var(--dim); }
 .dev.on .st { color: var(--active); }
 .dev.unavailable { opacity: 0.45; }
 .dev-flash-ok { border-color: var(--accent) !important; }
@@ -121,8 +174,9 @@ body {
 
 .btn-row { display: flex; gap: 6px; }
 .mini-btn {
-  padding: 8px 12px; border-radius: 10px; border: 1px solid var(--card-line);
-  background: var(--chip); color: var(--ink); font-family: inherit; font-size: 13px; cursor: pointer;
+  padding: 10px 14px; border-radius: 11px; border: 1px solid var(--card-line);
+  background: var(--chip); color: var(--ink); font-family: inherit; font-size: var(--fs-sm);
+  cursor: pointer; min-height: 42px;
 }
 .mini-btn:active { background: var(--accent); color: var(--accent-ink); }
 .mini-btn:disabled { opacity: 0.5; cursor: default; }
@@ -137,12 +191,12 @@ body {
   padding: 15px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
 }
 .climate-card .now { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.climate-card .mode { font-size: 12px; color: var(--dim); }
+.climate-card .mode { font-size: var(--fs-xs); color: var(--dim); }
 .climate-card .mode.active { color: var(--active); }
 .climate-set { display: flex; align-items: center; gap: 10px; }
-.climate-set .target { font-size: 17px; font-weight: 650; min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+.climate-set .target { font-size: var(--fs-lg); font-weight: 650; min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
 .round-btn {
-  width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--card-line);
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--card-line);
   background: var(--chip); color: var(--ink); font-size: 18px; font-family: inherit; cursor: pointer;
 }
 .round-btn:active { background: var(--accent); color: var(--accent-ink); }
@@ -160,24 +214,31 @@ body {
 .error-banner {
   background: color-mix(in srgb, var(--danger) 14%, var(--bg));
   border: 1px solid var(--danger); color: var(--danger);
-  padding: 12px; border-radius: 12px; margin-bottom: 14px; font-size: 13.5px;
+  padding: 12px; border-radius: 12px; margin-bottom: 14px; font-size: var(--fs-sm);
 }
 
 .appkey { margin: 16px 0; }
-.appkey summary { color: var(--dim); font-size: 13px; cursor: pointer; }
+.appkey summary { color: var(--dim); font-size: var(--fs-sm); cursor: pointer; }
 .appkey input {
   width: 100%; padding: 9px; margin-top: 8px; border-radius: 10px;
   border: 1px solid var(--card-line); background: var(--card); color: var(--ink); font-family: inherit;
 }
 
+/* Loading skeletons: quiet pulsing placeholders instead of a bare message. */
+.skeleton { pointer-events: none; }
+.sk-line { height: 12px; border-radius: 6px; background: var(--chip); animation: sk-pulse 1.4s ease-in-out infinite; }
+@keyframes sk-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
 @media (prefers-reduced-motion: reduce) {
   .toggle, .toggle::after { transition: none; }
+  .sk-line { animation: none; }
 }
 
 /* ---- Tablet (iPad portrait and up) ---- */
 @media (min-width: 720px) {
   :root { --shell-max: 768px; }
-  .shell { padding: 28px 24px 48px; }
+  /* Top padding clears the fixed top navbar. */
+  .shell { padding: 84px 24px 48px; }
   .rooms { grid-template-columns: repeat(3, 1fr); }
   .dev-list { grid-template-columns: 1fr 1fr; }
   .floors { max-width: 420px; }
@@ -187,6 +248,12 @@ body {
 @media (min-width: 1120px) {
   :root { --shell-max: 1024px; }
   .rooms { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* Floor-plan labels get a small bump on phones, where the SVG shrinks. */
+@media (max-width: 719px) {
+  .plan-label { font-size: 3.3px !important; }
+  .plan-sub { font-size: 2.7px !important; }
 }
 
 /* ---- Mouse / trackpad: hover affordances (never fire on touch) ---- */

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import NavBar from "../../NavBar";
+import { BlindsIcon, BulbIcon, SnowIcon } from "../../icons";
 
 /**
  * System view: one function across the whole house (lighting / climate /
@@ -26,9 +28,9 @@ interface UiDevice {
 }
 
 const SYSTEMS = {
-  lighting: { title: "Lighting", icon: "💡", sub: "Every light in the house" },
-  climate: { title: "Climate", icon: "❄️", sub: "A/C & heating zones" },
-  shades: { title: "Shades", icon: "🪟", sub: "All the blinds and shades" },
+  lighting: { title: "Lighting", icon: BulbIcon, sub: "Every light in the house" },
+  climate: { title: "Climate", icon: SnowIcon, sub: "A/C & heating zones" },
+  shades: { title: "Shades", icon: BlindsIcon, sub: "All the blinds and shades" },
 } as const;
 
 type SystemKey = keyof typeof SYSTEMS;
@@ -170,7 +172,7 @@ export default function SystemPage() {
   if (!system) {
     return (
       <main className="shell">
-        <a className="h-back" href="/">‹ Home</a>
+        <a className="h-back" href="/systems">‹ Systems</a>
         <h1 className="h-title">Unknown system</h1>
       </main>
     );
@@ -183,8 +185,8 @@ export default function SystemPage() {
 
   return (
     <main className="shell">
-      <a className="h-back" href="/">‹ Home</a>
-      <h1 className="h-title">{meta.icon} {meta.title}</h1>
+      <a className="h-back" href="/systems">‹ Systems</a>
+      <h1 className="h-title" style={{ display: "flex", alignItems: "center", gap: 9 }}><meta.icon size={24} /> {meta.title}</h1>
       <p className="h-sub">
         {meta.sub} — {members.length} device{members.length === 1 ? "" : "s"},{" "}
         {system === "shades" ? `${onCount} open` : `${onCount} on`}
@@ -242,6 +244,7 @@ export default function SystemPage() {
           </div>
         </section>
       ))}
+      <NavBar />
     </main>
   );
 }

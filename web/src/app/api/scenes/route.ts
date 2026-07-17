@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
+import { canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import { getStates } from "@/lib/ha";
 import { registry } from "@/lib/registry";
@@ -22,6 +23,10 @@ export async function POST(req: NextRequest) {
     | { action?: "capture" | "apply" | "delete"; name?: string; room?: string; id?: string }
     | null;
   if (!body?.action) return NextResponse.json({ error: "action required" }, { status: 400 });
+  // Guests can apply scenes but not create or delete them.
+  if ((body.action === "capture" || body.action === "delete") && !canProgram(auth.role)) {
+    return NextResponse.json({ error: "your account can't create or delete scenes" }, { status: 403 });
+  }
   const started = Date.now();
 
   try {

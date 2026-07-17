@@ -12,6 +12,7 @@ import { executeAction } from "@/lib/execute";
 import { getStates } from "@/lib/ha";
 import { registry } from "@/lib/registry";
 import { buildSceneStates, createScene } from "@/lib/scenes";
+import { canProgram } from "@/lib/permissions";
 import { z } from "zod/v4"; // v4 to match the assistant schemas (see lib/assistant.ts)
 
 export const maxDuration = 120;
@@ -45,6 +46,14 @@ export async function POST(req: NextRequest) {
     try {
       if (proposal.kind === "clarify") {
         return NextResponse.json({ error: "nothing to execute" }, { status: 400 });
+      }
+
+      // Guests get immediate actions only — nothing programmable.
+      if (proposal.kind !== "actions" && !canProgram(auth.role)) {
+        return NextResponse.json(
+          { error: "your account can run actions but not create scenes or automations" },
+          { status: 403 },
+        );
       }
 
       if (proposal.kind === "actions") {
@@ -124,7 +133,15 @@ export async function POST(req: NextRequest) {
       ],
       messages: [
         ...history,
-        { role: "user" as const, content: `${houseNowLine()}\n${body.data.message}` },
+        {
+          role: "user" as const,
+          content:
+            `${houseNowLine()}\n` +
+            (canProgram(auth.role)
+              ? ""
+              : "[permissions: this user is a guest — only immediate actions are allowed. Never propose scene_capture or automation; suggest they ask an admin instead.]\n") +
+            body.data.message,
+        },
       ],
       output_config: { format: zodOutputFormat(LlmProposalSchema) },
     });

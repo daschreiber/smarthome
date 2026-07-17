@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
+import { canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import {
   AutomationSpecSchema, createAutomation, deleteAutomation, listAutomations, setEnabled,
@@ -14,6 +15,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = authenticate(req);
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!canProgram(auth.role)) {
+    return NextResponse.json({ error: "your account can't change automations" }, { status: 403 });
+  }
 
   const body = (await req.json().catch(() => null)) as
     | { action?: "create" | "delete" | "toggle"; id?: string; enabled?: boolean; spec?: unknown }

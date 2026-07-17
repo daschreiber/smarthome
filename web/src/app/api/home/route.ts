@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStates } from "@/lib/ha";
 import { registry } from "@/lib/registry";
-import { authorized } from "@/lib/auth";
+import { authenticate } from "@/lib/auth";
 import { saunaConfigured, saunaStatus } from "@/lib/sauna";
 
 /**
@@ -9,7 +9,8 @@ import { saunaConfigured, saunaStatus } from "@/lib/sauna";
  * One bulk /api/states call, not N per-entity reads.
  */
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const auth = authenticate(req);
+  if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
     // HA bulk states and sauna status in parallel; sauna failure must not
     // break the rest of the home view.
@@ -64,7 +65,9 @@ export async function GET(req: NextRequest) {
           lastUpdated: s?.last_updated ?? null,
         };
       });
-    return NextResponse.json({ devices });
+    // The role rides along so the UI can hide programming affordances for
+    // guests; enforcement lives in the API routes, never in the browser.
+    return NextResponse.json({ devices, role: auth.role });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "upstream failure" },

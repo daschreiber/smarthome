@@ -4,8 +4,9 @@ import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   addUser, createResetToken, ensureSeeded, getUser, hashPassword, listUsers,
-  removeUser, setPassword, verifyPassword, verifyResetToken,
+  removeUser, setPassword, setRole, verifyPassword, verifyResetToken,
 } from "../users";
+import { canManageUsers, canProgram } from "../permissions";
 
 let dir: string;
 
@@ -14,6 +15,28 @@ beforeEach(() => {
   process.env.USERS_PATH = path.join(dir, "users.json");
   process.env.APP_SESSION_SECRET = "test-secret";
   delete process.env.APP_USERS;
+});
+
+describe("roles and permissions", () => {
+  it("guest can't program or manage; member programs; admin does both", () => {
+    expect(canProgram("guest")).toBe(false);
+    expect(canProgram("member")).toBe(true);
+    expect(canProgram("admin")).toBe(true);
+    expect(canManageUsers("guest")).toBe(false);
+    expect(canManageUsers("member")).toBe(false);
+    expect(canManageUsers("admin")).toBe(true);
+  });
+
+  it("changes a user's role but never demotes the last admin", () => {
+    addUser("admin@x.com", "adminpass1", "admin");
+    addUser("kid@x.com", "kidpass123", "member");
+    setRole("kid@x.com", "guest");
+    expect(getUser("kid@x.com")!.role).toBe("guest");
+    expect(() => setRole("admin@x.com", "member")).toThrow(/last admin/);
+    setRole("kid@x.com", "admin");
+    setRole("admin@x.com", "member"); // fine now — kid is an admin
+    expect(getUser("admin@x.com")!.role).toBe("member");
+  });
 });
 
 describe("password hashing", () => {

@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+type Role = "admin" | "member" | "guest";
+
 interface U {
   email: string;
-  role: "admin" | "member";
+  role: Role;
   createdAt: string;
 }
 
@@ -13,7 +15,7 @@ export default function Users() {
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"member" | "admin">("member");
+  const [role, setRole] = useState<Role>("member");
   const [busy, setBusy] = useState(false);
   const [resetLink, setResetLink] = useState<{ email: string; link: string } | null>(null);
 
@@ -57,14 +59,30 @@ export default function Users() {
     <main className="shell">
       <a className="h-back" href="/">‹ Home</a>
       <h1 className="h-title">Users</h1>
-      <p className="h-sub">Who can sign in, and with what role. Admins manage users; members control the house.</p>
+      <p className="h-sub">
+        Who can sign in, and with what role. Admins manage users; members control and program the
+        house; guests control devices but can&apos;t change scenes or automations.
+      </p>
       {error && <div className="error-banner">{error}</div>}
 
       {users.map((u) => (
         <div key={u.email} className="dev">
           <div>
             <div className="nm">{u.email}</div>
-            <div className="st">{u.role} · since {new Date(u.createdAt).toLocaleDateString()}</div>
+            <div className="st">
+              <select
+                value={u.role}
+                disabled={busy}
+                aria-label={`Role for ${u.email}`}
+                onChange={(e) => post({ action: "set-role", email: u.email, role: e.target.value })}
+                style={{ border: "none", background: "none", color: "inherit", font: "inherit", padding: 0, cursor: "pointer" }}
+              >
+                <option value="admin">admin</option>
+                <option value="member">member</option>
+                <option value="guest">guest</option>
+              </select>
+              {" · since "}{new Date(u.createdAt).toLocaleDateString()}
+            </div>
           </div>
           <div className="btn-row">
             <button className="mini-btn" disabled={busy} onClick={() => post({ action: "reset-link", email: u.email })}>
@@ -123,10 +141,11 @@ export default function Users() {
           />
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value as "member" | "admin")}
+            onChange={(e) => setRole(e.target.value as Role)}
             style={{ width: "100%", padding: 9, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}
           >
-            <option value="member">member — controls the house</option>
+            <option value="member">member — controls and programs the house</option>
+            <option value="guest">guest — controls devices, nothing programmable</option>
             <option value="admin">admin — also manages users</option>
           </select>
         </div>

@@ -125,7 +125,7 @@ export default function Assistant() {
           <div key={i} style={{ margin: "10px 0", textAlign: t.role === "user" ? "right" : "left" }}>
             <div
               style={{
-                display: "inline-block", maxWidth: "85%", textAlign: "left",
+                display: "inline-block", maxWidth: "min(85%, 560px)", textAlign: "left",
                 background: t.role === "user" ? "var(--accent)" : "var(--card)",
                 color: t.role === "user" ? "var(--accent-ink)" : "var(--ink)",
                 border: t.role === "user" ? "none" : "1px solid var(--card-line)",
@@ -168,7 +168,7 @@ export default function Assistant() {
           background: "var(--bg)", borderTop: "1px solid var(--card-line)",
         }}
       >
-        <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", gap: 8 }}>
+        <div style={{ maxWidth: "var(--shell-max)", margin: "0 auto", display: "flex", gap: 8 }}>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}

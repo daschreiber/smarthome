@@ -39,7 +39,7 @@ export default function Reset() {
   };
 
   return (
-    <main className="shell" style={{ marginTop: "14vh" }}>
+    <main className="shell" style={{ marginTop: "14vh", maxWidth: 400 }}>
       <h1 className="h-title">Set a new password</h1>
       {done ? (
         <>

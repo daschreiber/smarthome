@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import NavBar from "../../NavBar";
-import { BlindsIcon, BulbIcon, SnowIcon } from "../../icons";
+import { BlindsIcon, BulbIcon, FlameIcon, SnowIcon } from "../../icons";
 
 /**
  * System view: one function across the whole house (lighting / climate /
@@ -30,6 +30,7 @@ interface UiDevice {
 const SYSTEMS = {
   lighting: { title: "Lighting", icon: BulbIcon, sub: "Every light in the house" },
   climate: { title: "Climate", icon: SnowIcon, sub: "A/C & heating zones" },
+  heating: { title: "Underfloor heating", icon: FlameIcon, sub: "Warm floors, room by room" },
   shades: { title: "Shades", icon: BlindsIcon, sub: "All the blinds and shades" },
 } as const;
 
@@ -84,6 +85,7 @@ export default function SystemPage() {
     if (system === "lighting")
       return devices.filter((d) => d.kind === "light" && d.group === "Lighting" && d.category !== "scene_switch");
     if (system === "climate") return devices.filter((d) => d.kind === "climate");
+    if (system === "heating") return devices.filter((d) => d.kind === "heating");
     return devices.filter((d) => d.kind === "cover");
   }, [devices, system]);
 
@@ -196,6 +198,7 @@ export default function SystemPage() {
       <div className="scenes" style={{ marginBottom: 6 }}>
         {system === "lighting" && master("All lights off", "turn_off", true)}
         {system === "climate" && master("All A/C off", "turn_off", true)}
+        {system === "heating" && master("All heating off", "turn_off", true)}
         {system === "shades" && (
           <>
             {master("Open all", "open")}
@@ -225,7 +228,7 @@ export default function SystemPage() {
                     </div>
                   </div>
                   <div className="btn-row">
-                    {system === "lighting" ? (
+                    {system === "lighting" || system === "heating" ? (
                       <>
                         <button className="mini-btn" disabled={busy} onClick={() => systemCommand("turn_on", [room])}>On</button>
                         <button className="mini-btn" disabled={busy} onClick={() => systemCommand("turn_off", [room])}>Off</button>

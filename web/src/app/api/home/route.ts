@@ -13,10 +13,16 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
     // HA bulk states and sauna status in parallel; sauna failure must not
-    // break the rest of the home view.
+    // break the rest of the home view — but the REASON travels to the card.
+    let saunaNote: string | null = saunaConfigured() ? null : "not configured";
     const [haStates, sauna] = await Promise.all([
       getStates(),
-      saunaConfigured() ? saunaStatus().catch(() => null) : Promise.resolve(null),
+      saunaConfigured()
+        ? saunaStatus().catch((err: unknown) => {
+            saunaNote = err instanceof Error ? err.message : String(err);
+            return null;
+          })
+        : Promise.resolve(null),
     ]);
     const states = new Map(haStates.map((s) => [s.entity_id, s]));
     const devices = registry()
@@ -40,6 +46,7 @@ export async function GET(req: NextRequest) {
             hvacMode: null,
             brightnessPct: null,
             lastUpdated: null,
+            note: sauna && !sauna.connected ? "sauna is offline at KLAFS" : saunaNote,
           };
         }
         const s = states.get(d.entityId);

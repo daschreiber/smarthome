@@ -11,7 +11,7 @@ import { executeSystemCommand } from "@/lib/execute";
  */
 
 const Body = z.object({
-  system: z.enum(["lighting", "climate", "shades"]),
+  system: z.enum(["lighting", "climate", "heating", "shades"]),
   command: z.enum(["turn_on", "turn_off", "open", "close", "stop"]),
   rooms: z.array(z.string()).max(50).optional(),
 });

@@ -73,11 +73,12 @@ export function roomLights(room: string): Device[] {
  * towel rails ride the light domain but are NOT lights), "climate" is A/C
  * zones only (never the sauna), "shades" is every cover.
  */
-export type SystemKey = "lighting" | "climate" | "shades";
+export type SystemKey = "lighting" | "climate" | "heating" | "shades";
 
 export const SYSTEM_COMMANDS: Record<SystemKey, Command["command"][]> = {
   lighting: ["turn_on", "turn_off"],
   climate: ["turn_on", "turn_off"],
+  heating: ["turn_on", "turn_off"],
   shades: ["open", "close", "stop"],
 };
 
@@ -88,6 +89,8 @@ export function systemDevices(system: SystemKey): Device[] {
       return all.filter((d) => d.kind === "light" && d.group === "Lighting" && d.category !== "scene_switch");
     case "climate":
       return all.filter((d) => d.kind === "climate");
+    case "heating":
+      return all.filter((d) => d.kind === "heating");
     case "shades":
       return all.filter((d) => d.kind === "cover");
   }

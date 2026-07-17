@@ -29,6 +29,8 @@ interface UiDevice {
   currentTemperature: number | null;
   targetTemperature: number | null;
   hvacMode: string | null;
+  /** Sauna only: why the card is unavailable, when it is. */
+  note?: string | null;
 }
 
 type View = { t: "home" } | { t: "room"; room: string };
@@ -246,6 +248,11 @@ export default function Page() {
     [devices],
   );
 
+  const heatingOnTotal = useMemo(
+    () => devices.filter((d) => d.kind === "heating" && d.state === "on").length,
+    [devices],
+  );
+
   const roomDevices = useMemo(() => {
     if (view.t !== "room") return [];
     return devices.filter((d) => d.room === view.room);
@@ -368,6 +375,12 @@ export default function Page() {
               <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><SnowIcon size={18} /> Climate</div>
               <div className={`rs ${climateOnTotal > 0 ? "on" : ""}`}>
                 {climateOnTotal > 0 ? `${climateOnTotal} zone${climateOnTotal === 1 ? "" : "s"} active` : "all off"}
+              </div>
+            </a>
+            <a className="room-card" href="/systems/heating" style={{ textDecoration: "none", display: "block" }}>
+              <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><FlameIcon size={18} /> Heating</div>
+              <div className={`rs ${heatingOnTotal > 0 ? "on" : ""}`}>
+                {heatingOnTotal > 0 ? `${heatingOnTotal} room${heatingOnTotal === 1 ? "" : "s"}` : "all off"}
               </div>
             </a>
             <a className="room-card" href="/systems/shades" style={{ textDecoration: "none", display: "block" }}>
@@ -859,7 +872,7 @@ function SaunaCard({
           <div className="st">
             {d.available
               ? `${on ? "heating" : "off"} · cabin ${d.currentTemperature ?? "—"}° · target ${d.targetTemperature ?? "—"}°`
-              : "unavailable"}
+              : `unavailable${d.note ? ` — ${d.note}` : ""}`}
           </div>
         </div>
       </div>

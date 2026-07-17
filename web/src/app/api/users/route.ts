@@ -43,8 +43,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, link });
     }
     // default: add
-    if (!body.password) return NextResponse.json({ error: "password required" }, { status: 400 });
-    addUser(body.email, body.password, role);
+    // Empty password = Google-sign-in-only user.
+    addUser(body.email, body.password?.trim() ? body.password : null, role);
     audit({ ts: new Date().toISOString(), user: auth.user, deviceId: "users", entityId: "app.users", command: "add_user", args: { email: body.email, role }, ok: true, durationMs: 0 });
     return NextResponse.json({ ok: true, users: listUsers() });
   } catch (e) {

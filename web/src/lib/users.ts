@@ -85,14 +85,22 @@ export function anyUsers(): boolean {
   return load().length > 0;
 }
 
-export function addUser(email: string, password: string, role: Role = "member"): void {
+export function addUser(email: string, password: string | null, role: Role = "member"): void {
   ensureSeeded();
   const norm = email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(norm)) throw new Error("invalid email address");
-  if (password.length < 8) throw new Error("password must be at least 8 characters");
+  // No password = Google-sign-in-only user. The "!" sentinel can never
+  // verify (verifyPassword requires salt:hash), and a reset link can set a
+  // real password later if they ever need one.
+  if (password != null && password.length < 8) throw new Error("password must be at least 8 characters");
   const users = load();
   if (users.some((u) => u.email === norm)) throw new Error("user already exists");
-  users.push({ email: norm, passwordHash: hashPassword(password), role, createdAt: new Date().toISOString() });
+  users.push({
+    email: norm,
+    passwordHash: password == null ? "!" : hashPassword(password),
+    role,
+    createdAt: new Date().toISOString(),
+  });
   save(users);
 }
 

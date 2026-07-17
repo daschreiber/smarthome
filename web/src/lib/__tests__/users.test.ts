@@ -45,6 +45,17 @@ describe("password hashing", () => {
     expect(verifyPassword("correct horse", h)).toBe(true);
     expect(verifyPassword("wrong pony", h)).toBe(false);
   });
+
+  it("a Google-only user (no password) can never sign in by password", () => {
+    addUser("g@x.com", null, "guest");
+    const u = getUser("g@x.com")!;
+    expect(verifyPassword("", u.passwordHash)).toBe(false);
+    expect(verifyPassword("!", u.passwordHash)).toBe(false);
+    expect(verifyPassword("anything", u.passwordHash)).toBe(false);
+    // A reset link can still give them a real password later.
+    setPassword("g@x.com", "real-password-1");
+    expect(verifyPassword("real-password-1", getUser("g@x.com")!.passwordHash)).toBe(true);
+  });
 });
 
 describe("store and seeding", () => {

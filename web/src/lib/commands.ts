@@ -66,7 +66,13 @@ export function temperatureBounds(kind: Device["kind"]): { min: number; max: num
 
 export function assertCommandAllowed(device: Device, cmd: Command): void {
   const needed = CAPABILITY_FOR_COMMAND[cmd.command];
-  if (!device.capabilities.includes(needed as Device["capabilities"][number])) {
+  // Climate zones advertise hvac_mode rather than on_off; turning the zone
+  // on/off is the hvac-mode operation, so either capability satisfies it.
+  const satisfied =
+    device.capabilities.includes(needed as Device["capabilities"][number]) ||
+    ((cmd.command === "turn_on" || cmd.command === "turn_off") &&
+      device.capabilities.includes("hvac_mode" as Device["capabilities"][number]));
+  if (!satisfied) {
     throw new Error(
       `device ${device.id} (${device.kind}) does not support ${cmd.command}`,
     );
@@ -86,9 +92,13 @@ export function assertCommandAllowed(device: Device, cmd: Command): void {
  * null = not verifiable by simple state comparison (position, volume, stop);
  * those commands report the observed state without claiming confirmation.
  */
-export function expectedStates(cmd: Command): string[] | null {
+export function expectedStates(cmd: Command, kind?: Device["kind"]): string[] | null {
   switch (cmd.command) {
     case "turn_on":
+      // A climate zone that turns on lands in an hvac mode we can't predict
+      // (heat/cool/auto…), so state comparison can't prove it — report "sent".
+      if (kind === "climate") return null;
+      return ["on"];
     case "set_brightness":
       return ["on"];
     case "turn_off":
@@ -111,10 +121,12 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
   const target = { entity_id: device.entityId };
   switch (cmd.command) {
     case "turn_on":
+      if (device.kind === "climate") return { domain: "climate", service: "turn_on", data: target };
       return device.kind === "media_player"
         ? { domain: "media_player", service: "turn_on", data: target }
         : { domain: "light", service: "turn_on", data: target };
     case "turn_off":
+      if (device.kind === "climate") return { domain: "climate", service: "turn_off", data: target };
       return device.kind === "media_player"
         ? { domain: "media_player", service: "turn_off", data: target }
         : { domain: "light", service: "turn_off", data: target };

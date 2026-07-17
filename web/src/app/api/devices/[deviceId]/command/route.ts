@@ -91,7 +91,7 @@ export async function POST(
     // ~4s is normal (observed 3.7s in commissioning); poll up to 8s.
     // "confirmed" is ONLY claimed when the observed state proves the command
     // (PRODUCT_SPEC §6); otherwise the command is reported as "sent".
-    const expected = expectedStates(cmd);
+    const expected = expectedStates(cmd, device.kind);
     const deadline = Date.now() + 8000;
     let after = null;
     for (;;) {

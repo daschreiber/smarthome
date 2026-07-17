@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import FloorPlan from "./FloorPlan";
 
 /**
  * Phase C app shell in the decided design direction (docs/DESIGN_DIRECTION.md):
@@ -53,12 +54,14 @@ export default function Page() {
   const [authNeeded, setAuthNeeded] = useState(false);
   const [appKey, setAppKey] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [layout, setLayout] = useState<"grid" | "plan">("grid");
   const keyRef = useRef("");
 
   useEffect(() => {
     const k = localStorage.getItem("appKey") ?? "";
     setAppKey(k);
     keyRef.current = k;
+    if (localStorage.getItem("homeLayout") === "plan") setLayout("plan");
     setMounted(true);
   }, []);
 
@@ -191,6 +194,19 @@ export default function Page() {
     [devices],
   );
 
+  const climateOnTotal = useMemo(
+    () =>
+      devices.filter(
+        (d) => d.kind === "climate" && d.available && d.state !== "off" && d.state !== "unavailable",
+      ).length,
+    [devices],
+  );
+
+  const shadesOpenTotal = useMemo(
+    () => devices.filter((d) => d.kind === "cover" && d.state === "open").length,
+    [devices],
+  );
+
   const roomDevices = useMemo(() => {
     if (view.t !== "room") return [];
     return devices.filter((d) => d.room === view.room);
@@ -264,21 +280,60 @@ export default function Page() {
                 Floor {f}
               </button>
             ))}
+            <button
+              className="floor-tab"
+              style={{ flex: "0 0 auto", padding: "10px 14px" }}
+              aria-pressed={layout === "plan"}
+              aria-label={layout === "grid" ? "Switch to floor plan view" : "Switch to grid view"}
+              onClick={() => {
+                const next = layout === "grid" ? "plan" : "grid";
+                setLayout(next);
+                localStorage.setItem("homeLayout", next);
+              }}
+            >
+              {layout === "grid" ? "⌂" : "▦"}
+            </button>
           </div>
 
+          {layout === "plan" ? (
+            <FloorPlan floor={floor} rooms={rooms} onOpen={(room) => setView({ t: "room", room })} />
+          ) : (
+            <div className="rooms">
+              {[...rooms.entries()]
+                .filter(([, r]) => r.floor === floor)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([name, r]) => (
+                  <button key={name} className="room-card" onClick={() => setView({ t: "room", room: name })}>
+                    <div className="rn">{name}</div>
+                    <div className={`rs ${r.lightsOn > 0 ? "on" : ""}`}>
+                      {r.lightsOn > 0 ? `${r.lightsOn} light${r.lightsOn === 1 ? "" : "s"} on` : "all off"}
+                      {r.climate?.currentTemperature != null ? ` · ${r.climate.currentTemperature}°` : ""}
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+
+          <div className="section-label">Systems</div>
           <div className="rooms">
-            {[...rooms.entries()]
-              .filter(([, r]) => r.floor === floor)
-              .sort((a, b) => a[0].localeCompare(b[0]))
-              .map(([name, r]) => (
-                <button key={name} className="room-card" onClick={() => setView({ t: "room", room: name })}>
-                  <div className="rn">{name}</div>
-                  <div className={`rs ${r.lightsOn > 0 ? "on" : ""}`}>
-                    {r.lightsOn > 0 ? `${r.lightsOn} light${r.lightsOn === 1 ? "" : "s"} on` : "all off"}
-                    {r.climate?.currentTemperature != null ? ` · ${r.climate.currentTemperature}°` : ""}
-                  </div>
-                </button>
-              ))}
+            <a className="room-card" href="/systems/lighting" style={{ textDecoration: "none", display: "block" }}>
+              <div className="rn">💡 Lighting</div>
+              <div className={`rs ${lightsOnTotal > 0 ? "on" : ""}`}>
+                {lightsOnTotal > 0 ? `${lightsOnTotal} on` : "all off"}
+              </div>
+            </a>
+            <a className="room-card" href="/systems/climate" style={{ textDecoration: "none", display: "block" }}>
+              <div className="rn">❄️ Climate</div>
+              <div className={`rs ${climateOnTotal > 0 ? "on" : ""}`}>
+                {climateOnTotal > 0 ? `${climateOnTotal} zone${climateOnTotal === 1 ? "" : "s"} active` : "all off"}
+              </div>
+            </a>
+            <a className="room-card" href="/systems/shades" style={{ textDecoration: "none", display: "block" }}>
+              <div className="rn">🪟 Shades</div>
+              <div className={`rs ${shadesOpenTotal > 0 ? "on" : ""}`}>
+                {shadesOpenTotal > 0 ? `${shadesOpenTotal} open` : "all closed"}
+              </div>
+            </a>
           </div>
 
           {(scenes.length > 0 || customScenes.length > 0) && (

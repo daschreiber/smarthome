@@ -121,8 +121,11 @@ export const FLOOR_GEOMETRY: Record<5 | 6, FloorGeometry> = {
       { room: "Gym", rect: { x: 60, y: 4.6, w: 15, h: 18.4 } },
       { room: "Sauna", rect: { x: 75, y: 4.6, w: 20, h: 15.3 } },
       { room: "Downstairs Toilet", label: "WC", rect: { x: 81, y: 19.9, w: 14, h: 12.3 } },
-      { room: "Right Corridor", label: "Corridor", rect: { x: 62, y: 23, w: 19, h: 9.2 } },
-      { room: "Left Corridor", label: "Corr.", rect: { x: 24, y: 24.5, w: 5, h: 13.9 } },
+      // Owner-confirmed: the east hall is the LEFT corridor, the west strip
+      // by the guest rooms is the RIGHT corridor (named from inside, facing
+      // the balcony — not from the drawing's orientation).
+      { room: "Left Corridor", label: "Corridor", rect: { x: 62, y: 23, w: 19, h: 9.2 } },
+      { room: "Right Corridor", label: "Corr.", rect: { x: 24, y: 24.5, w: 5, h: 13.9 } },
       { room: "Guest Bathroom", label: "Bath", rect: { x: 5, y: 24.5, w: 19, h: 13.9 } },
       { room: "Den", rect: { x: 29, y: 25.3, w: 24, h: 28.4 } },
       { room: "Small Guest Room", label: "Guest S", rect: { x: 5, y: 38.4, w: 19, h: 15.3 } },

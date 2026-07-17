@@ -74,7 +74,7 @@ export default function More() {
             placeholder="app key"
             onChange={(e) => {
               setAppKey(e.target.value);
-              localStorage.setItem("appKey", e.target.value);
+              localStorage.setItem("appKey", e.target.value.trim());
             }}
           />
         </div>

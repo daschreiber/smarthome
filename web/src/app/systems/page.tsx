@@ -25,7 +25,7 @@ export default function Systems() {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/home", {
-        headers: keyRef.current ? { "x-app-key": keyRef.current } : {},
+        headers: /^[\x21-\x7e]+$/.test(keyRef.current.trim()) && keyRef.current.trim() ? { "x-app-key": keyRef.current.trim() } : {},
       });
       if (res.status === 401) { location.href = "/"; return; }
       if (res.ok) setDevices(((await res.json()) as { devices: UiDevice[] }).devices);

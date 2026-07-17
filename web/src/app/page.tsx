@@ -31,6 +31,8 @@ interface UiDevice {
   hvacMode: string | null;
   /** Sauna only: why the card is unavailable, when it is. */
   note?: string | null;
+  /** Sauna only: pending auto-stop time (HH:MM house time). */
+  stopAt?: string | null;
 }
 
 type View = { t: "home" } | { t: "room"; room: string };
@@ -106,10 +108,13 @@ export default function Page() {
     history.pushState({}, "", "/");
   }, []);
 
-  const headers = useCallback(
-    (): HeadersInit => (keyRef.current ? { "x-app-key": keyRef.current } : {}),
-    [],
-  );
+  const headers = useCallback((): HeadersInit => {
+    // A stored app key with whitespace or non-ASCII (paste artifacts) makes
+    // Safari reject the whole fetch with a cryptic SyntaxError — send the
+    // header only when the value is a legal header token.
+    const k = keyRef.current.trim();
+    return k && /^[\x21-\x7e]+$/.test(k) ? { "x-app-key": k } : {};
+  }, []);
 
   const loadFavs = useCallback(async () => {
     try {
@@ -850,11 +855,32 @@ function SaunaCard({
   const [label, setLabel] = useState<string | null>(null);
   const [pendingTemp, setPendingTemp] = useState<number | null>(null);
   const [committedTemp, setCommittedTemp] = useState<number | null>(null);
+  // Run time: null = no app auto-stop (the KLAFS bathing-time limit governs).
+  const [runFor, setRunFor] = useState<number | null>(120);
   const tempTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const raf = useRef<number | null>(null);
   const start = useRef(0);
   const HOLD_MS = 1100;
   const on = d.state === "on";
+
+  // While running, picking a duration replaces the pending auto-stop.
+  const setTimerNow = (minutes: number) => {
+    setLabel("Scheduling auto-stop…");
+    fetch("/api/sauna/timer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ minutes }),
+    })
+      .then(async (res) => {
+        const out = await res.json();
+        if (!res.ok) throw new Error(out.error ?? "auto-stop failed");
+        setLabel(null);
+      })
+      .catch((e) => {
+        setLabel(e instanceof Error ? e.message : "auto-stop failed");
+        setTimeout(() => setLabel(null), 6000);
+      });
+  };
 
   // KLAFS target (40-100°C, 5° steps). Preference: mid-adjustment value,
   // then the cabin's reported target, then the last target we sent.
@@ -884,7 +910,14 @@ function SaunaCard({
     if (p >= 1) {
       setFill(0);
       setLabel(on ? "Stopping — verifying…" : "Starting — verifying heating…");
-      send(d.id, { command: on ? "turn_off" : "turn_on", confirm: true }).then((r) => {
+      const body: Record<string, unknown> = { command: on ? "turn_off" : "turn_on", confirm: true };
+      if (!on) {
+        // Start carries the chosen target and run time; the sauna app
+        // schedules the auto-stop server-side.
+        if (shownTarget != null) body.temperature = shownTarget;
+        if (runFor != null) body.runForMinutes = runFor;
+      }
+      send(d.id, body).then((r) => {
         // Show the server's actual reason, not a mute "Command failed".
         setLabel(r.ok ? null : r.error ?? "Command failed");
         if (!r.ok) setTimeout(() => setLabel(null), 8000);
@@ -892,7 +925,7 @@ function SaunaCard({
       return;
     }
     raf.current = requestAnimationFrame(tick);
-  }, [on, d.id, send]);
+  }, [on, d.id, send, shownTarget, runFor]);
 
   const press = () => {
     if (busy) return;
@@ -911,7 +944,8 @@ function SaunaCard({
           <div className="nm">{d.label}</div>
           <div className="st">
             {d.available
-              ? `${on ? "heating" : "off"} · cabin ${d.currentTemperature ?? "—"}°`
+              ? `${on ? "heating" : "off"} · cabin ${d.currentTemperature ?? "—"}°` +
+                (on && d.stopAt ? ` · stops at ${d.stopAt}` : "")
               : `unavailable${d.note ? ` — ${d.note}` : ""}`}
           </div>
         </div>
@@ -934,6 +968,30 @@ function SaunaCard({
             +
           </button>
         </div>
+      </div>
+      <div className="slider-row" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", paddingBottom: 6 }}>
+        <span className="st">{on ? "Stop after" : "Run for"}</span>
+        {[60, 120, 180].map((m) => (
+          <button
+            key={m}
+            className="mini-btn"
+            style={!on && runFor === m ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
+            disabled={busy || !d.available}
+            onClick={() => (on ? setTimerNow(m) : setRunFor(m))}
+          >
+            {m / 60}h
+          </button>
+        ))}
+        {!on && (
+          <button
+            className="mini-btn"
+            style={runFor === null ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
+            disabled={busy || !d.available}
+            onClick={() => setRunFor(null)}
+          >
+            No limit
+          </button>
+        )}
       </div>
       <div className="slider-row">
         <button

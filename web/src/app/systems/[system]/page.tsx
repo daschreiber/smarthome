@@ -50,10 +50,10 @@ export default function SystemPage() {
   useEffect(() => {
     keyRef.current = localStorage.getItem("appKey") ?? "";
   }, []);
-  const headers = useCallback(
-    (): HeadersInit => (keyRef.current ? { "x-app-key": keyRef.current } : {}),
-    [],
-  );
+  const headers = useCallback((): HeadersInit => {
+    const k = keyRef.current.trim();
+    return k && /^[\x21-\x7e]+$/.test(k) ? { "x-app-key": k } : {};
+  }, []);
 
   const refresh = useCallback(async () => {
     try {

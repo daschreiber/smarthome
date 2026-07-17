@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { saunaSetTemperature, saunaStart, saunaStatus } from "../sauna";
+import { saunaScheduleStatus, saunaSetTemperature, saunaStart, saunaStatus, saunaStopIn } from "../sauna";
 
 /**
  * Pins the wire contract with the KLAFS sauna app (daschreiber/Sauna,
@@ -67,5 +67,26 @@ describe("sauna adapter wire contract", () => {
   it("an error body counts as failure even with HTTP 200", async () => {
     response = { error: "Login failed" };
     await expect(saunaStatus()).rejects.toThrow(/Login failed/);
+  });
+
+  it("start rides temp and stop_after on the query string and returns stop_at", async () => {
+    response = { success: true, verified: true, message: "Sauna starting at 90°C", stop_at: "14:30" };
+    const r = await saunaStart({ temp: 90, stopAfterMinutes: 120 });
+    expect(calls[0]).toContain("temp=90");
+    expect(calls[0]).toContain("stop_after=120");
+    expect(r.stopAt).toBe("14:30");
+  });
+
+  it("stop-in schedules the auto-stop and surfaces stop_at", async () => {
+    response = { success: true, stop_at: "15:45", schedule_id: "abc" };
+    const r = await saunaStopIn(60);
+    expect(calls[0]).toContain("/api/quick/stop-in?");
+    expect(calls[0]).toContain("minutes=60");
+    expect(r.stopAt).toBe("15:45");
+  });
+
+  it("schedule-status degrades to null when the endpoint is missing (older sauna app)", async () => {
+    vi.stubGlobal("fetch", async () => new Response("Not Found", { status: 404 }));
+    expect(await saunaScheduleStatus()).toEqual({ stopAt: null });
   });
 });

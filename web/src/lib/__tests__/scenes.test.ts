@@ -18,7 +18,7 @@ const dev = (over: Partial<Device>): Device => ({
 });
 
 const st = (entityId: string, state: string, attributes: Record<string, unknown> = {}): [string, HaState] =>
-  [entityId, { entity_id: entityId, state, attributes, last_updated: "" }];
+  [entityId, { entity_id: entityId, state, attributes, last_updated: "", last_changed: "" }];
 
 describe("buildSceneStates", () => {
   it("captures dimmer brightness, off lights, covers, and climate targets", () => {

@@ -29,6 +29,15 @@ interface Automation {
 
 interface SceneMeta { id: string; name: string; }
 
+interface TimerRule {
+  id: string;
+  deviceId: string;
+  afterMinutes: number;
+  enabled: boolean;
+}
+
+interface LightDevice { id: string; label: string; room: string; }
+
 const DAY_PRESETS: Array<{ label: string; days?: number[] }> = [
   { label: "Every day" },
   { label: "Weekdays (Mon–Fri)", days: [1, 2, 3, 4, 5] },
@@ -65,6 +74,12 @@ export default function Automations() {
   const [actRoom, setActRoom] = useState("");
   const [actScene, setActScene] = useState("");
 
+  // auto-off timers
+  const [timers, setTimers] = useState<TimerRule[]>([]);
+  const [lights, setLights] = useState<LightDevice[]>([]);
+  const [timerDevice, setTimerDevice] = useState("");
+  const [timerMinutes, setTimerMinutes] = useState(20);
+
   const load = useCallback(async () => {
     const res = await fetch("/api/automations");
     if (!res.ok) {
@@ -74,12 +89,21 @@ export default function Automations() {
     const body = await res.json();
     setItems(body.automations);
     setTz(body.tz);
-    const [sc, home] = await Promise.all([fetch("/api/scenes"), fetch("/api/home")]);
+    const [sc, home, tm] = await Promise.all([fetch("/api/scenes"), fetch("/api/home"), fetch("/api/timers")]);
     if (sc.ok) setScenes(((await sc.json()) as { scenes: SceneMeta[] }).scenes);
     if (home.ok) {
-      const devs = ((await home.json()) as { devices: Array<{ room: string; kind: string }> }).devices;
-      setRooms([...new Set(devs.filter((d) => d.kind === "light").map((d) => d.room))].sort());
+      const devs = ((await home.json()) as {
+        devices: Array<{ id: string; label: string; room: string; kind: string; category: string }>;
+      }).devices;
+      const lightDevs = devs.filter((d) => d.kind === "light" && d.category !== "scene_switch");
+      setRooms([...new Set(lightDevs.map((d) => d.room))].sort());
+      setLights(
+        lightDevs
+          .map((d) => ({ id: d.id, label: d.label, room: d.room }))
+          .sort((a, b) => `${a.room} ${a.label}`.localeCompare(`${b.room} ${b.label}`)),
+      );
     }
+    if (tm.ok) setTimers(((await tm.json()) as { timers: TimerRule[] }).timers);
     setError(null);
   }, []);
 
@@ -127,6 +151,27 @@ export default function Automations() {
     }
   };
 
+  const timerOp = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/timers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error ?? "failed");
+      setTimers(out.timers);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const lightById = (id: string) => lights.find((l) => l.id === id);
+
   return (
     <main className="shell">
       <a className="h-back" href="/">‹ Home</a>
@@ -157,6 +202,70 @@ export default function Automations() {
         </div>
       ))}
       {items.length === 0 && <p className="h-sub">No automations yet.</p>}
+
+      <div className="section-label">Auto-off timers</div>
+      <p className="h-sub" style={{ marginTop: -2 }}>
+        Whenever the device turns on — from any switch, scene, or app — it turns itself off after
+        the set time.
+      </p>
+      {timers.map((t) => {
+        const dev = lightById(t.deviceId);
+        return (
+          <div key={t.id} className="dev">
+            <div>
+              <div className="nm">{dev ? `${dev.room} — ${dev.label}` : t.deviceId}</div>
+              <div className="st">off after {t.afterMinutes} min{t.enabled ? "" : " · paused"}</div>
+            </div>
+            <div className="btn-row">
+              <button className="mini-btn" disabled={busy} onClick={() => timerOp({ action: "toggle", id: t.id, enabled: !t.enabled })}>
+                {t.enabled ? "Pause" : "Resume"}
+              </button>
+              <button
+                className="mini-btn"
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm("Delete this auto-off timer?")) timerOp({ action: "delete", id: t.id });
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      <div className="dev-block" style={{ padding: 14 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <select
+            value={timerDevice}
+            onChange={(e) => setTimerDevice(e.target.value)}
+            style={{ flex: "1 1 220px", padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}
+          >
+            <option value="">choose a light…</option>
+            {lights.map((l) => (
+              <option key={l.id} value={l.id}>{l.room} — {l.label}</option>
+            ))}
+          </select>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
+            off after
+            <input
+              type="number"
+              min={1}
+              max={720}
+              value={timerMinutes}
+              onChange={(e) => setTimerMinutes(Number(e.target.value))}
+              style={{ width: 64, padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}
+            />
+            min
+          </label>
+          <button
+            className="mini-btn"
+            disabled={busy || !timerDevice || !(timerMinutes >= 1)}
+            onClick={() => timerOp({ action: "create", deviceId: timerDevice, afterMinutes: timerMinutes }).then(() => setTimerDevice(""))}
+          >
+            + Add timer
+          </button>
+        </div>
+      </div>
 
       <div className="section-label">New automation</div>
       <div className="dev-block" style={{ padding: 14 }}>

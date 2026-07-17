@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { noiseStatus, setNoiseType, setNoiseVolume } from "../whitenoise";
+import { noiseMediaEntity, noiseStatus, noiseStreamUrl, setNoiseType, setNoiseVolume } from "../whitenoise";
 
 /**
  * Pins the wire contract with the white-noise machine
@@ -50,5 +50,13 @@ describe("white-noise adapter wire contract", () => {
     response = { detail: "invalid noise type" };
     status = 400;
     await expect(setNoiseType("white")).rejects.toThrow(/invalid noise type/);
+  });
+
+  it("builds the token-bearing stream URL and defaults the media entity", () => {
+    expect(noiseStreamUrl()).toBe("https://noise.example/stream?token=tok9");
+    expect(noiseMediaEntity()).toBe("media_player.master_bedroom");
+    process.env.WHITENOISE_MEDIA_ENTITY = "media_player.bedroom_zone";
+    expect(noiseMediaEntity()).toBe("media_player.bedroom_zone");
+    delete process.env.WHITENOISE_MEDIA_ENTITY;
   });
 });

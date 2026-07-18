@@ -21,8 +21,17 @@ describe("LlmProposalSchema", () => {
         message: "Kitchen on at 16:00 tomorrow, off at 20:00.",
         name: "Kitchen tomorrow",
         steps: [
-          { time: "16:00", days: null, date: "2026-07-18", actions: [{ type: "room", room: "Kitchen", command: "lights_on" }] },
-          { time: "20:00", days: null, date: "2026-07-18", actions: [{ type: "room", room: "Kitchen", command: "lights_off" }] },
+          { time: "16:00", sun: null, sunOffsetMinutes: null, days: null, date: "2026-07-18", actions: [{ type: "room", room: "Kitchen", command: "lights_on" }] },
+          { time: "20:00", sun: null, sunOffsetMinutes: null, days: null, date: "2026-07-18", actions: [{ type: "room", room: "Kitchen", command: "lights_off" }] },
+        ],
+      },
+      {
+        kind: "automation",
+        message: "Balcony lights 15 min before sunset, off at 01:00.",
+        name: "Balcony dusk",
+        steps: [
+          { time: null, sun: "sunset", sunOffsetMinutes: -15, days: null, date: null, actions: [{ type: "room", room: "Balcony (6th)", command: "lights_on" }] },
+          { time: "01:00", sun: null, sunOffsetMinutes: null, days: null, date: null, actions: [{ type: "room", room: "Balcony (6th)", command: "lights_off" }] },
         ],
       },
     ];
@@ -88,8 +97,8 @@ describe("toAutomationSpec", () => {
     message: "Kitchen on tomorrow at 16:00, off at 20:00.",
     name: "Kitchen tomorrow",
     steps: [
-      { time: "16:00", days: null, date: "2026-07-18", actions: [{ type: "room", room: "Kitchen", command: "lights_on" }] },
-      { time: "20:00", days: null, date: "2026-07-18", actions: [{ type: "room", room: "Kitchen", command: "lights_off" }] },
+      { time: "16:00", sun: null, sunOffsetMinutes: null, days: null, date: "2026-07-18", actions: [{ type: "room", room: "Kitchen", command: "lights_on" }] },
+      { time: "20:00", sun: null, sunOffsetMinutes: null, days: null, date: "2026-07-18", actions: [{ type: "room", room: "Kitchen", command: "lights_off" }] },
     ],
   };
 
@@ -101,21 +110,49 @@ describe("toAutomationSpec", () => {
       actions: [{ type: "room", room: "Kitchen", command: "lights_on" }],
     });
     expect(spec.steps[0]).not.toHaveProperty("days");
+    expect(spec.steps[0]).not.toHaveProperty("sun");
   });
 
   it("keeps recurring day lists and drops empty ones", () => {
     const weekly = toAutomationSpec({
       ...proposal,
-      steps: [{ time: "07:30", days: [1, 2, 3, 4, 5], date: null, actions: [{ type: "scene", sceneId: "s1" }] }],
+      steps: [{ time: "07:30", sun: null, sunOffsetMinutes: null, days: [1, 2, 3, 4, 5], date: null, actions: [{ type: "scene", sceneId: "s1" }] }],
     });
     expect(weekly.steps[0].days).toEqual([1, 2, 3, 4, 5]);
     expect(weekly.steps[0]).not.toHaveProperty("date");
 
     const daily = toAutomationSpec({
       ...proposal,
-      steps: [{ time: "07:30", days: [], date: null, actions: [{ type: "scene", sceneId: "s1" }] }],
+      steps: [{ time: "07:30", sun: null, sunOffsetMinutes: null, days: [], date: null, actions: [{ type: "scene", sceneId: "s1" }] }],
     });
     expect(daily.steps[0]).not.toHaveProperty("days");
     expect(AutomationSpecSchema.safeParse(daily).success).toBe(true);
+  });
+
+  it("maps sun triggers, keeping offset and dropping time", () => {
+    const dusk = toAutomationSpec({
+      ...proposal,
+      steps: [
+        { time: null, sun: "sunset", sunOffsetMinutes: -15, days: null, date: null, actions: [{ type: "room", room: "Balcony (6th)", command: "lights_on" }] },
+        { time: "01:00", sun: null, sunOffsetMinutes: null, days: null, date: null, actions: [{ type: "room", room: "Balcony (6th)", command: "lights_off" }] },
+      ],
+    });
+    expect(dusk.steps[0]).toEqual({
+      sun: "sunset", sunOffsetMinutes: -15,
+      actions: [{ type: "room", room: "Balcony (6th)", command: "lights_on" }],
+    });
+    expect(dusk.steps[0]).not.toHaveProperty("time");
+    // a zero/again-null offset collapses to a bare sun trigger
+    expect(dusk.steps[1]).toEqual({ time: "01:00", actions: [{ type: "room", room: "Balcony (6th)", command: "lights_off" }] });
+    expect(AutomationSpecSchema.safeParse(dusk).success).toBe(true);
+  });
+
+  it("collapses a zero sun offset to a bare sun trigger", () => {
+    const spec = toAutomationSpec({
+      ...proposal,
+      steps: [{ time: null, sun: "sunrise", sunOffsetMinutes: 0, days: null, date: null, actions: [{ type: "scene", sceneId: "s1" }] }],
+    });
+    expect(spec.steps[0]).toEqual({ sun: "sunrise", actions: [{ type: "scene", sceneId: "s1" }] });
+    expect(AutomationSpecSchema.safeParse(spec).success).toBe(true);
   });
 });

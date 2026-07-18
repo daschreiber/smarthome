@@ -157,6 +157,7 @@ body {
 .dev .st { font-size: var(--fs-xs); color: var(--dim); }
 .dev.on .st { color: var(--active); }
 .dev.unavailable { opacity: 0.45; }
+.dev.paused { opacity: 0.55; }
 .dev-flash-ok { border-color: var(--accent) !important; }
 .dev-flash-sent { border-color: var(--active) !important; }
 .dev-flash-fail { border-color: var(--danger) !important; }

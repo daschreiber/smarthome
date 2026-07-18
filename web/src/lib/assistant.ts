@@ -43,7 +43,11 @@ export const LlmActionSchema = z.discriminatedUnion("type", [
 ]);
 
 export const LlmStepSchema = z.object({
-  time: z.string(), // HH:MM 24h
+  // Exactly one trigger: a clock time OR a sun event. Null out the one you
+  // aren't using (structured outputs disallow optionals).
+  time: z.string().nullable(), // HH:MM 24h, or null when sun is set
+  sun: z.enum(["sunset", "sunrise"]).nullable(), // null when time is set
+  sunOffsetMinutes: z.number().nullable(), // minutes vs the sun event; negative = before
   days: z.array(z.number()).nullable(), // 0=Sunday..6; null = every day
   date: z.string().nullable(), // YYYY-MM-DD one-shot; null = recurring
   actions: z.array(LlmActionSchema),
@@ -105,12 +109,19 @@ export function toInternalAction(a: LlmAction): Action {
 export function toAutomationSpec(p: Extract<LlmProposal, { kind: "automation" }>): AutomationSpec {
   return {
     name: p.name,
-    steps: p.steps.map((s) => ({
-      time: s.time,
-      ...(s.days && s.days.length > 0 ? { days: s.days } : {}),
-      ...(s.date ? { date: s.date } : {}),
-      actions: s.actions.map(toInternalAction),
-    })),
+    steps: p.steps.map((s) => {
+      // Sun trigger wins if present; otherwise fall back to the clock time.
+      // The internal schema enforces exactly-one, so we never emit both.
+      const trigger = s.sun
+        ? { sun: s.sun, ...(s.sunOffsetMinutes ? { sunOffsetMinutes: s.sunOffsetMinutes } : {}) }
+        : { time: s.time ?? "00:00" };
+      return {
+        ...trigger,
+        ...(s.days && s.days.length > 0 ? { days: s.days } : {}),
+        ...(s.date ? { date: s.date } : {}),
+        actions: s.actions.map(toInternalAction),
+      };
+    }),
   };
 }
 
@@ -165,7 +176,11 @@ ${aliases}
 ## Proposal kinds
 - "actions": immediate commands, executed once when the user confirms. Use for "turn on X", "close the blinds", "set the lounge to 23 degrees".
 - "scene_capture": snapshot a room's current state under a name. Use for "save the lounge like this as Cozy".
-- "automation": scheduled steps (time HH:MM 24h; days array 0=Sunday..6 or null for every day; date YYYY-MM-DD for one-shot or null for recurring). Use for anything with a time or schedule.
+- "automation": scheduled steps. Each step is triggered by EITHER a clock time OR a sun event, never both:
+  - clock: set "time" to HH:MM 24h and "sun"/"sunOffsetMinutes" to null.
+  - sun: set "sun" to "sunset" or "sunrise" and "time" to null. "sunOffsetMinutes" shifts the trigger relative to the event — negative is before, positive is after, 0 or null is exactly at the event (e.g. "15 minutes before sunset" → sun "sunset", sunOffsetMinutes -15; range ±120).
+  - "days" (array 0=Sunday..6, or null for every day) and "date" (YYYY-MM-DD one-shot, or null for recurring) apply to either trigger.
+  Use for anything with a time, a schedule, or sunrise/sunset.
 - "clarify": when the request is ambiguous (unknown room, multiple plausible devices, missing time). Ask ONE short question.
 
 ## Rules

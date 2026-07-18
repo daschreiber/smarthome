@@ -17,6 +17,21 @@ import { z } from "zod/v4"; // v4 to match the assistant schemas (see lib/assist
 
 export const maxDuration = 120;
 
+/**
+ * User-facing error text. A raw ZodError stringifies to a JSON blob of
+ * issues (this is what surfaced on-device as "The string did not match the
+ * expected pattern." for schedules the model couldn't express) — never show
+ * that. Collapse validation failures into one plain sentence.
+ */
+function friendlyError(err: unknown, fallback: string): string {
+  if (err && typeof err === "object" && "issues" in err) {
+    const issues = (err as { issues: Array<{ message: string }> }).issues;
+    const first = issues?.[0]?.message;
+    return first ? `I couldn't build that: ${first.toLowerCase()}.` : fallback;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
 const ChatBody = z.object({
   message: z.string().min(1).max(2000),
   history: z
@@ -96,7 +111,7 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ ok: true, automationId: auto.id });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "execution failed";
+      const message = friendlyError(err, "execution failed");
       audit({
         ts: new Date().toISOString(), user: auth.user, deviceId: "assistant",
         entityId: "assistant.execute", command: "execute_proposal",
@@ -151,7 +166,23 @@ export async function POST(req: NextRequest) {
         proposal: { kind: "clarify", message: "I couldn't turn that into a house action — could you rephrase it?" },
       });
     }
-    return NextResponse.json({ proposal: response.parsed_output });
+    const proposal = response.parsed_output;
+    // Never surface a card that will fail on Confirm: validate an automation
+    // against the internal schema here, and downgrade to a clarify if the
+    // model produced something the executor would reject.
+    if (proposal.kind === "automation") {
+      const check = AutomationSpecSchema.safeParse(toAutomationSpec(proposal));
+      if (!check.success) {
+        console.error("assistant produced invalid automation:", check.error.issues);
+        return NextResponse.json({
+          proposal: {
+            kind: "clarify",
+            message: "I understood the idea but couldn't turn it into a valid schedule. Could you give me the times (or say sunrise/sunset) and which lights?",
+          },
+        });
+      }
+    }
+    return NextResponse.json({ proposal });
   } catch (err) {
     console.error("assistant error:", err);
     return NextResponse.json(

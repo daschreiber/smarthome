@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NavBar from "../NavBar";
 import {
-  fireSortKey, houseNow, nextAutomationFire, nextFireLabel,
+  fireSortKey, houseNow, nextAutomationFire, nextFireLabel, resolveStepTime,
+  type NextSunIso,
 } from "@/lib/nextfire";
 
 /**
@@ -15,7 +16,9 @@ import {
  */
 
 interface Step {
-  time: string;
+  time?: string;
+  sun?: "sunset" | "sunrise";
+  sunOffsetMinutes?: number;
   days?: number[];
   date?: string;
   actions: Array<
@@ -105,12 +108,19 @@ function commandOptions(t: TargetDevice | undefined): Array<{ value: string; lab
   return [{ value: "turn_on", label: "On" }, { value: "turn_off", label: "Off" }];
 }
 
+function whenPhrase(s: Step): string {
+  const o = s.sunOffsetMinutes ?? 0;
+  const at = s.sun
+    ? o === 0 ? `at ${s.sun}` : `${Math.abs(o)} min ${o < 0 ? "before" : "after"} ${s.sun}`
+    : `at ${s.time}`;
+  if (s.date) return `once on ${s.date} ${at}`;
+  if (s.days && s.days.length)
+    return `${s.days.map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join("/")} ${at}`;
+  return `every day ${at}`;
+}
+
 function describeStep(s: Step, deviceLabel: (id: string) => string): string {
-  const when = s.date
-    ? `once on ${s.date} at ${s.time}`
-    : s.days && s.days.length
-      ? `${s.days.map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join("/")} at ${s.time}`
-      : `every day at ${s.time}`;
+  const when = whenPhrase(s);
   const parts: string[] = [];
   for (let i = 0; i < s.actions.length; i++) {
     const a = s.actions[i];
@@ -159,6 +169,10 @@ export default function Automations() {
   const [days, setDays] = useState<number[]>([]); // empty = every day
   const [date, setDate] = useState("");
   const [once, setOnce] = useState(false);
+  const [sunMode, setSunMode] = useState(false);
+  const [sunEvent, setSunEvent] = useState<"sunset" | "sunrise">("sunset");
+  const [sunOffset, setSunOffset] = useState(0);
+  const [sunTimes, setSunTimes] = useState<NextSunIso | null>(null);
   const [target, setTarget] = useState(""); // "" | SCENE_TARGET | room name
   const [action, setAction] = useState<ChipKey>("lights_on");
   const [actScene, setActScene] = useState("");
@@ -184,6 +198,7 @@ export default function Automations() {
     const body = await res.json();
     setItems(body.automations);
     setTz(body.tz);
+    setSunTimes(body.sun ?? null);
     const [sc, home, tm] = await Promise.all([fetch("/api/scenes"), fetch("/api/home"), fetch("/api/timers")]);
     if (sc.ok) setScenes(((await sc.json()) as { scenes: SceneMeta[] }).scenes);
     if (home.ok) {
@@ -309,7 +324,9 @@ export default function Automations() {
       else actions = [cmd(actDevice, { command: actCommand })];
     }
     if (actions.length === 0) return;
-    const step: Step = { time, actions };
+    const step: Step = sunMode
+      ? { sun: sunEvent, ...(sunOffset !== 0 ? { sunOffsetMinutes: sunOffset } : {}), actions }
+      : { time, actions };
     if (once && date) step.date = date;
     else if (days.length > 0 && days.length < 7) step.days = [...days].sort();
     setSteps((s) => [...s, step]);
@@ -354,8 +371,19 @@ export default function Automations() {
 
   const now = houseNow(tz || undefined);
   // Soonest-first; enabled-but-spent (fired one-shots) next; paused last.
+  // Sun steps resolve against the served next-event instants; when those are
+  // unknown (HA blip) the row still names its sun trigger instead of a time.
   const sorted = items
-    .map((a) => ({ a, nf: a.enabled ? nextAutomationFire(a.steps, now) : null }))
+    .map((a) => {
+      const resolved = a.steps
+        .map((s) => resolveStepTime(s, sunTimes, tz || undefined))
+        .filter((s) => s !== null);
+      return {
+        a,
+        nf: a.enabled ? nextAutomationFire(resolved, now) : null,
+        sunFallback: a.steps.find((s) => s.sun)?.sun ?? null,
+      };
+    })
     .sort((x, y) => {
       const key = (w: typeof x) => (!w.a.enabled ? 2e9 : w.nf ? fireSortKey(w.nf) : 1e9);
       return key(x) - key(y) || x.a.name.localeCompare(y.a.name);
@@ -385,7 +413,7 @@ export default function Automations() {
       <p className="h-sub">Times are {tz ? `${tz.split("/").pop()!.replace(/_/g, " ")} time` : "house time"}. One-shot automations disable themselves after firing.</p>
       {error && <div className="error-banner">{error}</div>}
 
-      {sorted.map(({ a, nf }) => {
+      {sorted.map(({ a, nf, sunFallback }) => {
         const open = expandedId === a.id;
         return (
           <div key={a.id} className={`dev${a.enabled ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
@@ -398,7 +426,12 @@ export default function Automations() {
               }}
             >
               <div className="nm">{a.name}</div>
-              <div className="st">{!a.enabled ? "paused" : nf ? `next ${nextFireLabel(nf, now)}` : "nothing upcoming"}</div>
+              <div className="st">
+                {!a.enabled ? "paused"
+                  : nf ? `next ${nextFireLabel(nf, now)}`
+                  : sunFallback ? `next at ${sunFallback}`
+                  : "nothing upcoming"}
+              </div>
               {open
                 ? a.steps.map((s, i) => <div key={i} className="st">{describeStep(s, label)}</div>)
                 : (
@@ -452,9 +485,26 @@ export default function Automations() {
                   style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", font: "inherit" }}>✕</button>
               </div>
             ))}
-            {/* When: time, weekday chips (none = every day), or a one-shot date. */}
+            {/* When: a clock time or a sun event, weekday chips (none = every day), or a one-shot date. */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={field} />
+              {!sunMode && (
+                <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={field} />
+              )}
+              {sunMode && (
+                <>
+                  <select value={sunEvent} onChange={(e) => setSunEvent(e.target.value as "sunset" | "sunrise")} style={field}>
+                    <option value="sunset">Sunset</option>
+                    <option value="sunrise">Sunrise</option>
+                  </select>
+                  <select value={sunOffset} onChange={(e) => setSunOffset(Number(e.target.value))} style={field}>
+                    {[-45, -30, -15, 0, 15, 30, 45].map((o) => (
+                      <option key={o} value={o}>
+                        {o === 0 ? `at ${sunEvent}` : `${Math.abs(o)} min ${o < 0 ? "before" : "after"}`}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
               {!once && DAY_CHIPS.map((chipLabel, d) => (
                 <button
                   key={d}
@@ -467,6 +517,14 @@ export default function Automations() {
                   {chipLabel}
                 </button>
               ))}
+              <button
+                className="mini-btn"
+                aria-pressed={sunMode}
+                style={sunMode ? chipOn : undefined}
+                onClick={() => setSunMode((v) => !v)}
+              >
+                Sunset…
+              </button>
               <button
                 className="mini-btn"
                 aria-pressed={once}
@@ -483,6 +541,16 @@ export default function Automations() {
               )}
             </div>
             {!once && <p className="st" style={{ margin: "4px 0 0" }}>No days selected = every day.</p>}
+            {sunMode && (
+              <p className="st" style={{ margin: "4px 0 0" }}>
+                {(() => {
+                  const t = resolveStepTime({ sun: sunEvent, sunOffsetMinutes: sunOffset }, sunTimes, tz || undefined)?.time;
+                  return t
+                    ? `Fires around ${t} right now — tracks the real ${sunEvent} through the year.`
+                    : `Fires at ${sunEvent} — exact time comes from Home Assistant.`;
+                })()}
+              </p>
+            )}
 
             {/* What: pick a room (or a scene), then an action the room supports. */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  fireSortKey, houseNow, nextAutomationFire, nextFireLabel, nextStepFire,
+  fireSortKey, houseNow, nextAutomationFire, nextFireLabel, nextStepFire, resolveStepTime,
 } from "../nextfire";
 
 // Thursday 2026-07-16, 16:00 house time.
@@ -56,6 +56,27 @@ describe("nextAutomationFire", () => {
       .toBeLessThan(fireSortKey({ dayOffset: 1, time: "07:00" }));
     expect(fireSortKey({ dayOffset: 1, time: "07:00" }))
       .toBeLessThan(fireSortKey({ dayOffset: 1, time: "09:00" }));
+  });
+});
+
+describe("resolveStepTime", () => {
+  const sun = { sunrise: "2026-07-16T02:47:00Z", sunset: "2026-07-16T16:41:00Z" };
+  it("turns a sun step into a concrete house-clock time, offset applied", () => {
+    expect(resolveStepTime({ sun: "sunset" }, sun, "UTC")).toEqual({ sun: undefined, time: "16:41" });
+    expect(resolveStepTime({ sun: "sunset", sunOffsetMinutes: -41 }, sun, "UTC"))
+      .toMatchObject({ time: "16:00" });
+    expect(resolveStepTime({ sun: "sunset", sunOffsetMinutes: 19, days: [5] }, sun, "UTC"))
+      .toMatchObject({ time: "17:00", days: [5] });
+    expect(resolveStepTime({ sun: "sunrise" }, sun, "Asia/Jerusalem"))
+      .toMatchObject({ time: "05:47" });
+  });
+  it("passes clock steps through and returns null without sun data", () => {
+    expect(resolveStepTime({ time: "18:00" }, sun, "UTC")).toEqual({ time: "18:00" });
+    expect(resolveStepTime({ sun: "sunset" }, null, "UTC")).toBeNull();
+    expect(resolveStepTime({ sun: "sunset" }, { sunrise: null, sunset: null }, "UTC")).toBeNull();
+  });
+  it("feeds nextStepFire: unresolved sun steps yield no hint", () => {
+    expect(nextStepFire({ sun: "sunset" }, { minutes: 960, day: 4, date: "2026-07-16" })).toBeNull();
   });
 });
 

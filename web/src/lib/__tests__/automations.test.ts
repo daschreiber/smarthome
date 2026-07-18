@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   AutomationSpecSchema, createAutomation, dueSteps, listAutomations, markFired,
   nowParts, stepIsDue,
@@ -44,6 +44,48 @@ describe("stepIsDue", () => {
   it("does not double-fire within the same minute", () => {
     expect(stepIsDue({ ...base, lastFired: "2026-07-16T16:00" }, NOW)).toBe(false);
     expect(stepIsDue({ ...base, lastFired: "2026-07-15T16:00" }, NOW)).toBe(true);
+  });
+});
+
+describe("sun-triggered steps", () => {
+  const prevTz = process.env.APP_TZ;
+  beforeAll(() => { process.env.APP_TZ = "UTC"; });
+  afterAll(() => { process.env.APP_TZ = prevTz; });
+
+  const actions = [{ type: "scene" as const, sceneId: "s" }];
+  const at = (hhmm: string) => Date.parse(`2026-07-16T${hhmm}:00Z`); // NOW is 16:00 UTC Thursday
+
+  it("requires exactly one of time or sun, and offsets only with sun", () => {
+    const ok = (steps: unknown) => AutomationSpecSchema.safeParse({ name: "x", steps }).success;
+    expect(ok([{ sun: "sunset", actions }])).toBe(true);
+    expect(ok([{ sun: "sunset", sunOffsetMinutes: -30, days: [5], actions }])).toBe(true);
+    expect(ok([{ actions }])).toBe(false); // neither
+    expect(ok([{ time: "16:00", sun: "sunset", actions }])).toBe(false); // both
+    expect(ok([{ time: "16:00", sunOffsetMinutes: 15, actions }])).toBe(false); // offset without sun
+    expect(ok([{ sun: "sunset", sunOffsetMinutes: 500, actions }])).toBe(false); // out of range
+  });
+
+  it("fires when an event instant plus offset lands on this minute", () => {
+    const sun = { sunrise: [], sunset: [at("16:00")] };
+    expect(stepIsDue({ sun: "sunset", actions }, NOW, sun)).toBe(true);
+    expect(stepIsDue({ sun: "sunrise", actions }, NOW, sun)).toBe(false);
+    expect(stepIsDue({ sun: "sunset", actions }, { ...NOW, hhmm: "16:01" }, sun)).toBe(false);
+    // 30 min before an event at 16:30
+    expect(stepIsDue({ sun: "sunset", sunOffsetMinutes: -30, actions }, NOW,
+      { sunrise: [], sunset: [at("16:30")] })).toBe(true);
+    // 30 min after an event that already passed — retained instant still fires
+    expect(stepIsDue({ sun: "sunset", sunOffsetMinutes: 30, actions }, NOW,
+      { sunrise: [], sunset: [at("15:30"), Date.parse("2026-07-17T15:31:00Z")] })).toBe(true);
+  });
+
+  it("respects days, one-shot dates, dedup, and missing sun data", () => {
+    const sun = { sunrise: [], sunset: [at("16:00")] };
+    expect(stepIsDue({ sun: "sunset", days: [6], actions }, NOW, sun)).toBe(false);
+    expect(stepIsDue({ sun: "sunset", days: [4], actions }, NOW, sun)).toBe(true);
+    expect(stepIsDue({ sun: "sunset", date: "2026-07-17", actions }, NOW, sun)).toBe(false);
+    expect(stepIsDue({ sun: "sunset", lastFired: "2026-07-16T16:00", actions }, NOW, sun)).toBe(false);
+    expect(stepIsDue({ sun: "sunset", actions }, NOW, undefined)).toBe(false);
+    expect(stepIsDue({ sun: "sunset", actions }, NOW, { sunrise: [], sunset: [] })).toBe(false);
   });
 });
 

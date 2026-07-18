@@ -8,9 +8,11 @@ import { z } from "zod";
  * is the contract — the Automations UI and the future conversational layer
  * both produce this exact shape.
  *
- * v1 triggers are clock-based (time + days, or a one-shot date). Sunrise/
- * sunset and presence come later. Missed firings (deploy/restart at the
- * exact minute) are skipped, not replayed — documented behavior.
+ * Triggers are clock-based (time + days, or a one-shot date) or sun-based
+ * (sunset/sunrise with an optional offset, resolved from Home Assistant's
+ * sun.sun entity — see lib/sun.ts). Presence comes later. Missed firings
+ * (deploy/restart at the exact minute) are skipped, not replayed —
+ * documented behavior.
  */
 
 export const ActionSchema = z.union([
@@ -27,13 +29,23 @@ export const ActionSchema = z.union([
   }),
 ]);
 
-export const StepSchema = z.object({
-  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "time must be HH:MM"),
-  days: z.array(z.number().int().min(0).max(6)).optional(), // 0=Sunday
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // one-shot
-  actions: z.array(ActionSchema).min(1),
-  lastFired: z.string().optional(),
-});
+export const StepSchema = z
+  .object({
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "time must be HH:MM").optional(),
+    sun: z.enum(["sunset", "sunrise"]).optional(),
+    /** Minutes relative to the sun event; negative = before. */
+    sunOffsetMinutes: z.number().int().min(-120).max(120).optional(),
+    days: z.array(z.number().int().min(0).max(6)).optional(), // 0=Sunday
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // one-shot
+    actions: z.array(ActionSchema).min(1),
+    lastFired: z.string().optional(),
+  })
+  .refine((s) => (s.time !== undefined) !== (s.sun !== undefined), {
+    message: "step needs exactly one of time or sun",
+  })
+  .refine((s) => s.sunOffsetMinutes === undefined || s.sun !== undefined, {
+    message: "sunOffsetMinutes requires sun",
+  });
 
 export const AutomationSpecSchema = z.object({
   name: z.string().min(1).max(80),
@@ -117,8 +129,27 @@ export function nowParts(d = new Date(), tz = process.env.APP_TZ): {
   };
 }
 
-export function stepIsDue(step: Step, now: ReturnType<typeof nowParts>): boolean {
-  if (step.time !== now.hhmm) return false;
+/** Recent sun event instants (epoch ms), oldest first — see lib/sun.ts. */
+export interface SunEvents { sunrise: number[]; sunset: number[] }
+
+export function stepIsDue(
+  step: Step,
+  now: ReturnType<typeof nowParts>,
+  sun?: SunEvents,
+): boolean {
+  if (step.sun) {
+    // Due when any known event instant, shifted by the offset, lands on this
+    // exact house-clock minute. Multiple instants are checked because after
+    // the event passes HA's next_* flips to tomorrow, while a positive
+    // offset still has to fire against today's (cached) instant.
+    const events = sun?.[step.sun] ?? [];
+    const offsetMs = (step.sunOffsetMinutes ?? 0) * 60_000;
+    const hit = events.some((t) => {
+      const p = nowParts(new Date(t + offsetMs));
+      return p.date === now.date && p.hhmm === now.hhmm;
+    });
+    if (!hit) return false;
+  } else if (step.time !== now.hhmm) return false;
   if (step.date && step.date !== now.date) return false;
   if (step.days && step.days.length > 0 && !step.days.includes(now.day)) return false;
   const fireKey = `${now.date}T${now.hhmm}`;
@@ -130,12 +161,13 @@ export function stepIsDue(step: Step, now: ReturnType<typeof nowParts>): boolean
 export function dueSteps(
   items: Automation[],
   now: ReturnType<typeof nowParts>,
+  sun?: SunEvents,
 ): Array<{ automation: Automation; stepIndex: number }> {
   const due: Array<{ automation: Automation; stepIndex: number }> = [];
   for (const a of items) {
     if (!a.enabled) continue;
     a.steps.forEach((s, i) => {
-      if (stepIsDue(s, now)) due.push({ automation: a, stepIndex: i });
+      if (stepIsDue(s, now, sun)) due.push({ automation: a, stepIndex: i });
     });
   }
   return due;

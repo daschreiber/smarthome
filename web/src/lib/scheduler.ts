@@ -1,7 +1,8 @@
-import { dueSteps, listAutomations, markFired, nowParts } from "./automations";
+import { dueSteps, listAutomations, markFired, nowParts, type SunEvents } from "./automations";
 import { executeAction, executeOnDevice } from "./execute";
 import { dueTimers, listTimers } from "./timers";
 import { getStates } from "./ha";
+import { sunEvents } from "./sun";
 import { audit } from "./audit";
 
 /**
@@ -26,7 +27,13 @@ export async function tick(): Promise<void> {
   let due: ReturnType<typeof dueSteps>;
   const now = nowParts();
   try {
-    due = dueSteps(listAutomations(), now);
+    const items = listAutomations();
+    // Only consult HA's sun entity when a sun-triggered step could fire.
+    let sun: SunEvents | undefined;
+    if (items.some((a) => a.enabled && a.steps.some((s) => s.sun))) {
+      sun = await sunEvents();
+    }
+    due = dueSteps(items, now, sun);
   } catch (err) {
     console.error("[scheduler] tick failed:", err);
     return;
@@ -53,7 +60,7 @@ export async function tick(): Promise<void> {
       deviceId: "automations",
       entityId: `automation.${automation.id}`,
       command: `fire_step_${stepIndex}`,
-      args: { at: step.time, targets: total },
+      args: { at: step.time ?? `${step.sun}${step.sunOffsetMinutes ? `${step.sunOffsetMinutes > 0 ? "+" : ""}${step.sunOffsetMinutes}` : ""}`, targets: total },
       ok: failures.length === 0,
       durationMs: Date.now() - started,
       error: failures.length ? failures.join("; ") : undefined,

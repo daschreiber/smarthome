@@ -5,11 +5,18 @@ import { audit } from "@/lib/audit";
 import {
   AutomationSpecSchema, createAutomation, deleteAutomation, listAutomations, setEnabled,
 } from "@/lib/automations";
+import { nextSun } from "@/lib/sun";
 
 export async function GET(req: NextRequest) {
   const auth = authenticate(req);
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  return NextResponse.json({ automations: listAutomations(), tz: process.env.APP_TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone });
+  // nextSun is TTL-cached and swallows HA failures (nulls), so listing
+  // automations never breaks on a flaky upstream.
+  return NextResponse.json({
+    automations: listAutomations(),
+    tz: process.env.APP_TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    sun: await nextSun(),
+  });
 }
 
 export async function POST(req: NextRequest) {

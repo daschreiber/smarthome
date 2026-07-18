@@ -281,7 +281,13 @@ export default function Automations() {
     }
   };
 
-  const addStep = () => {
+  /**
+   * Build a step from the current selection, or null if the selection isn't a
+   * complete action yet. Pure (no state writes) so it can drive both the
+   * "+ Add step" button and the Create button's enabled state — and let
+   * Create auto-commit a single configured action without a separate tap.
+   */
+  const buildStep = (): Step | null => {
     const kindDevs = (k: string) => roomDevs.filter((t) => t.kind === k);
     const cmd = (deviceId: string, command: Record<string, unknown>) =>
       ({ type: "device" as const, deviceId, command });
@@ -323,21 +329,29 @@ export default function Automations() {
         actions = [cmd(actDevice, { command: "set_brightness", brightnessPct: bright })];
       else actions = [cmd(actDevice, { command: actCommand })];
     }
-    if (actions.length === 0) return;
+    if (actions.length === 0) return null;
     const step: Step = sunMode
       ? { sun: sunEvent, ...(sunOffset !== 0 ? { sunOffsetMinutes: sunOffset } : {}), actions }
       : { time, actions };
     if (once && date) step.date = date;
     else if (days.length > 0 && days.length < 7) step.days = [...days].sort();
-    setSteps((s) => [...s, step]);
+    return step;
+  };
+
+  const addStep = () => {
+    const step = buildStep();
+    if (step) setSteps((s) => [...s, step]);
   };
 
   const toggleDay = (d: number) =>
     setDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]));
 
   const create = async () => {
-    if (!name.trim() || steps.length === 0) return;
-    const ok = await post({ action: "create", spec: { name: name.trim(), steps } });
+    // Auto-commit the current selection when nothing's been queued yet, so a
+    // single-action automation doesn't force a separate "+ Add step" tap.
+    const finalSteps = steps.length > 0 ? steps : (buildStep() ? [buildStep()!] : []);
+    if (!name.trim() || finalSteps.length === 0) return;
+    const ok = await post({ action: "create", spec: { name: name.trim(), steps: finalSteps } });
     if (ok) {
       setName("");
       setSteps([]);
@@ -628,7 +642,7 @@ export default function Automations() {
               </p>
             )}
             <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-              <button className="scene-pill" disabled={busy || !name.trim() || steps.length === 0} onClick={create}
+              <button className="scene-pill" disabled={busy || !name.trim() || (steps.length === 0 && !buildStep())} onClick={create}
                 style={{ flex: 1, maxWidth: "none", padding: 12 }}>
                 Create automation
               </button>

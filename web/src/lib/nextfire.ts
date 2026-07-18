@@ -6,11 +6,16 @@
  */
 
 export interface StepTiming {
-  time: string; // HH:MM
+  time?: string; // HH:MM (absent for sun-triggered steps)
+  sun?: "sunset" | "sunrise";
+  sunOffsetMinutes?: number;
   days?: number[]; // 0=Sunday; empty/absent = every day
   date?: string; // YYYY-MM-DD one-shot
   lastFired?: string;
 }
+
+/** Next upcoming sun event instants (ISO), as served by /api/automations. */
+export interface NextSunIso { sunrise: string | null; sunset: string | null }
 
 export interface HouseNow {
   minutes: number; // minutes since midnight on the house wall clock
@@ -46,7 +51,25 @@ function toMinutes(hhmm: string): number {
   return Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 }
 
+/**
+ * Resolve a sun-triggered step to a concrete HH:MM for next-fire display,
+ * using the next event instant plus the step's offset. Later occurrences
+ * (weekday-restricted steps) reuse the same clock time — sunset drifts a
+ * minute or two per day, fine for a hint; the scheduler fires on the real
+ * instant. Returns null when the sun times are unknown.
+ */
+export function resolveStepTime(step: StepTiming, sun: NextSunIso | null, tz?: string): StepTiming | null {
+  if (!step.sun) return step;
+  const iso = sun?.[step.sun];
+  if (!iso) return null;
+  const at = Date.parse(iso) + (step.sunOffsetMinutes ?? 0) * 60_000;
+  const p = houseNow(tz, new Date(at));
+  const hhmm = `${String(Math.floor(p.minutes / 60)).padStart(2, "0")}:${String(p.minutes % 60).padStart(2, "0")}`;
+  return { ...step, sun: undefined, time: hhmm };
+}
+
 export function nextStepFire(step: StepTiming, now: HouseNow): NextFire | null {
+  if (!step.time) return null; // unresolved sun step — no concrete hint
   const t = toMinutes(step.time);
   if (step.date) {
     if (step.lastFired || step.date < now.date) return null;

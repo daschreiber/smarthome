@@ -164,7 +164,10 @@ export default function Automations() {
   // builder state
   const [builderOpen, setBuilderOpen] = useState(false);
   const [name, setName] = useState("");
-  const [steps, setSteps] = useState<Step[]>([]);
+  // Actions already queued for this automation. They all share the one trigger
+  // time below, so the whole thing is a single step with several actions —
+  // e.g. "Saturday 18:00 → gym lights off, gym AC off".
+  const [draft, setDraft] = useState<Array<{ label: string; actions: Step["actions"] }>>([]);
   const [time, setTime] = useState("18:00");
   const [days, setDays] = useState<number[]>([]); // empty = every day
   const [date, setDate] = useState("");
@@ -174,7 +177,7 @@ export default function Automations() {
   const [sunOffset, setSunOffset] = useState(0);
   const [sunTimes, setSunTimes] = useState<NextSunIso | null>(null);
   const [target, setTarget] = useState(""); // "" | SCENE_TARGET | room name
-  const [action, setAction] = useState<ChipKey>("lights_on");
+  const [action, setAction] = useState<ChipKey | "">("lights_on");
   const [actScene, setActScene] = useState("");
   const [actDevice, setActDevice] = useState("");
   const [actCommand, setActCommand] = useState("turn_on");
@@ -282,12 +285,13 @@ export default function Automations() {
   };
 
   /**
-   * Build a step from the current selection, or null if the selection isn't a
-   * complete action yet. Pure (no state writes) so it can drive both the
-   * "+ Add step" button and the Create button's enabled state — and let
-   * Create auto-commit a single configured action without a separate tap.
+   * Build the action(s) for the currently selected chip + parameters, plus a
+   * short label for the queued-actions list. Null when the selection isn't a
+   * complete action yet. Pure (no state writes) so it can drive "+ Add action",
+   * the queued pills, and the Create button's enabled state — and let Create
+   * auto-commit the current selection without a separate tap.
    */
-  const buildStep = (): Step | null => {
+  const currentAction = (): { label: string; actions: Step["actions"] } | null => {
     const kindDevs = (k: string) => roomDevs.filter((t) => t.kind === k);
     const cmd = (deviceId: string, command: Record<string, unknown>) =>
       ({ type: "device" as const, deviceId, command });
@@ -299,62 +303,107 @@ export default function Automations() {
     };
     const bright = Math.min(100, Math.max(1, Math.round(actBright)));
     let actions: Step["actions"] = [];
+    let label = "";
     if (target === SCENE_TARGET) {
-      if (actScene) actions = [{ type: "scene", sceneId: actScene }];
+      if (actScene) {
+        actions = [{ type: "scene", sceneId: actScene }];
+        label = `run "${scenes.find((s) => s.id === actScene)?.name ?? actScene}"`;
+      }
+    } else if (!action) {
+      return null;
     } else if (action === "lights_on" || action === "lights_off") {
       actions = [{ type: "room", room: target, command: action }];
+      label = `${target} lights ${action === "lights_on" ? "on" : "off"}`;
     } else if (action === "shades_open" || action === "shades_close") {
-      // One step, one action per shade in the room — the engine fans out.
+      // One action per shade in the room — the engine fans out.
       actions = kindDevs("cover").map((t) => cmd(t.id, { command: action === "shades_open" ? "open" : "close" }));
+      label = `${target} shades ${action === "shades_open" ? "open" : "closed"}`;
     } else if (action === "ac_on_at" || action === "sauna_on_at") {
       // Two actions per zone: wake it, then set its target.
-      actions = kindDevs(action === "ac_on_at" ? "climate" : "sauna").flatMap((t) => [
+      const kind = action === "ac_on_at" ? "climate" : "sauna";
+      actions = kindDevs(kind).flatMap((t) => [
         cmd(t.id, { command: "turn_on" }),
         cmd(t.id, { command: "set_temperature", temperature: clampTemp(t.kind) }),
       ]);
+      label = `${target} ${kind === "climate" ? "AC" : "sauna"} on at ${clampTemp(kind)}°`;
     } else if (action !== "device") {
       const kind = action.startsWith("ac") ? "climate"
         : action.startsWith("sauna") ? "sauna"
         : action.startsWith("heating") ? "heating" : "noise";
       actions = kindDevs(kind).map((t) => cmd(t.id, { command: action.endsWith("_on") ? "turn_on" : "turn_off" }));
+      const noun = kind === "climate" ? "AC" : kind === "sauna" ? "sauna"
+        : kind === "heating" ? "floor heating" : "white noise";
+      label = `${target} ${noun} ${action.endsWith("_on") ? "on" : "off"}`;
     } else if (actDevice) {
-      if (actCommand === "on_at")
+      const dname = selectedDevice?.label ?? actDevice;
+      if (actCommand === "on_at") {
         actions = [
           cmd(actDevice, { command: "turn_on" }),
           cmd(actDevice, { command: "set_temperature", temperature: clampTemp(selectedDevice?.kind) }),
         ];
-      else if (actCommand === "set_temp")
+        label = `${dname} on at ${clampTemp(selectedDevice?.kind)}°`;
+      } else if (actCommand === "set_temp") {
         actions = [cmd(actDevice, { command: "set_temperature", temperature: clampTemp(selectedDevice?.kind) })];
-      else if (actCommand === "on_at_pct")
+        label = `${dname} to ${clampTemp(selectedDevice?.kind)}°`;
+      } else if (actCommand === "on_at_pct") {
         actions = [cmd(actDevice, { command: "set_brightness", brightnessPct: bright })];
-      else actions = [cmd(actDevice, { command: actCommand })];
+        label = `${dname} on at ${bright}%`;
+      } else {
+        actions = [cmd(actDevice, { command: actCommand })];
+        label = `${dname} ${actCommand === "turn_off" ? "off" : actCommand === "turn_on" ? "on" : String(actCommand).replace(/_/g, " ")}`;
+      }
     }
     if (actions.length === 0) return null;
-    const step: Step = sunMode
-      ? { sun: sunEvent, ...(sunOffset !== 0 ? { sunOffsetMinutes: sunOffset } : {}), actions }
-      : { time, actions };
-    if (once && date) step.date = date;
-    else if (days.length > 0 && days.length < 7) step.days = [...days].sort();
-    return step;
+    return { label, actions };
   };
 
-  const addStep = () => {
-    const step = buildStep();
-    if (step) setSteps((s) => [...s, step]);
+  /** The one trigger shared by every action in this automation. */
+  const stepWhen = (): Partial<Step> => {
+    const base: Partial<Step> = sunMode
+      ? { sun: sunEvent, ...(sunOffset !== 0 ? { sunOffsetMinutes: sunOffset } : {}) }
+      : { time };
+    if (once && date) base.date = date;
+    else if (days.length > 0 && days.length < 7) base.days = [...days].sort();
+    return base;
+  };
+
+  /**
+   * The finished step: every queued action plus the current selection (so a
+   * one-action automation needs no "+ Add action" tap). Null until at least one
+   * action is complete — which is exactly when Create should enable.
+   */
+  const buildStep = (): Step | null => {
+    const cur = currentAction();
+    const entries = cur ? [...draft, cur] : draft;
+    if (entries.length === 0) return null;
+    return { ...stepWhen(), actions: entries.flatMap((e) => e.actions) } as Step;
+  };
+
+  /** Queue the current selection so another action can be added at the same time. */
+  const addAction = () => {
+    const cur = currentAction();
+    if (!cur) return;
+    setDraft((d) => [...d, cur]);
+    setAction("");        // clear the chip row so the next action starts fresh
+    setActDevice("");
+    setActScene("");
   };
 
   const toggleDay = (d: number) =>
     setDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]));
 
   const create = async () => {
-    // Auto-commit the current selection when nothing's been queued yet, so a
-    // single-action automation doesn't force a separate "+ Add step" tap.
-    const finalSteps = steps.length > 0 ? steps : (buildStep() ? [buildStep()!] : []);
-    if (!name.trim() || finalSteps.length === 0) return;
-    const ok = await post({ action: "create", spec: { name: name.trim(), steps: finalSteps } });
+    // One automation = one trigger time with every queued action (plus the
+    // current selection, auto-committed so a single action needs no extra tap).
+    const step = buildStep();
+    if (!name.trim() || !step) return;
+    const ok = await post({ action: "create", spec: { name: name.trim(), steps: [step] } });
     if (ok) {
       setName("");
-      setSteps([]);
+      setDraft([]);
+      setAction("lights_on");
+      setActDevice("");
+      setActScene("");
       setBuilderOpen(false);
     }
   };
@@ -417,9 +466,14 @@ export default function Automations() {
     );
   };
 
+  const startsSauna = (a: Step["actions"][number]) =>
+    a.type === "device" &&
+    targets.find((t) => t.id === a.deviceId)?.kind === "sauna" &&
+    a.command.command !== "turn_off";
   const saunaScheduled =
     action === "sauna_on_at" ||
-    (action === "device" && selectedDevice?.kind === "sauna" && actCommand !== "turn_off");
+    (action === "device" && selectedDevice?.kind === "sauna" && actCommand !== "turn_off") ||
+    draft.some((d) => d.actions.some(startsSauna));
 
   return (
     <main className="shell">
@@ -492,13 +546,6 @@ export default function Automations() {
               onChange={(e) => setName(e.target.value)}
               style={{ ...field, width: "100%", padding: 9, marginBottom: 8 }}
             />
-            {steps.map((s, i) => (
-              <div key={i} className="st" style={{ marginBottom: 4 }}>
-                {describeStep(s, label)}{" "}
-                <button onClick={() => setSteps(steps.filter((_, j) => j !== i))}
-                  style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", font: "inherit" }}>✕</button>
-              </div>
-            ))}
             {/* When: a clock time or a sun event, weekday chips (none = every day), or a one-shot date. */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
               {!sunMode && (
@@ -631,9 +678,26 @@ export default function Automations() {
                 )}
               </div>
             )}
-            {target && (
+            {/* Queued actions: everything here fires together at the trigger above. */}
+            {draft.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <p className="st" style={{ margin: "0 0 4px", fontWeight: 600 }}>Does all of this:</p>
+                {draft.map((d, i) => (
+                  <div key={i} className="st" style={{ marginBottom: 4 }}>
+                    {d.label}{" "}
+                    <button
+                      aria-label={`Remove ${d.label}`}
+                      onClick={() => setDraft(draft.filter((_, j) => j !== i))}
+                      style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", font: "inherit" }}
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Queue the current selection so more actions can run at the same time. */}
+            {currentAction() && (
               <div style={{ marginTop: 8 }}>
-                <button className="mini-btn" onClick={addStep}>+ Add step</button>
+                <button className="mini-btn" onClick={addAction}>+ Add another action</button>
               </div>
             )}
             {saunaScheduled && (
@@ -642,7 +706,7 @@ export default function Automations() {
               </p>
             )}
             <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-              <button className="scene-pill" disabled={busy || !name.trim() || (steps.length === 0 && !buildStep())} onClick={create}
+              <button className="scene-pill" disabled={busy || !name.trim() || !buildStep()} onClick={create}
                 style={{ flex: 1, maxWidth: "none", padding: 12 }}>
                 Create automation
               </button>

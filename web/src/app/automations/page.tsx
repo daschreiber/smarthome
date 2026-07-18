@@ -1,11 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import NavBar from "../NavBar";
+import {
+  fireSortKey, houseNow, nextAutomationFire, nextFireLabel,
+} from "@/lib/nextfire";
 
 /**
- * Automations screen: list + a pragmatic builder for time-triggered steps.
- * Richer creation (arbitrary devices, natural language) arrives with the
+ * Automations screen: a compact schedule-ordered list + a room-first builder.
+ * Pick a room, get chips for what that room can actually do (lights, shades,
+ * AC at a set-point, the sauna in the Sauna…) derived from device
+ * capabilities. Richer creation (natural language) arrives with the
  * conversational layer, which produces the same automation spec.
  */
 
@@ -40,21 +45,65 @@ interface TimerRule {
 
 interface LightDevice { id: string; label: string; room: string; }
 
-/** Anything schedulable: on/off-style devices across every kind. */
-interface TargetDevice { id: string; label: string; room: string; kind: string; }
+/** Anything schedulable, with capabilities so the builder can offer levels. */
+interface TargetDevice { id: string; label: string; room: string; kind: string; capabilities: string[] }
 
 const DAY_CHIPS = ["S", "M", "T", "W", "T", "F", "S"]; // 0=Sunday .. 6=Saturday
+const SCENE_TARGET = "__scene__";
 
-const DEVICE_COMMANDS: Record<string, Array<{ value: string; label: string }>> = {
-  cover: [{ value: "open", label: "Open" }, { value: "close", label: "Close" }],
-  climate: [
-    { value: "on_at", label: "On at °C…" },
-    { value: "turn_on", label: "On" },
-    { value: "turn_off", label: "Off" },
-    { value: "set_temp", label: "Set °C only" },
-  ],
-  default: [{ value: "turn_on", label: "On" }, { value: "turn_off", label: "Off" }],
-};
+type ChipKey =
+  | "lights_on" | "lights_off"
+  | "shades_open" | "shades_close"
+  | "ac_on_at" | "ac_off"
+  | "sauna_on_at" | "sauna_off"
+  | "heating_on" | "heating_off"
+  | "noise_on" | "noise_off"
+  | "device";
+
+/** Room-level action chips, offered only when the room has the hardware. */
+function chipsForRoom(roomDevs: TargetDevice[]): Array<{ key: ChipKey; label: string }> {
+  const has = (k: string) => roomDevs.some((t) => t.kind === k);
+  const chips: Array<{ key: ChipKey; label: string }> = [];
+  if (has("light")) chips.push({ key: "lights_on", label: "Lights on" }, { key: "lights_off", label: "Lights off" });
+  if (has("cover")) chips.push({ key: "shades_open", label: "Shades open" }, { key: "shades_close", label: "Shades closed" });
+  if (has("climate")) chips.push({ key: "ac_on_at", label: "AC on at °C" }, { key: "ac_off", label: "AC off" });
+  if (has("sauna")) chips.push({ key: "sauna_on_at", label: "Sauna on at °C" }, { key: "sauna_off", label: "Sauna off" });
+  if (has("heating")) chips.push({ key: "heating_on", label: "Floor heating on" }, { key: "heating_off", label: "Floor heating off" });
+  if (has("noise")) chips.push({ key: "noise_on", label: "White noise on" }, { key: "noise_off", label: "White noise off" });
+  chips.push({ key: "device", label: "Single device…" });
+  return chips;
+}
+
+/** Mirrors the server's temperatureBounds() so the input can't propose an out-of-range set-point. */
+function tempBoundsFor(kind: string | undefined) {
+  return kind === "sauna"
+    ? { min: 40, max: 100, step: 1, dflt: 80 }
+    : { min: 10, max: 32, step: 0.5, dflt: 24 };
+}
+
+function commandOptions(t: TargetDevice | undefined): Array<{ value: string; label: string }> {
+  if (t?.kind === "cover") return [{ value: "open", label: "Open" }, { value: "close", label: "Close" }];
+  if (t?.kind === "climate")
+    return [
+      { value: "on_at", label: "On at °C…" },
+      { value: "turn_on", label: "On" },
+      { value: "turn_off", label: "Off" },
+      { value: "set_temp", label: "Set °C only" },
+    ];
+  if (t?.kind === "sauna")
+    return [
+      { value: "on_at", label: "On at °C…" },
+      { value: "turn_on", label: "On" },
+      { value: "turn_off", label: "Off" },
+    ];
+  if (t?.capabilities.includes("brightness"))
+    return [
+      { value: "turn_on", label: "On" },
+      { value: "on_at_pct", label: "On at %…" },
+      { value: "turn_off", label: "Off" },
+    ];
+  return [{ value: "turn_on", label: "On" }, { value: "turn_off", label: "Off" }];
+}
 
 function describeStep(s: Step, deviceLabel: (id: string) => string): string {
   const when = s.date
@@ -62,46 +111,67 @@ function describeStep(s: Step, deviceLabel: (id: string) => string): string {
     : s.days && s.days.length
       ? `${s.days.map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join("/")} at ${s.time}`
       : `every day at ${s.time}`;
-  const what = s.actions
-    .map((a) => {
-      if (a.type === "scene") return `scene "${a.sceneId}"`;
-      if (a.type === "room") return `${a.room} lights ${a.command === "lights_on" ? "on" : "off"}`;
-      if (a.command.command === "set_temperature") return `${deviceLabel(a.deviceId)} to ${a.command.temperature}°`;
-      const verb = String(a.command.command).replace("turn_", "").replace("_", " ");
-      return `${deviceLabel(a.deviceId)} ${verb}`;
-    })
-    .join(", ");
-  return `${when} → ${what}`;
+  const parts: string[] = [];
+  for (let i = 0; i < s.actions.length; i++) {
+    const a = s.actions[i];
+    if (a.type === "scene") { parts.push(`scene "${a.sceneId}"`); continue; }
+    if (a.type === "room") { parts.push(`${a.room} lights ${a.command === "lights_on" ? "on" : "off"}`); continue; }
+    const next = s.actions[i + 1];
+    // A turn_on followed by a set-point on the same device is one intent.
+    if (
+      a.command.command === "turn_on" &&
+      next?.type === "device" && next.deviceId === a.deviceId &&
+      next.command.command === "set_temperature"
+    ) {
+      parts.push(`${deviceLabel(a.deviceId)} on at ${next.command.temperature}°`);
+      i++;
+      continue;
+    }
+    if (a.command.command === "set_temperature") { parts.push(`${deviceLabel(a.deviceId)} to ${a.command.temperature}°`); continue; }
+    if (a.command.command === "set_brightness") { parts.push(`${deviceLabel(a.deviceId)} on at ${a.command.brightnessPct}%`); continue; }
+    const verb = String(a.command.command).replace("turn_", "").replace("_", " ");
+    parts.push(`${deviceLabel(a.deviceId)} ${verb}`);
+  }
+  return `${when} → ${parts.join(", ")}`;
 }
+
+const field: React.CSSProperties = {
+  padding: 8, borderRadius: 10, border: "1px solid var(--card-line)",
+  background: "var(--card)", color: "var(--ink)", fontFamily: "inherit",
+};
+const chipOn: React.CSSProperties = {
+  background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)",
+};
 
 export default function Automations() {
   const [items, setItems] = useState<Automation[]>([]);
   const [scenes, setScenes] = useState<SceneMeta[]>([]);
-  const [rooms, setRooms] = useState<string[]>([]);
   const [tz, setTz] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // builder state
+  const [builderOpen, setBuilderOpen] = useState(false);
   const [name, setName] = useState("");
   const [steps, setSteps] = useState<Step[]>([]);
   const [time, setTime] = useState("18:00");
   const [days, setDays] = useState<number[]>([]); // empty = every day
   const [date, setDate] = useState("");
   const [once, setOnce] = useState(false);
-  const [actKind, setActKind] = useState<
-    "room_on" | "room_off" | "shades_open" | "shades_close" | "scene" | "device"
-  >("room_on");
-  const [actRoom, setActRoom] = useState("");
+  const [target, setTarget] = useState(""); // "" | SCENE_TARGET | room name
+  const [action, setAction] = useState<ChipKey>("lights_on");
   const [actScene, setActScene] = useState("");
   const [actDevice, setActDevice] = useState("");
   const [actCommand, setActCommand] = useState("turn_on");
   const [actTemp, setActTemp] = useState(24);
+  const [actBright, setActBright] = useState(60);
   const [targets, setTargets] = useState<TargetDevice[]>([]);
 
   // auto-off timers
   const [timers, setTimers] = useState<TimerRule[]>([]);
   const [lights, setLights] = useState<LightDevice[]>([]);
+  const [timerFormOpen, setTimerFormOpen] = useState(false);
   const [timerDevice, setTimerDevice] = useState("");
   const [timerMinutes, setTimerMinutes] = useState(20);
 
@@ -118,15 +188,13 @@ export default function Automations() {
     if (sc.ok) setScenes(((await sc.json()) as { scenes: SceneMeta[] }).scenes);
     if (home.ok) {
       const devs = ((await home.json()) as {
-        devices: Array<{ id: string; label: string; room: string; kind: string; category: string }>;
+        devices: Array<{ id: string; label: string; room: string; kind: string; category: string; capabilities: string[] }>;
       }).devices;
 
-      const lightDevs = devs.filter((d) => d.kind === "light" && d.category !== "scene_switch");
-      setRooms([...new Set(lightDevs.map((d) => d.room))].sort());
       setTargets(
         devs
           .filter((d) => d.category !== "scene_switch")
-          .map((d) => ({ id: d.id, label: d.label, room: d.room, kind: d.kind }))
+          .map((d) => ({ id: d.id, label: d.label, room: d.room, kind: d.kind, capabilities: d.capabilities ?? [] }))
           .sort((a, b) => `${a.room} ${a.label}`.localeCompare(`${b.room} ${b.label}`)),
       );
       // Timers apply to lights AND underfloor heating ("never longer than 2h").
@@ -144,6 +212,10 @@ export default function Automations() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const allRooms = useMemo(() => [...new Set(targets.map((t) => t.room))].sort(), [targets]);
+  const roomDevs = useMemo(() => targets.filter((t) => t.room === target), [targets, target]);
+  const chips = useMemo(() => chipsForRoom(roomDevs), [roomDevs]);
 
   const post = async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -166,31 +238,76 @@ export default function Automations() {
     }
   };
 
+  const pickTarget = (v: string) => {
+    setTarget(v);
+    setActDevice("");
+    if (v && v !== SCENE_TARGET) {
+      const first = chipsForRoom(targets.filter((t) => t.room === v))[0];
+      pickAction(first.key);
+    }
+  };
+
+  const pickAction = (key: ChipKey) => {
+    setAction(key);
+    if (key === "sauna_on_at") setActTemp((t) => (t >= 40 && t <= 100 ? t : 80));
+    if (key === "ac_on_at") setActTemp((t) => (t >= 10 && t <= 32 ? t : 24));
+  };
+
+  const selectedDevice = targets.find((t) => t.id === actDevice);
+
+  const pickDevice = (id: string) => {
+    setActDevice(id);
+    const dev = targets.find((t) => t.id === id);
+    const first = commandOptions(dev)[0].value;
+    setActCommand(first);
+    if (first === "on_at") {
+      const b = tempBoundsFor(dev?.kind);
+      setActTemp((t) => (t >= b.min && t <= b.max ? t : b.dflt));
+    }
+  };
+
   const addStep = () => {
+    const kindDevs = (k: string) => roomDevs.filter((t) => t.kind === k);
+    const cmd = (deviceId: string, command: Record<string, unknown>) =>
+      ({ type: "device" as const, deviceId, command });
+    // The number inputs' min/max are advisory; clamp so a typo can't store a
+    // set-point the server would reject at fire time.
+    const clampTemp = (kind: string | undefined) => {
+      const b = tempBoundsFor(kind);
+      return Math.min(b.max, Math.max(b.min, actTemp));
+    };
+    const bright = Math.min(100, Math.max(1, Math.round(actBright)));
     let actions: Step["actions"] = [];
-    if (actKind === "scene" && actScene) actions = [{ type: "scene", sceneId: actScene }];
-    else if (actKind === "device" && actDevice) {
+    if (target === SCENE_TARGET) {
+      if (actScene) actions = [{ type: "scene", sceneId: actScene }];
+    } else if (action === "lights_on" || action === "lights_off") {
+      actions = [{ type: "room", room: target, command: action }];
+    } else if (action === "shades_open" || action === "shades_close") {
+      // One step, one action per shade in the room — the engine fans out.
+      actions = kindDevs("cover").map((t) => cmd(t.id, { command: action === "shades_open" ? "open" : "close" }));
+    } else if (action === "ac_on_at" || action === "sauna_on_at") {
+      // Two actions per zone: wake it, then set its target.
+      actions = kindDevs(action === "ac_on_at" ? "climate" : "sauna").flatMap((t) => [
+        cmd(t.id, { command: "turn_on" }),
+        cmd(t.id, { command: "set_temperature", temperature: clampTemp(t.kind) }),
+      ]);
+    } else if (action !== "device") {
+      const kind = action.startsWith("ac") ? "climate"
+        : action.startsWith("sauna") ? "sauna"
+        : action.startsWith("heating") ? "heating" : "noise";
+      actions = kindDevs(kind).map((t) => cmd(t.id, { command: action.endsWith("_on") ? "turn_on" : "turn_off" }));
+    } else if (actDevice) {
       if (actCommand === "on_at")
-        // Two actions, one step: wake the zone, then set its target.
         actions = [
-          { type: "device", deviceId: actDevice, command: { command: "turn_on" } },
-          { type: "device", deviceId: actDevice, command: { command: "set_temperature", temperature: actTemp } },
+          cmd(actDevice, { command: "turn_on" }),
+          cmd(actDevice, { command: "set_temperature", temperature: clampTemp(selectedDevice?.kind) }),
         ];
       else if (actCommand === "set_temp")
-        actions = [{ type: "device", deviceId: actDevice, command: { command: "set_temperature", temperature: actTemp } }];
-      else actions = [{ type: "device", deviceId: actDevice, command: { command: actCommand } }];
+        actions = [cmd(actDevice, { command: "set_temperature", temperature: clampTemp(selectedDevice?.kind) })];
+      else if (actCommand === "on_at_pct")
+        actions = [cmd(actDevice, { command: "set_brightness", brightnessPct: bright })];
+      else actions = [cmd(actDevice, { command: actCommand })];
     }
-    else if ((actKind === "shades_open" || actKind === "shades_close") && actRoom)
-      // One step, one action per shade in the room — the engine fans out.
-      actions = targets
-        .filter((t) => t.kind === "cover" && t.room === actRoom)
-        .map((t) => ({
-          type: "device" as const,
-          deviceId: t.id,
-          command: { command: actKind === "shades_open" ? "open" : "close" },
-        }));
-    else if ((actKind === "room_on" || actKind === "room_off") && actRoom)
-      actions = [{ type: "room", room: actRoom, command: actKind === "room_on" ? "lights_on" : "lights_off" }];
     if (actions.length === 0) return;
     const step: Step = { time, actions };
     if (once && date) step.date = date;
@@ -201,17 +318,13 @@ export default function Automations() {
   const toggleDay = (d: number) =>
     setDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]));
 
-  const commandsFor = (deviceId: string) => {
-    const kind = targets.find((t) => t.id === deviceId)?.kind;
-    return DEVICE_COMMANDS[kind ?? "default"] ?? DEVICE_COMMANDS.default;
-  };
-
   const create = async () => {
     if (!name.trim() || steps.length === 0) return;
     const ok = await post({ action: "create", spec: { name: name.trim(), steps } });
     if (ok) {
       setName("");
       setSteps([]);
+      setBuilderOpen(false);
     }
   };
 
@@ -227,14 +340,44 @@ export default function Automations() {
       if (!res.ok) throw new Error(out.error ?? "failed");
       setTimers(out.timers);
       setError(null);
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "failed");
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
   const lightById = (id: string) => lights.find((l) => l.id === id);
+  const label = (id: string) => targets.find((t) => t.id === id)?.label ?? id;
+
+  const now = houseNow(tz || undefined);
+  // Soonest-first; enabled-but-spent (fired one-shots) next; paused last.
+  const sorted = items
+    .map((a) => ({ a, nf: a.enabled ? nextAutomationFire(a.steps, now) : null }))
+    .sort((x, y) => {
+      const key = (w: typeof x) => (!w.a.enabled ? 2e9 : w.nf ? fireSortKey(w.nf) : 1e9);
+      return key(x) - key(y) || x.a.name.localeCompare(y.a.name);
+    });
+
+  const tempInput = (kind: string | undefined) => {
+    const b = tempBoundsFor(kind);
+    return (
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
+        <input
+          type="number" min={b.min} max={b.max} step={b.step} value={actTemp}
+          onChange={(e) => setActTemp(Number(e.target.value))}
+          style={{ ...field, width: 70 }}
+        />
+        °C
+      </label>
+    );
+  };
+
+  const saunaScheduled =
+    action === "sauna_on_at" ||
+    (action === "device" && selectedDevice?.kind === "sauna" && actCommand !== "turn_off");
 
   return (
     <main className="shell">
@@ -242,31 +385,190 @@ export default function Automations() {
       <p className="h-sub">Times are {tz ? `${tz.split("/").pop()!.replace(/_/g, " ")} time` : "house time"}. One-shot automations disable themselves after firing.</p>
       {error && <div className="error-banner">{error}</div>}
 
-      {items.map((a) => (
-        <div key={a.id} className="dev" style={{ alignItems: "flex-start" }}>
-          <div>
-            <div className="nm">{a.name}</div>
-            {a.steps.map((s, i) => (
-              <div key={i} className="st">
-                {describeStep(s, (id) => targets.find((t) => t.id === id)?.label ?? id)}
+      {sorted.map(({ a, nf }) => {
+        const open = expandedId === a.id;
+        return (
+          <div key={a.id} className={`dev${a.enabled ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
+            <button
+              aria-expanded={open}
+              onClick={() => setExpandedId(open ? null : a.id)}
+              style={{
+                flex: 1, minWidth: 0, background: "none", border: "none", padding: 0,
+                textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer",
+              }}
+            >
+              <div className="nm">{a.name}</div>
+              <div className="st">{!a.enabled ? "paused" : nf ? `next ${nextFireLabel(nf, now)}` : "nothing upcoming"}</div>
+              {open
+                ? a.steps.map((s, i) => <div key={i} className="st">{describeStep(s, label)}</div>)
+                : (
+                  <div className="st" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {a.steps.map((s) => describeStep(s, label)).join(" · ")}
+                  </div>
+                )}
+            </button>
+            <div className="btn-row" style={{ flexDirection: "column", alignItems: "flex-end" }}>
+              <button
+                className="toggle"
+                aria-pressed={a.enabled}
+                aria-label={`${a.name} ${a.enabled ? "on" : "paused"}`}
+                disabled={busy}
+                onClick={() => post({ action: "toggle", id: a.id, enabled: !a.enabled })}
+              />
+              {open && (
+                <button
+                  className="mini-btn"
+                  disabled={busy}
+                  onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) post({ action: "delete", id: a.id }); }}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {items.length === 0 && <p className="h-sub">No automations yet.</p>}
+
+      {!builderOpen && (
+        <button className="scene-pill" style={{ width: "100%", maxWidth: "none", padding: 12 }} onClick={() => setBuilderOpen(true)}>
+          + New automation
+        </button>
+      )}
+      {builderOpen && (
+        <>
+          <div className="section-label">New automation</div>
+          <div className="dev-block" style={{ padding: 14 }}>
+            <input
+              placeholder="name (e.g. Kitchen evening lights)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              style={{ ...field, width: "100%", padding: 9, marginBottom: 8 }}
+            />
+            {steps.map((s, i) => (
+              <div key={i} className="st" style={{ marginBottom: 4 }}>
+                {describeStep(s, label)}{" "}
+                <button onClick={() => setSteps(steps.filter((_, j) => j !== i))}
+                  style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", font: "inherit" }}>✕</button>
               </div>
             ))}
+            {/* When: time, weekday chips (none = every day), or a one-shot date. */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={field} />
+              {!once && DAY_CHIPS.map((chipLabel, d) => (
+                <button
+                  key={d}
+                  className="mini-btn"
+                  aria-pressed={days.includes(d)}
+                  aria-label={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d]}
+                  style={{ minHeight: 36, padding: "6px 0", width: 36, ...(days.includes(d) ? chipOn : {}) }}
+                  onClick={() => toggleDay(d)}
+                >
+                  {chipLabel}
+                </button>
+              ))}
+              <button
+                className="mini-btn"
+                aria-pressed={once}
+                style={once ? chipOn : undefined}
+                onClick={() => {
+                  setOnce((v) => !v);
+                  if (!once && !date) setDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+                }}
+              >
+                Once…
+              </button>
+              {once && (
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={field} />
+              )}
+            </div>
+            {!once && <p className="st" style={{ margin: "4px 0 0" }}>No days selected = every day.</p>}
+
+            {/* What: pick a room (or a scene), then an action the room supports. */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+              <select value={target} onChange={(e) => pickTarget(e.target.value)} style={{ ...field, flex: "1 1 200px" }}>
+                <option value="">choose a room…</option>
+                <option value={SCENE_TARGET}>Run a scene…</option>
+                {allRooms.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+              {target === SCENE_TARGET && (
+                <select value={actScene} onChange={(e) => setActScene(e.target.value)} style={field}>
+                  <option value="">choose scene…</option>
+                  {scenes.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              )}
+            </div>
+            {target && target !== SCENE_TARGET && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                {chips.map((c) => (
+                  <button
+                    key={c.key}
+                    className="mini-btn"
+                    aria-pressed={action === c.key}
+                    style={action === c.key ? chipOn : undefined}
+                    onClick={() => pickAction(c.key)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {target && target !== SCENE_TARGET && (action === "ac_on_at" || action === "sauna_on_at" || action === "device") && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
+                {action === "ac_on_at" && tempInput("climate")}
+                {action === "sauna_on_at" && tempInput("sauna")}
+                {action === "device" && (
+                  <>
+                    <select value={actDevice} onChange={(e) => pickDevice(e.target.value)} style={{ ...field, flex: "1 1 200px" }}>
+                      <option value="">choose device…</option>
+                      {roomDevs.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                    </select>
+                    {actDevice && (
+                      <select value={actCommand} onChange={(e) => {
+                        setActCommand(e.target.value);
+                        if (e.target.value === "on_at" || e.target.value === "set_temp") {
+                          const b = tempBoundsFor(selectedDevice?.kind);
+                          setActTemp((t) => (t >= b.min && t <= b.max ? t : b.dflt));
+                        }
+                      }} style={field}>
+                        {commandOptions(selectedDevice).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      </select>
+                    )}
+                    {(actCommand === "on_at" || actCommand === "set_temp") && tempInput(selectedDevice?.kind)}
+                    {actCommand === "on_at_pct" && (
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
+                        <input
+                          type="number" min={1} max={100} step={1} value={actBright}
+                          onChange={(e) => setActBright(Number(e.target.value))}
+                          style={{ ...field, width: 70 }}
+                        />
+                        %
+                      </label>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+            {target && (
+              <div style={{ marginTop: 8 }}>
+                <button className="mini-btn" onClick={addStep}>+ Add step</button>
+              </div>
+            )}
+            {saunaScheduled && (
+              <p className="st" style={{ margin: "4px 0 0", color: "var(--danger)" }}>
+                Scheduling the sauna starts the heater unattended — the KLAFS bathing-time limit still applies.
+              </p>
+            )}
+            <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+              <button className="scene-pill" disabled={busy || !name.trim() || steps.length === 0} onClick={create}
+                style={{ flex: 1, maxWidth: "none", padding: 12 }}>
+                Create automation
+              </button>
+              <button className="mini-btn" onClick={() => setBuilderOpen(false)}>Cancel</button>
+            </div>
           </div>
-          <div className="btn-row">
-            <button className="mini-btn" disabled={busy} onClick={() => post({ action: "toggle", id: a.id, enabled: !a.enabled })}>
-              {a.enabled ? "On" : "Off"}
-            </button>
-            <button
-              className="mini-btn"
-              disabled={busy}
-              onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) post({ action: "delete", id: a.id }); }}
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      ))}
-      {items.length === 0 && <p className="h-sub">No automations yet.</p>}
+        </>
+      )}
 
       <div className="section-label">Auto-off timers</div>
       <p className="h-sub" style={{ marginTop: -2 }}>
@@ -298,159 +600,50 @@ export default function Automations() {
           </div>
         );
       })}
-      <div className="dev-block" style={{ padding: 14 }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <select
-            value={timerDevice}
-            onChange={(e) => setTimerDevice(e.target.value)}
-            style={{ flex: "1 1 220px", padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}
-          >
-            <option value="">choose a device…</option>
-            {lights.map((l) => (
-              <option key={l.id} value={l.id}>{l.room} — {l.label}</option>
-            ))}
-          </select>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
-            off after
-            <input
-              type="number"
-              min={1}
-              max={720}
-              value={timerMinutes}
-              onChange={(e) => setTimerMinutes(Number(e.target.value))}
-              style={{ width: 64, padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}
-            />
-            min
-          </label>
-          <button
-            className="mini-btn"
-            disabled={busy || !timerDevice || !(timerMinutes >= 1)}
-            onClick={() => timerOp({ action: "create", deviceId: timerDevice, afterMinutes: timerMinutes }).then(() => setTimerDevice(""))}
-          >
-            + Add timer
-          </button>
-        </div>
-      </div>
-
-      <div className="section-label">New automation</div>
-      <div className="dev-block" style={{ padding: 14 }}>
-        <input
-          placeholder="name (e.g. Kitchen evening lights)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          style={{ width: "100%", padding: 9, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit", marginBottom: 8 }}
-        />
-        {steps.map((s, i) => (
-          <div key={i} className="st" style={{ marginBottom: 4 }}>
-            {describeStep(s, (id) => targets.find((t) => t.id === id)?.label ?? id)}{" "}
-            <button onClick={() => setSteps(steps.filter((_, j) => j !== i))}
-              style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", font: "inherit" }}>✕</button>
-          </div>
-        ))}
-        {/* When: time, weekday chips (none = every day), or a one-shot date. */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
-            style={{ padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }} />
-          {!once && DAY_CHIPS.map((label, d) => (
-            <button
-              key={d}
-              className="mini-btn"
-              aria-pressed={days.includes(d)}
-              aria-label={["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d]}
-              style={{
-                minHeight: 36, padding: "6px 0", width: 36,
-                ...(days.includes(d) ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : {}),
-              }}
-              onClick={() => toggleDay(d)}
+      {!timerFormOpen && (
+        <button className="mini-btn" onClick={() => setTimerFormOpen(true)}>+ Add auto-off timer</button>
+      )}
+      {timerFormOpen && (
+        <div className="dev-block" style={{ padding: 14 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <select
+              value={timerDevice}
+              onChange={(e) => setTimerDevice(e.target.value)}
+              style={{ ...field, flex: "1 1 220px" }}
             >
-              {label}
+              <option value="">choose a device…</option>
+              {lights.map((l) => (
+                <option key={l.id} value={l.id}>{l.room} — {l.label}</option>
+              ))}
+            </select>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
+              off after
+              <input
+                type="number"
+                min={1}
+                max={720}
+                value={timerMinutes}
+                onChange={(e) => setTimerMinutes(Number(e.target.value))}
+                style={{ ...field, width: 64 }}
+              />
+              min
+            </label>
+            <button
+              className="mini-btn"
+              disabled={busy || !timerDevice || !(timerMinutes >= 1)}
+              onClick={async () => {
+                if (await timerOp({ action: "create", deviceId: timerDevice, afterMinutes: timerMinutes })) {
+                  setTimerDevice("");
+                  setTimerFormOpen(false);
+                }
+              }}
+            >
+              + Add timer
             </button>
-          ))}
-          <button
-            className="mini-btn"
-            aria-pressed={once}
-            style={once ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : undefined}
-            onClick={() => {
-              setOnce((v) => !v);
-              if (!once && !date) setDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
-            }}
-          >
-            Once…
-          </button>
-          {once && (
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              style={{ padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }} />
-          )}
+            <button className="mini-btn" onClick={() => setTimerFormOpen(false)}>Cancel</button>
+          </div>
         </div>
-        {!once && <p className="st" style={{ margin: "4px 0 0" }}>No days selected = every day.</p>}
-
-        {/* What: room lights, a scene, or any single device. */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-          <select value={actKind} onChange={(e) => setActKind(e.target.value as typeof actKind)}
-            style={{ padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}>
-            <option value="room_on">Room lights ON</option>
-            <option value="room_off">Room lights OFF</option>
-            <option value="shades_open">Room shades OPEN</option>
-            <option value="shades_close">Room shades CLOSED</option>
-            <option value="scene">Run scene</option>
-            <option value="device">Device…</option>
-          </select>
-          {actKind === "scene" && (
-            <select value={actScene} onChange={(e) => setActScene(e.target.value)}
-              style={{ padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}>
-              <option value="">choose scene…</option>
-              {scenes.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          )}
-          {(actKind === "room_on" || actKind === "room_off" || actKind === "shades_open" || actKind === "shades_close") && (
-            <select value={actRoom} onChange={(e) => setActRoom(e.target.value)}
-              style={{ padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}>
-              <option value="">choose room…</option>
-              {(actKind === "shades_open" || actKind === "shades_close"
-                ? [...new Set(targets.filter((t) => t.kind === "cover").map((t) => t.room))].sort()
-                : rooms
-              ).map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          )}
-          {actKind === "device" && (
-            <>
-              <select value={actDevice} onChange={(e) => { setActDevice(e.target.value); setActCommand(commandsFor(e.target.value)[0].value); }}
-                style={{ flex: "1 1 200px", padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}>
-                <option value="">choose device…</option>
-                {targets.map((t) => <option key={t.id} value={t.id}>{t.room} — {t.label}</option>)}
-              </select>
-              <select value={actCommand} onChange={(e) => setActCommand(e.target.value)}
-                style={{ padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}>
-                {commandsFor(actDevice).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
-              {(actCommand === "on_at" || actCommand === "set_temp") && (
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
-                  <input
-                    type="number"
-                    min={10}
-                    max={32}
-                    step={0.5}
-                    value={actTemp}
-                    onChange={(e) => setActTemp(Number(e.target.value))}
-                    style={{ width: 70, padding: 8, borderRadius: 10, border: "1px solid var(--card-line)", background: "var(--card)", color: "var(--ink)", fontFamily: "inherit" }}
-                  />
-                  °C
-                </label>
-              )}
-            </>
-          )}
-          <button className="mini-btn" onClick={addStep}>+ Add step</button>
-        </div>
-        {actKind === "device" && targets.find((t) => t.id === actDevice)?.kind === "sauna" && (
-          <p className="st" style={{ margin: "4px 0 0", color: "var(--danger)" }}>
-            Scheduling the sauna starts the heater unattended — the KLAFS bathing-time limit still applies.
-          </p>
-        )}
-        <button className="scene-pill" disabled={busy || !name.trim() || steps.length === 0} onClick={create}
-          style={{ width: "100%", marginTop: 12, padding: 12 }}>
-          Create automation
-        </button>
-      </div>
+      )}
       <NavBar />
     </main>
   );

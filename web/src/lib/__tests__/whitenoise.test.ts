@@ -59,4 +59,15 @@ describe("white-noise adapter wire contract", () => {
     expect(noiseMediaEntity()).toBe("media_player.bedroom_zone");
     delete process.env.WHITENOISE_MEDIA_ENTITY;
   });
+
+  it("prepends https:// to a scheme-less base URL (the bare-host paste trap)", async () => {
+    // Railway shows the domain without a scheme; a bare host used to make
+    // fetch() throw "Failed to parse URL". It must be normalized for both the
+    // API calls and the stream URL handed to the speakers.
+    process.env.WHITENOISE_BASE_URL = "whitenoise-production.up.railway.app";
+    response = { noise_type: "white", volume: 30, listeners: 0 };
+    await noiseStatus();
+    expect(calls[0].url).toBe("https://whitenoise-production.up.railway.app/api/status");
+    expect(noiseStreamUrl()).toBe("https://whitenoise-production.up.railway.app/stream?token=tok9");
+  });
 });

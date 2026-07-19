@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  LlmProposalSchema, toAutomationSpec, toCommand, toInternalAction,
+  LlmProposalSchema, proposalOutputFormat, toAutomationSpec, toCommand, toInternalAction,
   type LlmAction, type LlmProposal,
 } from "../assistant";
 import { AutomationSpecSchema } from "../automations";
@@ -154,5 +154,14 @@ describe("toAutomationSpec", () => {
     });
     expect(spec.steps[0]).toEqual({ sun: "sunrise", actions: [{ type: "scene", sceneId: "s1" }] });
     expect(AutomationSpecSchema.safeParse(spec).success).toBe(true);
+  });
+});
+
+describe("proposalOutputFormat", () => {
+  it("emits a schema with no $defs/$ref (Anthropic rejects them under anyOf)", () => {
+    const fmt = proposalOutputFormat();
+    const json = JSON.stringify(fmt.schema);
+    expect(json).not.toContain("$defs");
+    expect(json).not.toContain("$ref");
   });
 });

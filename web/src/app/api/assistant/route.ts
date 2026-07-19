@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { authenticate } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import {
   LlmProposalSchema, assistantConfigured, buildSystemPrompt, houseNowLine,
-  toAutomationSpec, toInternalAction,
+  proposalOutputFormat, toAutomationSpec, toInternalAction,
 } from "@/lib/assistant";
 import { AutomationSpecSchema, createAutomation } from "@/lib/automations";
 import { executeAction } from "@/lib/execute";
@@ -158,7 +157,7 @@ export async function POST(req: NextRequest) {
             body.data.message,
         },
       ],
-      output_config: { format: zodOutputFormat(LlmProposalSchema) },
+      output_config: { format: proposalOutputFormat() },
     });
 
     if (response.stop_reason === "refusal" || !response.parsed_output) {

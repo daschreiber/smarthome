@@ -6,7 +6,7 @@ import { audit } from "@/lib/audit";
 import { authenticate } from "@/lib/auth";
 import { unitEntityIds } from "@/lib/coolmaster";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
-import { noiseMediaEntity, noiseStatus, noiseStreamUrl, setNoiseVolume } from "@/lib/whitenoise";
+import { noiseMediaEntity, noiseMediaSource, noiseStatus, noiseStreamUrl, setNoiseVolume } from "@/lib/whitenoise";
 
 /**
  * Command execution flow per IMPLEMENTATION_SPEC §9:
@@ -57,14 +57,26 @@ export async function POST(
         message = `volume ${s.volume}%`;
         listeners = s.listeners;
       } else if (cmd.command === "turn_on" || cmd.command === "turn_off") {
-        // On/off drives the Control4 zone: play the stream URL, or stop it.
+        // On/off drives the room's media_player. Two dialects:
+        // - WHITENOISE_MEDIA_SOURCE set: Control4's matrix model — the room
+        //   JOINS the named source (select_source); play_media is ignored by
+        //   the Control4 integration, so URL playback can't work there.
+        // - Unset: play the stream URL directly (DLNA/Sonos/Cast entities).
         // The token-bearing URL stays server-side (never sent to the browser).
         if (cmd.command === "turn_on") {
-          await callService("media_player", "play_media", {
-            entity_id: noiseMediaEntity(),
-            media_content_id: noiseStreamUrl(),
-            media_content_type: "music",
-          });
+          const source = noiseMediaSource();
+          if (source) {
+            await callService("media_player", "select_source", {
+              entity_id: noiseMediaEntity(),
+              source,
+            });
+          } else {
+            await callService("media_player", "play_media", {
+              entity_id: noiseMediaEntity(),
+              media_content_id: noiseStreamUrl(),
+              media_content_type: "music",
+            });
+          }
         } else {
           await callService("media_player", "turn_off", { entity_id: noiseMediaEntity() });
         }

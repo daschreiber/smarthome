@@ -43,6 +43,18 @@ export function noiseMediaEntity(): string {
   return process.env.WHITENOISE_MEDIA_ENTITY || "media_player.master_bedroom";
 }
 
+/**
+ * Control4 is a source/zone matrix: rooms JOIN sources, they don't play URLs
+ * (its HA integration ignores play_media). When the stream is programmed into
+ * Control4 as a source (web-radio/station driver), set this to that source's
+ * name and "on" becomes select_source on the room — the operation the matrix
+ * actually understands. Unset = fall back to play_media with the stream URL,
+ * which works on entities that accept URLs (DLNA renderers, Sonos, Cast…).
+ */
+export function noiseMediaSource(): string | null {
+  return process.env.WHITENOISE_MEDIA_SOURCE || null;
+}
+
 /** The token-bearing stream URL the zone connects to. Server-side only —
  *  it carries the token and must never reach the browser. */
 export function noiseStreamUrl(): string {

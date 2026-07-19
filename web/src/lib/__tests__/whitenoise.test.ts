@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { noiseMediaEntity, noiseStatus, noiseStreamUrl, setNoiseType, setNoiseVolume } from "../whitenoise";
+import { noiseMediaEntity, noiseMediaSource, noiseStatus, noiseStreamUrl, setNoiseType, setNoiseVolume } from "../whitenoise";
 
 /**
  * Pins the wire contract with the white-noise machine
@@ -58,6 +58,13 @@ describe("white-noise adapter wire contract", () => {
     process.env.WHITENOISE_MEDIA_ENTITY = "media_player.bedroom_zone";
     expect(noiseMediaEntity()).toBe("media_player.bedroom_zone");
     delete process.env.WHITENOISE_MEDIA_ENTITY;
+  });
+
+  it("media source is null unless configured (Control4 select_source mode)", () => {
+    expect(noiseMediaSource()).toBeNull();
+    process.env.WHITENOISE_MEDIA_SOURCE = "White Noise";
+    expect(noiseMediaSource()).toBe("White Noise");
+    delete process.env.WHITENOISE_MEDIA_SOURCE;
   });
 
   it("prepends https:// to a scheme-less base URL (the bare-host paste trap)", async () => {

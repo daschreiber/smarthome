@@ -49,13 +49,17 @@ interface TimerRule {
 interface LightDevice { id: string; label: string; room: string; }
 
 /** Anything schedulable, with capabilities so the builder can offer levels. */
-interface TargetDevice { id: string; label: string; room: string; kind: string; capabilities: string[] }
+interface TargetDevice { id: string; label: string; room: string; kind: string; category: string; capabilities: string[] }
+
+/** A real, controllable light (not a towel rail or vent, which ride the light domain). */
+const isRoomLight = (t: TargetDevice) =>
+  t.kind === "light" && (t.category === "light_switch" || t.category === "light_dimmer");
 
 const DAY_CHIPS = ["S", "M", "T", "W", "T", "F", "S"]; // 0=Sunday .. 6=Saturday
 const SCENE_TARGET = "__scene__";
 
 type ChipKey =
-  | "lights_on" | "lights_off"
+  | "lights_on" | "lights_off" | "lights_each"
   | "shades_open" | "shades_close"
   | "ac_on_at" | "ac_off"
   | "sauna_on_at" | "sauna_off"
@@ -67,7 +71,11 @@ type ChipKey =
 function chipsForRoom(roomDevs: TargetDevice[]): Array<{ key: ChipKey; label: string }> {
   const has = (k: string) => roomDevs.some((t) => t.kind === k);
   const chips: Array<{ key: ChipKey; label: string }> = [];
-  if (has("light")) chips.push({ key: "lights_on", label: "Lights on" }, { key: "lights_off", label: "Lights off" });
+  if (roomDevs.some(isRoomLight)) {
+    chips.push({ key: "lights_on", label: "Lights on" }, { key: "lights_off", label: "Lights off" });
+    // Only worth a per-light editor when there's more than one to disagree about.
+    if (roomDevs.filter(isRoomLight).length > 1) chips.push({ key: "lights_each", label: "Set each light…" });
+  }
   if (has("cover")) chips.push({ key: "shades_open", label: "Shades open" }, { key: "shades_close", label: "Shades closed" });
   if (has("climate")) chips.push({ key: "ac_on_at", label: "AC on at °C" }, { key: "ac_off", label: "AC off" });
   if (has("sauna")) chips.push({ key: "sauna_on_at", label: "Sauna on at °C" }, { key: "sauna_off", label: "Sauna off" });
@@ -184,6 +192,10 @@ export default function Automations() {
   const [actTemp, setActTemp] = useState(24);
   const [actBright, setActBright] = useState(60);
   const [targets, setTargets] = useState<TargetDevice[]>([]);
+  // Per-light editor ("Set each light…"): what to do with each light in the room.
+  // Missing / "leave" = don't touch it. Keyed by device id.
+  type LightMode = "leave" | "on" | "off" | "pct";
+  const [lightModes, setLightModes] = useState<Record<string, { mode: LightMode; pct: number }>>({});
 
   // auto-off timers
   const [timers, setTimers] = useState<TimerRule[]>([]);
@@ -212,7 +224,7 @@ export default function Automations() {
       setTargets(
         devs
           .filter((d) => d.category !== "scene_switch")
-          .map((d) => ({ id: d.id, label: d.label, room: d.room, kind: d.kind, capabilities: d.capabilities ?? [] }))
+          .map((d) => ({ id: d.id, label: d.label, room: d.room, kind: d.kind, category: d.category, capabilities: d.capabilities ?? [] }))
           .sort((a, b) => `${a.room} ${a.label}`.localeCompare(`${b.room} ${b.label}`)),
       );
       // Timers apply to lights AND underfloor heating ("never longer than 2h").
@@ -234,6 +246,17 @@ export default function Automations() {
   const allRooms = useMemo(() => [...new Set(targets.map((t) => t.room))].sort(), [targets]);
   const roomDevs = useMemo(() => targets.filter((t) => t.room === target), [targets, target]);
   const chips = useMemo(() => chipsForRoom(roomDevs), [roomDevs]);
+  const roomLightList = useMemo(() => roomDevs.filter(isRoomLight), [roomDevs]);
+
+  const lightMode = (id: string) => lightModes[id] ?? { mode: "leave" as LightMode, pct: 60 };
+  const setLightMode = (id: string, mode: LightMode) =>
+    setLightModes((m) => ({ ...m, [id]: { ...(m[id] ?? { mode: "leave" as LightMode, pct: 60 }), mode } }));
+  const setLightPct = (id: string, pct: number) =>
+    setLightModes((m) => ({ ...m, [id]: { ...(m[id] ?? { mode: "leave" as LightMode, pct: 60 }), pct } }));
+  const setAllLights = (mode: LightMode) =>
+    setLightModes((m) =>
+      Object.fromEntries(roomLightList.map((t) => [t.id, { mode, pct: (m[t.id] ?? { pct: 60 }).pct }])),
+    );
 
   const post = async (body: Record<string, unknown>) => {
     setBusy(true);
@@ -259,6 +282,7 @@ export default function Automations() {
   const pickTarget = (v: string) => {
     setTarget(v);
     setActDevice("");
+    setLightModes({}); // device ids differ per room; start the per-light editor fresh
     if (v && v !== SCENE_TARGET) {
       const first = chipsForRoom(targets.filter((t) => t.room === v))[0];
       pickAction(first.key);
@@ -311,6 +335,26 @@ export default function Automations() {
       }
     } else if (!action) {
       return null;
+    } else if (action === "lights_each") {
+      // One action per light the user set to something other than "leave".
+      const parts: string[] = [];
+      const built: Step["actions"] = [];
+      for (const t of roomLightList) {
+        const { mode, pct } = lightMode(t.id);
+        if (mode === "on") {
+          built.push(cmd(t.id, { command: "turn_on" }));
+          parts.push(`${t.label} on`);
+        } else if (mode === "off") {
+          built.push(cmd(t.id, { command: "turn_off" }));
+          parts.push(`${t.label} off`);
+        } else if (mode === "pct" && t.capabilities.includes("brightness")) {
+          const b = Math.min(100, Math.max(1, Math.round(pct)));
+          built.push(cmd(t.id, { command: "set_brightness", brightnessPct: b }));
+          parts.push(`${t.label} ${b}%`);
+        }
+      }
+      actions = built;
+      label = `${target}: ${parts.join(", ")}`;
     } else if (action === "lights_on" || action === "lights_off") {
       actions = [{ type: "room", room: target, command: action }];
       label = `${target} lights ${action === "lights_on" ? "on" : "off"}`;
@@ -404,6 +448,7 @@ export default function Automations() {
       setAction("lights_on");
       setActDevice("");
       setActScene("");
+      setLightModes({});
       setBuilderOpen(false);
     }
   };
@@ -640,6 +685,40 @@ export default function Automations() {
                     {c.label}
                   </button>
                 ))}
+              </div>
+            )}
+            {target && target !== SCENE_TARGET && action === "lights_each" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <button className="mini-btn" onClick={() => setAllLights("off")}>All off</button>
+                  <button className="mini-btn" onClick={() => setAllLights("on")}>All on</button>
+                  <button className="mini-btn" onClick={() => setAllLights("leave")}>Leave all</button>
+                </div>
+                {roomLightList.map((t) => {
+                  const { mode, pct } = lightMode(t.id);
+                  return (
+                    <div key={t.id} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ flex: "1 1 140px", fontSize: 14 }}>{t.label}</span>
+                      <select value={mode} onChange={(e) => setLightMode(t.id, e.target.value as LightMode)} style={field}>
+                        <option value="leave">Leave</option>
+                        <option value="on">On</option>
+                        <option value="off">Off</option>
+                        {t.capabilities.includes("brightness") && <option value="pct">On at %…</option>}
+                      </select>
+                      {mode === "pct" && t.capabilities.includes("brightness") && (
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
+                          <input
+                            type="number" min={1} max={100} step={1} value={pct}
+                            onChange={(e) => setLightPct(t.id, Number(e.target.value))}
+                            style={{ ...field, width: 70 }}
+                          />
+                          %
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="st" style={{ margin: 0 }}>“Leave” lights aren’t touched — they stay however they were.</p>
               </div>
             )}
             {target && target !== SCENE_TARGET && (action === "ac_on_at" || action === "sauna_on_at" || action === "device") && (

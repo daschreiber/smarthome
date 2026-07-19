@@ -22,6 +22,19 @@ export function noiseConfigured(): boolean {
 }
 
 /**
+ * The service's base URL, normalized. Railway (and most hosts) show the domain
+ * without a scheme, so a bare `host.up.railway.app` is an easy paste — but then
+ * fetch() and the stream URL both choke with "Failed to parse URL". Prepend
+ * https:// when no scheme is present, and drop any trailing slash. Returns ""
+ * when unset so callers can still detect the not-configured case.
+ */
+function noiseBaseUrl(): string {
+  const raw = (process.env.WHITENOISE_BASE_URL ?? "").trim().replace(/\/+$/, "");
+  if (!raw) return "";
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+}
+
+/**
  * The Home Assistant media_player entity for the room whose speakers play the
  * stream. On/off is done by telling this Control4 zone to play (or stop) the
  * stream URL — no bedside button required. Defaults to the Master Bedroom.
@@ -30,16 +43,28 @@ export function noiseMediaEntity(): string {
   return process.env.WHITENOISE_MEDIA_ENTITY || "media_player.master_bedroom";
 }
 
+/**
+ * Control4 is a source/zone matrix: rooms JOIN sources, they don't play URLs
+ * (its HA integration ignores play_media). When the stream is programmed into
+ * Control4 as a source (web-radio/station driver), set this to that source's
+ * name and "on" becomes select_source on the room — the operation the matrix
+ * actually understands. Unset = fall back to play_media with the stream URL,
+ * which works on entities that accept URLs (DLNA renderers, Sonos, Cast…).
+ */
+export function noiseMediaSource(): string | null {
+  return process.env.WHITENOISE_MEDIA_SOURCE || null;
+}
+
 /** The token-bearing stream URL the zone connects to. Server-side only —
  *  it carries the token and must never reach the browser. */
 export function noiseStreamUrl(): string {
-  const base = (process.env.WHITENOISE_BASE_URL ?? "").replace(/\/+$/, "");
+  const base = noiseBaseUrl();
   const token = process.env.WHITENOISE_TOKEN ?? "";
   return `${base}/stream?token=${encodeURIComponent(token)}`;
 }
 
 async function call(path: string, method: "GET" | "POST"): Promise<NoiseStatus> {
-  const base = (process.env.WHITENOISE_BASE_URL ?? "").replace(/\/+$/, "");
+  const base = noiseBaseUrl();
   const token = process.env.WHITENOISE_TOKEN ?? "";
   if (!base || !token) throw new Error("white noise is not configured");
   const controller = new AbortController();

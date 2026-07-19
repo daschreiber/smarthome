@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { noiseMediaEntity, noiseStatus, noiseStreamUrl, setNoiseType, setNoiseVolume } from "../whitenoise";
+import { noiseMediaEntity, noiseMediaSource, noiseStatus, noiseStreamUrl, setNoiseType, setNoiseVolume } from "../whitenoise";
 
 /**
  * Pins the wire contract with the white-noise machine
@@ -58,5 +58,23 @@ describe("white-noise adapter wire contract", () => {
     process.env.WHITENOISE_MEDIA_ENTITY = "media_player.bedroom_zone";
     expect(noiseMediaEntity()).toBe("media_player.bedroom_zone");
     delete process.env.WHITENOISE_MEDIA_ENTITY;
+  });
+
+  it("media source is null unless configured (Control4 select_source mode)", () => {
+    expect(noiseMediaSource()).toBeNull();
+    process.env.WHITENOISE_MEDIA_SOURCE = "White Noise";
+    expect(noiseMediaSource()).toBe("White Noise");
+    delete process.env.WHITENOISE_MEDIA_SOURCE;
+  });
+
+  it("prepends https:// to a scheme-less base URL (the bare-host paste trap)", async () => {
+    // Railway shows the domain without a scheme; a bare host used to make
+    // fetch() throw "Failed to parse URL". It must be normalized for both the
+    // API calls and the stream URL handed to the speakers.
+    process.env.WHITENOISE_BASE_URL = "whitenoise-production.up.railway.app";
+    response = { noise_type: "white", volume: 30, listeners: 0 };
+    await noiseStatus();
+    expect(calls[0].url).toBe("https://whitenoise-production.up.railway.app/api/status");
+    expect(noiseStreamUrl()).toBe("https://whitenoise-production.up.railway.app/stream?token=tok9");
   });
 });

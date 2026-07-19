@@ -116,6 +116,35 @@ export async function GET(req: NextRequest) {
           lastUpdated: s?.last_updated ?? null,
         };
       });
+    // White noise is hidden from the registry (and thus the command,
+    // automation, and assistant layers) until it's configured. But hiding it
+    // outright reads as "the feature is missing," so the home view surfaces a
+    // display-only, unavailable card that names what's absent. It becomes the
+    // real card the moment WHITENOISE_BASE_URL / WHITENOISE_TOKEN are set.
+    if (!noiseConfigured()) {
+      devices.push({
+        id: "master_bedroom__white_noise",
+        label: "White noise",
+        room: "Master Bedroom",
+        floor: 6,
+        group: "Media",
+        kind: "noise",
+        category: "noise_machine",
+        capabilities: [],
+        requiresConfirmation: false,
+        state: "unknown",
+        available: false,
+        brightnessPct: null,
+        currentTemperature: null,
+        targetTemperature: null,
+        hvacMode: null,
+        lastUpdated: null,
+        note: "not configured — set WHITENOISE_BASE_URL and WHITENOISE_TOKEN",
+        noiseType: null,
+        volumePct: null,
+      });
+    }
+
     // The underfloor-heating valve relays are hidden as CONTROLS (plumbing,
     // per the entity map), but their state makes an honest read-only
     // indicator: which rooms have warm floors right now.

@@ -4,6 +4,7 @@ import path from "node:path";
 // schemas are self-contained, so they live in v4 while the rest of the app
 // stays on classic v3 (both ship in the installed zod package).
 import { z } from "zod/v4";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { registry } from "./registry";
 import { listScenes } from "./scenes";
 import { nowParts, type Action, type AutomationSpec } from "./automations";
@@ -76,6 +77,48 @@ export const LlmProposalSchema = z.discriminatedUnion("kind", [
 
 export type LlmProposal = z.infer<typeof LlmProposalSchema>;
 export type LlmAction = z.infer<typeof LlmActionSchema>;
+
+/**
+ * Structured-output format for the assistant call.
+ *
+ * zodOutputFormat emits reused sub-schemas (our action schema, shared by the
+ * "actions" proposal and automation steps) as `$defs` + `$ref`. Anthropic's
+ * structured-output API rejects `$defs` under a top-level `anyOf` (our
+ * discriminated union) with `For 'anyOf', '$defs' is not supported`, which
+ * made EVERY assistant request 400. We keep the SDK's format (and its zod
+ * `parse`) but inline the `$ref`s so no `$defs` remain.
+ */
+type JsonNode = Record<string, unknown>;
+
+function inlineDefs(node: unknown, defs: Record<string, JsonNode>): unknown {
+  if (Array.isArray(node)) return node.map((n) => inlineDefs(n, defs));
+  if (node && typeof node === "object") {
+    const obj = node as JsonNode;
+    if (typeof obj.$ref === "string") {
+      const key = obj.$ref.replace("#/$defs/", "");
+      return inlineDefs(structuredClone(defs[key]), defs);
+    }
+    const out: JsonNode = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (k === "$defs") continue; // drop the defs block itself
+      out[k] = inlineDefs(v, defs);
+    }
+    return out;
+  }
+  return node;
+}
+
+export function proposalOutputFormat() {
+  // Keep zodOutputFormat's exact return type (so parsed_output still infers as
+  // LlmProposal) and only swap in the $ref-free schema.
+  const fmt = zodOutputFormat(LlmProposalSchema);
+  const schema = fmt.schema as JsonNode;
+  const defs = (schema.$defs ?? {}) as Record<string, JsonNode>;
+  if (Object.keys(defs).length > 0) {
+    return { ...fmt, schema: inlineDefs(schema, defs) as typeof fmt.schema };
+  }
+  return fmt;
+}
 
 /** Convert an LLM device action's (command, value) into an internal Command. */
 export function toCommand(action: Extract<LlmAction, { type: "device" }>): Command {

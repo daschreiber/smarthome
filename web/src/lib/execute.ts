@@ -85,7 +85,7 @@ export function roomLights(room: string): Device[] {
 export type SystemKey = "lighting" | "climate" | "heating" | "shades";
 
 export const SYSTEM_COMMANDS: Record<SystemKey, Command["command"][]> = {
-  lighting: ["turn_on", "turn_off"],
+  lighting: ["turn_on", "turn_off", "set_brightness"],
   climate: ["turn_on", "turn_off"],
   heating: ["turn_on", "turn_off"],
   shades: ["open", "close", "stop"],
@@ -110,14 +110,22 @@ export async function executeSystemCommand(
   system: SystemKey,
   command: Command["command"],
   rooms?: string[],
+  brightnessPct?: number,
 ): Promise<BatchResult> {
   if (!SYSTEM_COMMANDS[system].includes(command)) {
     throw new Error(`${command} is not a ${system} system command`);
   }
   let targets = systemDevices(system);
   if (rooms && rooms.length > 0) targets = targets.filter((d) => rooms.includes(d.room));
+  let cmd: Command = { command } as Command;
+  if (command === "set_brightness") {
+    if (brightnessPct == null) throw new Error("set_brightness needs brightnessPct");
+    // Group dim only touches lights that can actually dim; plain switches
+    // keep their current state rather than erroring.
+    targets = targets.filter((d) => d.capabilities.includes("brightness"));
+    cmd = { command: "set_brightness", brightnessPct };
+  }
   if (targets.length === 0) return { total: 0, failed: [{ target: system, error: "no matching devices" }] };
-  const cmd = { command } as Command;
   return runBatch(targets.map((d) => ({ target: d.id, run: () => executeOnDevice(d, cmd) })));
 }
 

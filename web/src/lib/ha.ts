@@ -81,3 +81,25 @@ export async function callService(
     throw new Error(`service ${domain}.${service} failed: HTTP ${res.status} ${text.slice(0, 200)}`);
   }
 }
+
+/**
+ * Same as callService but for services that return data (HA 2023.12+
+ * `?return_response`, e.g. roborock.get_maps). Returns the raw
+ * service_response object; callers parse defensively.
+ */
+export async function callServiceWithResponse(
+  domain: string,
+  service: string,
+  data: Record<string, unknown>,
+): Promise<unknown> {
+  const res = await haFetch(`/api/services/${domain}/${service}?return_response`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`service ${domain}.${service} failed: HTTP ${res.status} ${text.slice(0, 200)}`);
+  }
+  const body = (await res.json()) as { service_response?: unknown };
+  return body?.service_response ?? null;
+}

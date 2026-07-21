@@ -114,6 +114,16 @@ export async function GET(req: NextRequest) {
           targetTemperature: unitTarget ?? attr("temperature"),
           hvacMode: d.kind === "climate" ? s?.state ?? null : null,
           batteryPct: d.kind === "vacuum" ? attr("battery_level") : null,
+          fanSpeed:
+            d.kind === "vacuum" && typeof s?.attributes.fan_speed === "string"
+              ? (s.attributes.fan_speed as string)
+              : null,
+          fanSpeedList:
+            d.kind === "vacuum" && Array.isArray(s?.attributes.fan_speed_list)
+              ? (s.attributes.fan_speed_list as unknown[]).filter(
+                  (v): v is string => typeof v === "string",
+                )
+              : null,
           lastUpdated: s?.last_updated ?? null,
           note: null as string | null,
         };
@@ -173,6 +183,8 @@ export async function GET(req: NextRequest) {
           targetTemperature: null,
           hvacMode: null,
           batteryPct: null,
+          fanSpeed: null,
+          fanSpeedList: null,
           lastUpdated: null,
           note: "waiting for the Roborock integration in Home Assistant",
         });

@@ -98,6 +98,50 @@ describe("vacuum commands", () => {
     expect(expectedStates({ command: "pause_cleaning" })).toEqual(["paused"]);
     expect(expectedStates({ command: "return_to_dock" })).toEqual(["returning", "docked"]);
   });
+
+  it("maps a segment clean to Roborock's app_segment_clean", () => {
+    expect(
+      buildServiceCall(vacuum, { command: "start_cleaning", segments: [16, 17], repeat: 2 }),
+    ).toEqual({
+      domain: "vacuum",
+      service: "send_command",
+      data: {
+        entity_id: vacuum.entityId,
+        command: "app_segment_clean",
+        params: [{ segments: [16, 17], repeat: 2 }],
+      },
+    });
+  });
+
+  it("omits repeat for a single pass and segments for a whole-floor clean", () => {
+    expect(
+      buildServiceCall(vacuum, { command: "start_cleaning", segments: [16], repeat: 1 }).data,
+    ).toEqual({
+      entity_id: vacuum.entityId,
+      command: "app_segment_clean",
+      params: [{ segments: [16] }],
+    });
+    expect(buildServiceCall(vacuum, { command: "start_cleaning" })).toEqual({
+      domain: "vacuum", service: "start", data: { entity_id: vacuum.entityId },
+    });
+  });
+
+  it("maps suction to vacuum.set_fan_speed", () => {
+    expect(buildServiceCall(vacuum, { command: "set_fan_speed", fanSpeed: "max_plus" })).toEqual({
+      domain: "vacuum",
+      service: "set_fan_speed",
+      data: { entity_id: vacuum.entityId, fan_speed: "max_plus" },
+    });
+  });
+
+  it("bounds segment/pass/fan-speed inputs at the schema", () => {
+    expect(CommandSchema.safeParse({ command: "start_cleaning", segments: [16] }).success).toBe(true);
+    expect(CommandSchema.safeParse({ command: "start_cleaning", segments: [] }).success).toBe(false);
+    expect(CommandSchema.safeParse({ command: "start_cleaning", segments: [1.5] }).success).toBe(false);
+    expect(CommandSchema.safeParse({ command: "start_cleaning", repeat: 4 }).success).toBe(false);
+    expect(CommandSchema.safeParse({ command: "set_fan_speed", fanSpeed: "balanced" }).success).toBe(true);
+    expect(CommandSchema.safeParse({ command: "set_fan_speed", fanSpeed: "rm -rf /" }).success).toBe(false);
+  });
 });
 
 describe("CommandSchema", () => {

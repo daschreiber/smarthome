@@ -193,7 +193,17 @@ body {
 }
 .climate-card .now { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .climate-card .mode { font-size: var(--fs-xs); color: var(--dim); }
-.climate-card .mode.active { color: var(--active); }
+/* A running zone reads at a glance: tinted card + a small filled mode pill —
+   a quiet echo of the selected floor tab's accent treatment. */
+.climate-card.on {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--card-line));
+  background: color-mix(in srgb, var(--accent) 7%, var(--card));
+  box-shadow: var(--glow);
+}
+.climate-card .mode.active {
+  display: inline-block; background: var(--accent); color: var(--accent-ink);
+  padding: 1px 9px 2px; border-radius: 999px; font-weight: 600; margin-top: 2px;
+}
 .climate-set { display: flex; align-items: center; gap: 10px; }
 .climate-set .target { font-size: var(--fs-lg); font-weight: 650; min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
 .round-btn {

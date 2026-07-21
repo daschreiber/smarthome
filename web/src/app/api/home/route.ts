@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
           hvacMode: null,
           batteryPct: null,
           lastUpdated: null,
-          note: "not connected — add the Roborock integration in Home Assistant",
+          note: "waiting for the Roborock integration in Home Assistant",
         });
       }
     }

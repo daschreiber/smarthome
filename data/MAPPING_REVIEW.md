@@ -8,10 +8,11 @@ section it appears in. Consequential loads (boilers, ovens, pump, HVAC
 master cutoffs, TV lift) live under Utilities/Appliances and are
 candidates for a confirm-before-run tap in the UI.
 
-Controllable entities mapped: **184**
+Controllable entities mapped: **186**
 
-## Appliances (7, 7 hidden)
+## Appliances (9, 7 hidden)
 
+- [Den] Floor 5 Roborock (vacuum)  `vacuum.den_floor_5`
 - [hidden] [Kitchen] Dishwasher (Dairy) (kitchen_appliance)  `light.knx_switch_mdykh_khlby`
 - [hidden] [Kitchen] Garbage Disposal (Dairy) (kitchen_appliance)  `light.knx_switch_tvkhn_khlby`
 - [hidden] [Kitchen] Garbage Disposal (Meat) (kitchen_appliance)  `light.knx_switch_tvkhn_bshry`
@@ -19,6 +20,7 @@ Controllable entities mapped: **184**
 - [hidden] [Kitchen] Oven (Center) (kitchen_appliance)  `light.knx_switch_tnvr_mrkz`
 - [hidden] [Kitchen] Oven (Lower) (kitchen_appliance)  `light.knx_switch_tnvr_tkhtvn`
 - [hidden] [Kitchen] Oven (Upper) (kitchen_appliance)  `light.knx_switch_tnvr_lyvn`
+- [Lounge] Floor 6 Roborock (vacuum)  `vacuum.floor_6`
 
 ## Climate & Comfort (39, 16 hidden)
 

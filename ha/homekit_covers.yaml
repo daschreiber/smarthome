@@ -1,0 +1,202 @@
+# HomeKit cover workaround — see docs/APPLE_HOME_SETUP.md
+#
+# The Control4 cover entities claim position support, but position commands
+# (cover.set_cover_position) are silently dropped by the Control4->KNX chain
+# and position feedback is stuck near 1%. Apple Home drives covers by target
+# position, so raising blinds from the Home app does nothing, while the
+# open/close/stop services work (proven by the PWA and runbook Stage 3).
+#
+# Modern `template:` format (the legacy `cover: - platform: template` block
+# loads but never sets up on current HA — attempt 1, 2026-07-21). With no
+# `state`/`position` template these covers are optimistic: state follows the
+# last command instead of the broken feedback. Only open/close/stop are
+# offered, so HomeKit renders plain up/down controls.
+#
+# Install: copy this block into configuration.yaml on the Green, validate,
+# restart. Then exclude the 13 original cover.* Control4 entities from the
+# HomeKit Bridge; these HK wrappers join the bridge automatically.
+
+template:
+  - cover:
+      - name: "HK Daniel Study Blinds"
+        unique_id: hk_daniel_study_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.daniel_s_study_daniel_study_blinds
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.daniel_s_study_daniel_study_blinds
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.daniel_s_study_daniel_study_blinds
+      - name: "HK Daniella Study Blinds"
+        unique_id: hk_daniella_study_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.daniella_s_study_daniella_study_blinds
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.daniella_s_study_daniella_study_blinds
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.daniella_s_study_daniella_study_blinds
+      - name: "HK Den Blinds"
+        unique_id: hk_den_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.den_den_blinds
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.den_den_blinds
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.den_den_blinds
+      - name: "HK Guest Bathroom Blinds"
+        unique_id: hk_guest_bathroom_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.guest_bathroom_guest_bathroom_blinds
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.guest_bathroom_guest_bathroom_blinds
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.guest_bathroom_guest_bathroom_blinds
+      - name: "HK Kitchen Left Blinds"
+        unique_id: hk_kitchen_left_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.kitchen_kitchen_left
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.kitchen_kitchen_left
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.kitchen_kitchen_left
+      - name: "HK Kitchen Right Blinds"
+        unique_id: hk_kitchen_right_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.kitchen_kitchen_right
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.kitchen_kitchen_right
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.kitchen_kitchen_right
+      - name: "HK Large Guest Room Blinds"
+        unique_id: hk_large_guest_room_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.large_guest_room_large_guest_room_blinds
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.large_guest_room_large_guest_room_blinds
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.large_guest_room_large_guest_room_blinds
+      - name: "HK Lounge Left Blinds"
+        unique_id: hk_lounge_left_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.lounge_lounge_left
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.lounge_lounge_left
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.lounge_lounge_left
+      - name: "HK Lounge Right Blinds"
+        unique_id: hk_lounge_right_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.lounge_lounge_right
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.lounge_lounge_right
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.lounge_lounge_right
+      - name: "HK Master Bedroom Balcony Left"
+        unique_id: hk_master_bedroom_balcony_left
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_left
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_left
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_left
+      - name: "HK Master Bedroom Balcony Right"
+        unique_id: hk_master_bedroom_balcony_right
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_right
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_right
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_right
+      - name: "HK Master Bedroom Window"
+        unique_id: hk_master_bedroom_window
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_window
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_window
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_window
+      - name: "HK Medium Guest Room Blinds"
+        unique_id: hk_medium_guest_room_blinds
+        open_cover:
+          - action: cover.open_cover
+            target:
+              entity_id: cover.medium_guest_room_medium_guest_room_blinds
+        close_cover:
+          - action: cover.close_cover
+            target:
+              entity_id: cover.medium_guest_room_medium_guest_room_blinds
+        stop_cover:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.medium_guest_room_medium_guest_room_blinds

@@ -115,6 +115,26 @@ instead of buying a Connect ZBT-1 dongle. This does *not* put the lock in
 Apple Home via HA; it can be commissioned to Apple Home directly and/or to
 HA's Matter server via multi-admin — a Phase F decision.
 
+## Covers: position commands are broken — use the template wrappers
+
+Discovered live (2026-07-21): Apple Home closes blinds but cannot raise
+them. Cause: the Control4 cover entities claim position support, but
+`cover.set_cover_position` is silently dropped by the Control4→KNX chain
+(the climate-setpoint bug's sibling) and reported position is stuck near
+1%. HomeKit drives covers by target position, so "open" (target 100) does
+nothing; "close" (target 0) matches the bogus ~1% report and works. The
+`open_cover`/`close_cover`/`stop_cover` services work fine (PWA-proven).
+
+Fix: `ha/homekit_covers.yaml` defines 13 optimistic template covers
+("HK …") that expose only open/close/stop. Install by copying the block
+into `configuration.yaml` on the Green and restarting. Then in the HomeKit
+Bridge options, exclude the 13 original `cover.*` Control4 entities; the
+HK wrappers join the bridge automatically (cover domain), appear in the
+bridge's room, and get moved/renamed per the manifest — same final names
+("Blinds", "Left Blinds", …), the "HK <Room> …" prefix tells you which is
+which. The PWA keeps using the original Control4 entities directly and is
+unaffected.
+
 ## Failure modes seen elsewhere / to expect here
 
 - **Pairing fails or bridge shows "No Response"**: mDNS blocked between

@@ -175,6 +175,7 @@ export default function Automations() {
 
   // builder state
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // set = editing an existing automation
   const [name, setName] = useState("");
   // Actions already queued for this automation. They all share the one trigger
   // time below, so the whole thing is a single step with several actions —
@@ -440,19 +441,66 @@ export default function Automations() {
   const toggleDay = (d: number) =>
     setDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d]));
 
-  const create = async () => {
+  const resetBuilder = () => {
+    setName("");
+    setDraft([]);
+    setAction("lights_on");
+    setActDevice("");
+    setActScene("");
+    setLightModes({});
+    setSunMode(false);
+    setOnce(false);
+    setDays([]);
+    setEditingId(null);
+  };
+
+  const openNewBuilder = () => {
+    resetBuilder();
+    setBuilderOpen(true);
+  };
+
+  const closeBuilder = () => {
+    setBuilderOpen(false);
+    setEditingId(null);
+  };
+
+  /**
+   * Load an existing automation into the builder. This builder models one
+   * trigger + a list of actions, so only single-step automations are editable
+   * (multi-step ones — rare, from the assistant — show Delete only). The
+   * step's existing actions become one pre-filled draft entry the user can
+   * keep, remove, or add to; the trigger controls are seeded from the step.
+   */
+  const startEdit = (a: Automation) => {
+    const s = a.steps[0];
+    resetBuilder();
+    setEditingId(a.id);
+    setName(a.name);
+    if (s.sun) {
+      setSunMode(true);
+      setSunEvent(s.sun);
+      setSunOffset(s.sunOffsetMinutes ?? 0);
+    } else if (s.time) {
+      setTime(s.time);
+    }
+    if (s.date) { setOnce(true); setDate(s.date); }
+    else if (s.days && s.days.length) setDays([...s.days]);
+    const actionsLabel = describeStep(s, label).split("→").slice(1).join("→").trim() || "current actions";
+    setDraft([{ label: actionsLabel, actions: s.actions }]);
+    setAction(""); // start with no new selection; the loaded actions are queued
+    setExpandedId(null);
+    setBuilderOpen(true);
+  };
+
+  const save = async () => {
     // One automation = one trigger time with every queued action (plus the
     // current selection, auto-committed so a single action needs no extra tap).
     const step = buildStep();
     if (!name.trim() || !step) return;
-    const ok = await post({ action: "create", spec: { name: name.trim(), steps: [step] } });
+    const spec = { name: name.trim(), steps: [step] };
+    const ok = await post(editingId ? { action: "update", id: editingId, spec } : { action: "create", spec });
     if (ok) {
-      setName("");
-      setDraft([]);
-      setAction("lights_on");
-      setActDevice("");
-      setActScene("");
-      setLightModes({});
+      resetBuilder();
       setBuilderOpen(false);
     }
   };
@@ -565,14 +613,23 @@ export default function Automations() {
                 disabled={busy}
                 onClick={() => post({ action: "toggle", id: a.id, enabled: !a.enabled })}
               />
-              {open && a.canDelete && (
-                <button
-                  className="mini-btn"
-                  disabled={busy}
-                  onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) post({ action: "delete", id: a.id }); }}
-                >
-                  Delete
-                </button>
+              {open && (
+                <>
+                  {a.steps.length === 1 && (
+                    <button className="mini-btn" disabled={busy} onClick={() => startEdit(a)}>
+                      Edit
+                    </button>
+                  )}
+                  {a.canDelete && (
+                    <button
+                      className="mini-btn"
+                      disabled={busy}
+                      onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) post({ action: "delete", id: a.id }); }}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -581,13 +638,13 @@ export default function Automations() {
       {items.length === 0 && <p className="h-sub">No automations yet.</p>}
 
       {!builderOpen && (
-        <button className="scene-pill" style={{ width: "100%", maxWidth: "none", padding: 12 }} onClick={() => setBuilderOpen(true)}>
+        <button className="scene-pill" style={{ width: "100%", maxWidth: "none", padding: 12 }} onClick={openNewBuilder}>
           + New automation
         </button>
       )}
       {builderOpen && (
         <>
-          <div className="section-label">New automation</div>
+          <div className="section-label">{editingId ? "Edit automation" : "New automation"}</div>
           <div className="dev-block" style={{ padding: 14 }}>
             <input
               placeholder="name (e.g. Kitchen evening lights)"
@@ -789,11 +846,11 @@ export default function Automations() {
               </p>
             )}
             <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-              <button className="scene-pill" disabled={busy || !name.trim() || !buildStep()} onClick={create}
+              <button className="scene-pill" disabled={busy || !name.trim() || !buildStep()} onClick={save}
                 style={{ flex: 1, maxWidth: "none", padding: 12 }}>
-                Create automation
+                {editingId ? "Save changes" : "Create automation"}
               </button>
-              <button className="mini-btn" onClick={() => setBuilderOpen(false)}>Cancel</button>
+              <button className="mini-btn" onClick={closeBuilder}>Cancel</button>
             </div>
           </div>
         </>

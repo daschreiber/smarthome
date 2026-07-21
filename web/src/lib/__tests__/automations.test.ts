@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   AutomationSpecSchema, createAutomation, dueSteps, listAutomations, markFired,
-  nowParts, stepIsDue,
+  nowParts, stepIsDue, updateAutomation,
 } from "../automations";
 
 beforeEach(() => {
@@ -124,5 +124,28 @@ describe("nowParts", () => {
   it("formats wall-clock parts in a fixed timezone", () => {
     const p = nowParts(new Date("2026-07-16T13:00:00Z"), "Asia/Jerusalem");
     expect(p).toEqual({ hhmm: "16:00", day: 4, date: "2026-07-16" });
+  });
+});
+
+describe("updateAutomation", () => {
+  it("replaces name and steps in place, keeps id/enabled/creator, resets firing", () => {
+    const a = createAutomation(
+      { name: "Old", steps: [{ time: "16:00", actions: [{ type: "scene", sceneId: "s" }], lastFired: "2026-07-16T16:00" }] },
+      "daniel@x.com",
+    );
+    const updated = updateAutomation(a.id, {
+      name: "New name",
+      steps: [{ time: "07:30", days: [1], actions: [{ type: "room", room: "Kitchen", command: "lights_on" }] }],
+    });
+    expect(updated.id).toBe(a.id);
+    expect(updated.enabled).toBe(true);
+    expect(updated.createdBy).toBe("daniel@x.com");
+    expect(updated.name).toBe("New name");
+    expect(updated.steps[0].time).toBe("07:30");
+    expect(updated.steps[0].lastFired).toBeUndefined();
+    expect(listAutomations()).toHaveLength(1); // in place, not duplicated
+  });
+  it("throws for an unknown id", () => {
+    expect(() => updateAutomation("nope", { name: "x", steps: [{ time: "10:00", actions: [{ type: "scene", sceneId: "s" }] }] })).toThrow();
   });
 });

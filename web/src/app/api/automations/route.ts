@@ -4,6 +4,7 @@ import { canDeleteRecord, canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import {
   AutomationSpecSchema, createAutomation, deleteAutomation, listAutomations, setEnabled,
+  updateAutomation,
 } from "@/lib/automations";
 import { nextSun } from "@/lib/sun";
 
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => null)) as
-    | { action?: "create" | "delete" | "toggle"; id?: string; enabled?: boolean; spec?: unknown }
+    | { action?: "create" | "update" | "delete" | "toggle"; id?: string; enabled?: boolean; spec?: unknown }
     | null;
   if (!body?.action) return NextResponse.json({ error: "action required" }, { status: 400 });
 
@@ -49,6 +50,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, automation: auto });
     }
     if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+    if (body.action === "update") {
+      const parsed = AutomationSpecSchema.safeParse(body.spec);
+      if (!parsed.success) {
+        return NextResponse.json({ error: "invalid automation", detail: parsed.error.flatten() }, { status: 400 });
+      }
+      const auto = updateAutomation(body.id, parsed.data);
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId: "automations",
+        entityId: `automation.${auto.id}`, command: "update_automation",
+        args: { steps: auto.steps.length }, ok: true, durationMs: 0,
+      });
+      return NextResponse.json({ ok: true, automation: auto });
+    }
     if (body.action === "delete") {
       const target = listAutomations().find((a) => a.id === body.id);
       if (target && !canDeleteRecord(auth.role, auth.user, target.createdBy)) {

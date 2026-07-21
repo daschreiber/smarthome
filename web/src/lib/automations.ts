@@ -109,6 +109,21 @@ export function setEnabled(id: string, enabled: boolean): void {
   save(items);
 }
 
+/**
+ * Replace an automation's name and steps in place, keeping its id, enabled
+ * state, and creator. New steps carry no lastFired, so editing resets the
+ * firing state — an edited step fires again at its next due minute.
+ */
+export function updateAutomation(id: string, spec: AutomationSpec): Automation {
+  const items = load();
+  const a = items.find((x) => x.id === id);
+  if (!a) throw new Error("no such automation");
+  a.name = spec.name;
+  a.steps = spec.steps;
+  save(items);
+  return a;
+}
+
 /** Local wall-clock parts in the app's timezone. */
 export function nowParts(d = new Date(), tz = process.env.APP_TZ): {
   hhmm: string; day: number; date: string;

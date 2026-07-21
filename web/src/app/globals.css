@@ -205,6 +205,16 @@ body {
   padding: 1px 9px 2px; border-radius: 999px; font-weight: 600; margin-top: 2px;
 }
 .climate-set { display: flex; align-items: center; gap: 10px; }
+/* On|Off segments: the filled segment IS the current state; tapping the
+   other one switches. Same pattern as the Grid|Plan view toggle. */
+.onoff { display: flex; background: var(--chip); border-radius: 12px; padding: 3px; flex-shrink: 0; }
+.onoff button {
+  border: none; background: none; font-family: inherit; font-size: var(--fs-xs);
+  font-weight: 600; color: var(--chip-ink); padding: 8px 12px; border-radius: 9px;
+  cursor: pointer; min-height: 38px;
+}
+.onoff button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.onoff button:disabled { opacity: 0.6; cursor: default; }
 .climate-set .target { font-size: var(--fs-lg); font-weight: 650; min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
 .round-btn {
   width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--card-line);

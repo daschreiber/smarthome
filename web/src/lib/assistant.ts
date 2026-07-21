@@ -25,6 +25,7 @@ import type { Command } from "./commands";
 const DEVICE_COMMANDS = [
   "turn_on", "turn_off", "set_brightness", "open", "close", "stop",
   "set_position", "set_temperature", "set_volume",
+  "start_cleaning", "pause_cleaning", "return_to_dock",
 ] as const;
 
 // Structured-outputs-safe schema (no records, no optionals — nullable instead).
@@ -231,6 +232,7 @@ ${aliases}
 - "the lights in X" or "X lights" → prefer a room action (lights_on/lights_off) over listing devices.
 - Device values: brightness/position/volume are percent 0-100; temperature is °C (rooms 10-32, sauna 40-100).
 - The sauna is safety-sensitive: propose it only when explicitly asked, never include it in room actions or scene captures, and say clearly in the message that confirming will start/stop the heater.
+- The robot vacuums are per-floor: the Lounge vacuum cleans floor 6, the Den vacuum cleans floor 5. "vacuum/clean the lounge", "clean floor 6", "clean upstairs" → start_cleaning on that floor's vacuum; "send it home/back" → return_to_dock. Vacuums never join room light actions or scene captures.
 - Relative dates ("tomorrow", "Saturday"): resolve using the current house time given in the user message; one-shot automations must carry the resolved date.
 - "message" is shown to the user above the confirm button: one or two plain sentences describing exactly what will happen, including resolved times/dates.
 - Prefer the simplest correct proposal. Do not bundle unrelated extras the user didn't ask for.`;

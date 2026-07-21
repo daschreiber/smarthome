@@ -36,6 +36,8 @@ interface UiDevice {
   /** White-noise machine only. */
   noiseType?: string | null;
   volumePct?: number | null;
+  /** Vacuums only. */
+  batteryPct?: number | null;
 }
 
 type View = { t: "home" } | { t: "room"; room: string };
@@ -694,6 +696,7 @@ function Device({
   if (d.kind === "sauna") return <SaunaCard d={d} busy={busy} send={send} />;
   if (d.kind === "noise") return <NoiseCard d={d} busy={busy} send={send} />;
   if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} star={star} />;
+  if (d.kind === "vacuum") return <VacuumCard d={d} flash={flash} busy={busy} send={send} star={star} />;
   if (d.kind === "cover") {
     return (
       <div className={`dev ${d.available ? "" : "unavailable"} ${flashClass(flash)}`}>
@@ -842,6 +845,57 @@ function ClimateCard({
           onClick={() => send(d.id, { command: active ? "turn_off" : "turn_on" })}
         >
           {active ? "Off" : "On"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Roborock vacuums (one per floor). Clean / Pause / Dock ride the standard
+ * command path; state and battery are whatever Home Assistant reports.
+ * "Clean" doubles as resume when the vacuum is paused (vacuum.start resumes).
+ */
+function VacuumCard({
+  d, flash, busy, send, star,
+}: {
+  d: UiDevice;
+  flash?: Flash;
+  busy: boolean;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
+  star?: React.ReactNode;
+}) {
+  const cleaning = d.state === "cleaning";
+  const paused = d.state === "paused";
+  return (
+    <div className={`dev ${cleaning ? "on" : ""} ${d.available ? "" : "unavailable"} ${flashClass(flash)}`}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {star}
+        <div>
+          <div className="nm">{d.label}</div>
+          <div className="st">
+            {busy
+              ? "…"
+              : d.available
+                ? `${d.state}${d.batteryPct != null ? ` · ${d.batteryPct}%` : ""}`
+                : `unavailable${d.note ? ` — ${d.note}` : ""}`}
+          </div>
+        </div>
+      </div>
+      <div className="btn-row">
+        <button
+          className="mini-btn"
+          disabled={busy || !d.available}
+          onClick={() => send(d.id, { command: cleaning ? "pause_cleaning" : "start_cleaning" })}
+        >
+          {cleaning ? "Pause" : paused ? "Resume" : "Clean"}
+        </button>
+        <button
+          className="mini-btn"
+          disabled={busy || !d.available}
+          onClick={() => send(d.id, { command: "return_to_dock" })}
+        >
+          Dock
         </button>
       </div>
     </div>

@@ -83,7 +83,7 @@ def main():
     with open(os.path.join(outdir, "entities.json"), "w") as f:
         json.dump(entities, f, indent=2, ensure_ascii=False)
 
-    unnamed = [e for e in entities if e["domain"] in ("light", "cover", "climate", "media_player")
+    unnamed = [e for e in entities if e["domain"] in ("light", "cover", "climate", "media_player", "vacuum")
                and not e["area"]]
     dupes = {}
     for e in entities:

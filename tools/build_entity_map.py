@@ -114,7 +114,7 @@ GROUPS = {
     "fan": "Climate & Comfort", "hvac_master_switch": "Climate & Comfort",
     "infrastructure_climate": "Utilities",
     "media": "Media", "scene_switch": "Scenes",
-    "kitchen_appliance": "Appliances",
+    "kitchen_appliance": "Appliances", "vacuum": "Appliances",
     "infrastructure": "Utilities", "controlled_socket": "Utilities",
     "motorized_furniture": "Utilities",
 }
@@ -169,6 +169,17 @@ def infer_room(name):
     return ""
 
 
+def vacuum_room(name):
+    """A floor-named vacuum lives in its dock room: floor 6 docks in the
+    Lounge, floor 5 in the Den (owner-confirmed, 2026-07-21)."""
+    low = name.lower()
+    if re.search(r"floor 5|5th", low):
+        return "Den"
+    if re.search(r"floor 6|6th", low):
+        return "Lounge"
+    return ""
+
+
 def clean_name(name, room):
     n = re.sub(r"^KNX (Dimmer|Switch) ", "", name)
     n = re.sub(r"^(5|6)th( -)?( FH -)? ?", "", n)
@@ -194,6 +205,12 @@ def classify(e):
         return "shade"
     if domain == "media_player":
         return "media"
+    if domain == "vacuum":
+        # The two Roborocks (one per floor). Room comes from the friendly
+        # name — "Lounge Roborock" / "Den Roborock" and "Floor 6 Roborock" /
+        # "Floor 5 Roborock" both work (see vacuum_room below); anything else
+        # needs a ROOM_OVERRIDES entry.
+        return "vacuum"
     if domain == "light":
         for pattern, category in LIGHT_RULES:
             if re.search(pattern, low):
@@ -208,12 +225,15 @@ def main():
 
     out, categories = [], {}
     for e in entities:
-        if e["domain"] not in ("light", "cover", "climate", "media_player"):
+        if e["domain"] not in ("light", "cover", "climate", "media_player", "vacuum"):
             continue
         category = classify(e)
         room = (ROOM_OVERRIDES.get(e["entity_id"])
                 or infer_room(e["name"])
                 or infer_room(e["entity_id"].replace("_", " ")))
+        if category == "vacuum" and not room:
+            room = (vacuum_room(e["name"])
+                    or vacuum_room(e["entity_id"].replace("_", " ")))
         if category == "climate_zone":
             display = "A/C & Heating"
         elif category == "floor_heating":

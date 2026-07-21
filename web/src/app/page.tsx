@@ -57,6 +57,8 @@ interface CustomScene {
   name: string;
   room: string | null;
   deviceCount: number;
+  /** Server-decided: admins delete anything, others only their own scenes. */
+  canDelete: boolean;
 }
 
 const GROUP_ORDER = ["Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
@@ -443,7 +445,7 @@ export default function Page() {
             <>
               <div className="section-label">
                 Scenes{" "}
-                {canProgram && customScenes.length > 0 && (
+                {canProgram && customScenes.some((s) => s.canDelete) && (
                   <button
                     onClick={() => setEditScenes((v) => !v)}
                     style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", fontSize: 11, cursor: "pointer", textDecoration: "underline", textTransform: "none", letterSpacing: 0 }}
@@ -468,15 +470,18 @@ export default function Page() {
                     key={s.id}
                     className="scene-pill"
                     style={{ background: "var(--chip)", color: "var(--ink)", border: "1px solid var(--card-line)" }}
+                    disabled={editScenes && !s.canDelete}
                     onClick={() => {
                       if (editScenes) {
-                        if (window.confirm(`Delete scene "${s.name}"?`)) sceneOp({ action: "delete", id: s.id });
+                        if (s.canDelete && window.confirm(`Delete scene "${s.name}"?`)) {
+                          sceneOp({ action: "delete", id: s.id });
+                        }
                       } else {
                         sceneOp({ action: "apply", id: s.id });
                       }
                     }}
                   >
-                    {editScenes ? `✕ ${s.name}` : s.name}
+                    {editScenes && s.canDelete ? `✕ ${s.name}` : s.name}
                   </button>
                 ))}
               </div>

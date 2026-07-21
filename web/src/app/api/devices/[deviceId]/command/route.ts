@@ -187,6 +187,20 @@ export async function POST(
   }
 
   try {
+    // Suction levels vary by vacuum model; the entity's fan_speed_list is
+    // the authority, so reject anything it doesn't advertise.
+    if (cmd.command === "set_fan_speed") {
+      const s = await getState(device.entityId);
+      const list = Array.isArray(s?.attributes.fan_speed_list)
+        ? (s.attributes.fan_speed_list as unknown[]).filter((v) => typeof v === "string")
+        : null;
+      if (list && !list.includes(cmd.fanSpeed)) {
+        return NextResponse.json(
+          { error: `fan speed must be one of: ${list.join(", ")}` },
+          { status: 400 },
+        );
+      }
+    }
     const call = buildServiceCall(device, cmd);
     await callService(call.domain, call.service, call.data);
 
@@ -202,6 +216,11 @@ export async function POST(
     const readbackId = setpointUnits?.[0] ?? device.entityId;
     const setpointReached = (s: { attributes: Record<string, unknown> } | null) =>
       !!setpointUnits && !!s && s.attributes.temperature === wantedTemp;
+    // Fan speed is the other attribute-verified command: state stays
+    // "docked"/"cleaning", but the entity echoes the accepted fan_speed.
+    const wantedFan = cmd.command === "set_fan_speed" ? cmd.fanSpeed : null;
+    const fanReached = (s: { attributes: Record<string, unknown> } | null) =>
+      wantedFan != null && !!s && s.attributes.fan_speed === wantedFan;
     const expected = expectedStates(cmd, device.kind);
     const deadline = Date.now() + 8000;
     let after = null;
@@ -211,13 +230,17 @@ export async function POST(
       if (setpointUnits) {
         if (setpointReached(after)) break;
         if (!after) break; // unit entity absent — integration not added yet
+      } else if (wantedFan != null) {
+        if (fanReached(after)) break;
       } else if (!expected) break;
       else if (after && expected.includes(after.state)) break;
       if (Date.now() >= deadline) break;
     }
     const verified = setpointUnits
       ? setpointReached(after)
-      : !!expected && !!after && expected.includes(after.state);
+      : wantedFan != null
+        ? fanReached(after)
+        : !!expected && !!after && expected.includes(after.state);
     const status = verified ? "confirmed" : "sent";
 
     const durationMs = Date.now() - started;

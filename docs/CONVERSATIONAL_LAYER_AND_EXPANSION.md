@@ -92,9 +92,14 @@ To bring the two Roborocks live:
    `tools/build_entity_map.py`.
 3. Re-run `tools/export_inventory.py`, then `tools/build_entity_map.py`, and
    redeploy. The placeholder cards are replaced by the real devices.
-4. Later, per-room cleaning: name the map segments in the Roborock app, then
-   extend the command layer with a segment-clean command (Roborock exposes
-   segment IDs via the integration).
+4. **Done 2026-07-21** — per-room cleaning, suction level, and passes: the
+   card's Clean button opens an options panel. Rooms come live from
+   `roborock.get_maps` (name the segments in the Roborock app and they appear
+   after the 15-min cache expires); suction options come from the entity's
+   `fan_speed_list`; passes (1-3×) ride Roborock's `app_segment_clean`
+   command. Room-targeted cleaning through the conversational layer
+   ("vacuum the kitchen") is the remaining piece — the segment vocabulary
+   would need to join the assistant's tool schema.
 
 ## UI consequences (for the design brainstorm)
 

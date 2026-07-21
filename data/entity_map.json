@@ -372,6 +372,17 @@
     "visible": true
   },
   {
+    "entity_id": "vacuum.den_floor_5",
+    "domain": "vacuum",
+    "original_name": "Floor 5 Roborock",
+    "display_name": "Floor 5 Roborock",
+    "room": "Den",
+    "floor": 5,
+    "category": "vacuum",
+    "group": "Appliances",
+    "visible": true
+  },
+  {
     "entity_id": "light.knx_switch_dining_table",
     "domain": "light",
     "original_name": "KNX Switch Dining Table",
@@ -1154,6 +1165,17 @@
     "floor": 6,
     "category": "shade",
     "group": "Shades",
+    "visible": true
+  },
+  {
+    "entity_id": "vacuum.floor_6",
+    "domain": "vacuum",
+    "original_name": "Floor 6 Roborock",
+    "display_name": "Floor 6 Roborock",
+    "room": "Lounge",
+    "floor": 6,
+    "category": "vacuum",
+    "group": "Appliances",
     "visible": true
   },
   {

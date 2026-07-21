@@ -431,20 +431,6 @@
     }
   },
   {
-    "entity_id": "light.knx_dimmer_daniel_study_lights",
-    "domain": "light",
-    "name": "KNX Dimmer Daniel Study lights",
-    "state": "off",
-    "area": "",
-    "attributes": {
-      "friendly_name": "KNX Dimmer Daniel Study lights",
-      "supported_features": 32,
-      "supported_color_modes": [
-        "brightness"
-      ]
-    }
-  },
-  {
     "entity_id": "light.knx_dimmer_daniel_study_strip_1",
     "domain": "light",
     "name": "KNX Dimmer Daniel Study Strip 1",
@@ -466,6 +452,20 @@
     "area": "",
     "attributes": {
       "friendly_name": "KNX Dimmer Daniel Study Strip 2",
+      "supported_features": 32,
+      "supported_color_modes": [
+        "brightness"
+      ]
+    }
+  },
+  {
+    "entity_id": "light.knx_dimmer_daniel_study_lights",
+    "domain": "light",
+    "name": "KNX Dimmer Daniel Study lights",
+    "state": "off",
+    "area": "",
+    "attributes": {
+      "friendly_name": "KNX Dimmer Daniel Study lights",
       "supported_features": 32,
       "supported_color_modes": [
         "brightness"
@@ -501,20 +501,6 @@
     }
   },
   {
-    "entity_id": "light.knx_dimmer_den_lights",
-    "domain": "light",
-    "name": "KNX Dimmer Den lights",
-    "state": "on",
-    "area": "",
-    "attributes": {
-      "friendly_name": "KNX Dimmer Den lights",
-      "supported_features": 32,
-      "supported_color_modes": [
-        "brightness"
-      ]
-    }
-  },
-  {
     "entity_id": "light.knx_dimmer_den_sides_spots",
     "domain": "light",
     "name": "KNX Dimmer Den Sides Spots",
@@ -536,6 +522,20 @@
     "area": "",
     "attributes": {
       "friendly_name": "KNX Dimmer Den Strip",
+      "supported_features": 32,
+      "supported_color_modes": [
+        "brightness"
+      ]
+    }
+  },
+  {
+    "entity_id": "light.knx_dimmer_den_lights",
+    "domain": "light",
+    "name": "KNX Dimmer Den lights",
+    "state": "on",
+    "area": "",
+    "attributes": {
+      "friendly_name": "KNX Dimmer Den lights",
       "supported_features": 32,
       "supported_color_modes": [
         "brightness"
@@ -1145,20 +1145,6 @@
     }
   },
   {
-    "entity_id": "light.knx_switch_6th_fh_master_bathroom",
-    "domain": "light",
-    "name": "KNX Switch 6th - FH - Master Bathroom",
-    "state": "on",
-    "area": "",
-    "attributes": {
-      "friendly_name": "KNX Switch 6th - FH - Master Bathroom",
-      "supported_features": 0,
-      "supported_color_modes": [
-        "onoff"
-      ]
-    }
-  },
-  {
     "entity_id": "light.knx_switch_6th_fh_mbr",
     "domain": "light",
     "name": "KNX Switch 6th - FH - MBR",
@@ -1166,6 +1152,20 @@
     "area": "",
     "attributes": {
       "friendly_name": "KNX Switch 6th - FH - MBR",
+      "supported_features": 0,
+      "supported_color_modes": [
+        "onoff"
+      ]
+    }
+  },
+  {
+    "entity_id": "light.knx_switch_6th_fh_master_bathroom",
+    "domain": "light",
+    "name": "KNX Switch 6th - FH - Master Bathroom",
+    "state": "on",
+    "area": "",
+    "attributes": {
+      "friendly_name": "KNX Switch 6th - FH - Master Bathroom",
       "supported_features": 0,
       "supported_color_modes": [
         "onoff"
@@ -1411,20 +1411,6 @@
     }
   },
   {
-    "entity_id": "light.knx_switch_daniella_study_lights",
-    "domain": "light",
-    "name": "KNX Switch Daniella Study lights",
-    "state": "on",
-    "area": "",
-    "attributes": {
-      "friendly_name": "KNX Switch Daniella Study lights",
-      "supported_features": 0,
-      "supported_color_modes": [
-        "onoff"
-      ]
-    }
-  },
-  {
     "entity_id": "light.knx_switch_daniella_study_shelfs_led",
     "domain": "light",
     "name": "KNX Switch Daniella Study Shelfs led",
@@ -1446,6 +1432,20 @@
     "area": "",
     "attributes": {
       "friendly_name": "KNX Switch Daniella Study Strip",
+      "supported_features": 0,
+      "supported_color_modes": [
+        "onoff"
+      ]
+    }
+  },
+  {
+    "entity_id": "light.knx_switch_daniella_study_lights",
+    "domain": "light",
+    "name": "KNX Switch Daniella Study lights",
+    "state": "on",
+    "area": "",
+    "attributes": {
+      "friendly_name": "KNX Switch Daniella Study lights",
       "supported_features": 0,
       "supported_color_modes": [
         "onoff"
@@ -1621,20 +1621,6 @@
     }
   },
   {
-    "entity_id": "light.knx_switch_guest_bathroom_lights",
-    "domain": "light",
-    "name": "KNX Switch Guest Bathroom lights",
-    "state": "off",
-    "area": "",
-    "attributes": {
-      "friendly_name": "KNX Switch Guest Bathroom lights",
-      "supported_features": 0,
-      "supported_color_modes": [
-        "onoff"
-      ]
-    }
-  },
-  {
     "entity_id": "light.knx_switch_guest_bathroom_mirror",
     "domain": "light",
     "name": "KNX Switch Guest Bathroom Mirror",
@@ -1712,6 +1698,20 @@
     "area": "",
     "attributes": {
       "friendly_name": "KNX Switch Guest Bathroom Vent",
+      "supported_features": 0,
+      "supported_color_modes": [
+        "onoff"
+      ]
+    }
+  },
+  {
+    "entity_id": "light.knx_switch_guest_bathroom_lights",
+    "domain": "light",
+    "name": "KNX Switch Guest Bathroom lights",
+    "state": "off",
+    "area": "",
+    "attributes": {
+      "friendly_name": "KNX Switch Guest Bathroom lights",
       "supported_features": 0,
       "supported_color_modes": [
         "onoff"
@@ -1852,6 +1852,20 @@
     "area": "",
     "attributes": {
       "friendly_name": "KNX Switch Lounge TV Led",
+      "supported_features": 0,
+      "supported_color_modes": [
+        "onoff"
+      ]
+    }
+  },
+  {
+    "entity_id": "light.knx_switch_mbr_tv_lift",
+    "domain": "light",
+    "name": "KNX Switch MBR TV Lift",
+    "state": "off",
+    "area": "",
+    "attributes": {
+      "friendly_name": "KNX Switch MBR TV Lift",
       "supported_features": 0,
       "supported_color_modes": [
         "onoff"
@@ -2041,20 +2055,6 @@
     }
   },
   {
-    "entity_id": "light.knx_switch_mbr_tv_lift",
-    "domain": "light",
-    "name": "KNX Switch MBR TV Lift",
-    "state": "off",
-    "area": "",
-    "attributes": {
-      "friendly_name": "KNX Switch MBR TV Lift",
-      "supported_features": 0,
-      "supported_color_modes": [
-        "onoff"
-      ]
-    }
-  },
-  {
     "entity_id": "light.knx_switch_medium_guest_room_closets_lightstrip",
     "domain": "light",
     "name": "KNX Switch Medium Guest Room Closets Lightstrip",
@@ -2097,20 +2097,6 @@
     }
   },
   {
-    "entity_id": "light.knx_switch_medium_guest_room_lights",
-    "domain": "light",
-    "name": "KNX Switch Medium Guest Room lights",
-    "state": "on",
-    "area": "",
-    "attributes": {
-      "friendly_name": "KNX Switch Medium Guest Room lights",
-      "supported_features": 0,
-      "supported_color_modes": [
-        "onoff"
-      ]
-    }
-  },
-  {
     "entity_id": "light.knx_switch_medium_guest_room_reading_left",
     "domain": "light",
     "name": "KNX Switch Medium Guest Room Reading Left",
@@ -2132,6 +2118,20 @@
     "area": "",
     "attributes": {
       "friendly_name": "KNX Switch Medium Guest Room Reading Right",
+      "supported_features": 0,
+      "supported_color_modes": [
+        "onoff"
+      ]
+    }
+  },
+  {
+    "entity_id": "light.knx_switch_medium_guest_room_lights",
+    "domain": "light",
+    "name": "KNX Switch Medium Guest Room lights",
+    "state": "on",
+    "area": "",
+    "attributes": {
+      "friendly_name": "KNX Switch Medium Guest Room lights",
       "supported_features": 0,
       "supported_color_modes": [
         "onoff"
@@ -2458,6 +2458,18 @@
     }
   },
   {
+    "entity_id": "media_player.bbq_speaker",
+    "domain": "media_player",
+    "name": "BBQ speaker",
+    "state": "unavailable",
+    "area": "",
+    "attributes": {
+      "friendly_name": "BBQ speaker",
+      "device_class": "speaker",
+      "supported_features": 152449
+    }
+  },
+  {
     "entity_id": "media_player.balcony_2",
     "domain": "media_player",
     "name": "Balcony",
@@ -2477,18 +2489,6 @@
     "area": "",
     "attributes": {
       "friendly_name": "Balcony ",
-      "device_class": "speaker",
-      "supported_features": 152449
-    }
-  },
-  {
-    "entity_id": "media_player.bbq_speaker",
-    "domain": "media_player",
-    "name": "BBQ speaker",
-    "state": "unavailable",
-    "area": "",
-    "attributes": {
-      "friendly_name": "BBQ speaker",
       "device_class": "speaker",
       "supported_features": 152449
     }
@@ -2530,6 +2530,18 @@
     }
   },
   {
+    "entity_id": "media_player.mbr_balcony",
+    "domain": "media_player",
+    "name": "MBR balcony",
+    "state": "unavailable",
+    "area": "",
+    "attributes": {
+      "friendly_name": "MBR balcony",
+      "device_class": "speaker",
+      "supported_features": 152449
+    }
+  },
+  {
     "entity_id": "media_player.master_bathroom",
     "domain": "media_player",
     "name": "Master Bathroom",
@@ -2563,18 +2575,6 @@
       "friendly_name": "Master Bedroom Balcony",
       "device_class": "speaker",
       "supported_features": 23821
-    }
-  },
-  {
-    "entity_id": "media_player.mbr_balcony",
-    "domain": "media_player",
-    "name": "MBR balcony",
-    "state": "unavailable",
-    "area": "",
-    "attributes": {
-      "friendly_name": "MBR balcony",
-      "device_class": "speaker",
-      "supported_features": 152449
     }
   },
   {
@@ -2769,6 +2769,16 @@
     }
   },
   {
+    "entity_id": "sensor.daniel_iphone_17_bssid",
+    "domain": "sensor",
+    "name": "Daniel iPhone 17 BSSID",
+    "state": "unavailable",
+    "area": "",
+    "attributes": {
+      "friendly_name": "Daniel iPhone 17 BSSID"
+    }
+  },
+  {
     "entity_id": "sensor.daniel_iphone_17_battery_level",
     "domain": "sensor",
     "name": "Daniel iPhone 17 Battery Level",
@@ -2788,16 +2798,6 @@
     "area": "",
     "attributes": {
       "friendly_name": "Daniel iPhone 17 Battery State"
-    }
-  },
-  {
-    "entity_id": "sensor.daniel_iphone_17_bssid",
-    "domain": "sensor",
-    "name": "Daniel iPhone 17 BSSID",
-    "state": "unavailable",
-    "area": "",
-    "attributes": {
-      "friendly_name": "Daniel iPhone 17 BSSID"
     }
   },
   {
@@ -3129,6 +3129,26 @@
     "attributes": {
       "friendly_name": "Home Assistant Supervisor Update",
       "supported_features": 5
+    }
+  },
+  {
+    "entity_id": "vacuum.den_floor_5",
+    "domain": "vacuum",
+    "name": "Floor 5 Roborock",
+    "state": "docked",
+    "area": "Den",
+    "attributes": {
+      "friendly_name": "Floor 5 Roborock"
+    }
+  },
+  {
+    "entity_id": "vacuum.floor_6",
+    "domain": "vacuum",
+    "name": "Floor 6 Roborock",
+    "state": "docked",
+    "area": "Lounge",
+    "attributes": {
+      "friendly_name": "Floor 6 Roborock"
     }
   },
   {

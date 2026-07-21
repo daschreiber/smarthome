@@ -989,7 +989,7 @@ function ClimateCard({
 
   const active = d.hvacMode != null && d.hvacMode !== "off";
   return (
-    <div className={`climate-card ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
+    <div className={`climate-card ${active ? "on" : ""} ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         {star}
         <div>

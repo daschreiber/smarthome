@@ -25,6 +25,17 @@ const rows: MapRow[] = [
     visible: true,
   },
   {
+    entity_id: "vacuum.roborock_lounge",
+    domain: "vacuum",
+    original_name: "Lounge Roborock",
+    display_name: "Lounge Roborock",
+    room: "Lounge",
+    floor: 6,
+    category: "vacuum",
+    group: "Appliances",
+    visible: true,
+  },
+  {
     entity_id: "light.knx_switch_boiler_roof",
     domain: "light",
     original_name: "KNX Switch Boiler Roof",
@@ -48,10 +59,17 @@ describe("buildDevices", () => {
   it("derives capabilities from domain and category", () => {
     expect(devices[0].capabilities).toContain("brightness");
     expect(devices[1].capabilities).toContain("set_temperature");
+    expect(devices[2].capabilities).toEqual(["vacuum_control"]);
+  });
+
+  it("builds the vacuum as an ordinary room device", () => {
+    expect(devices[2].id).toBe("lounge__lounge_roborock");
+    expect(devices[2].kind).toBe("vacuum");
+    expect(devices[2].floor).toBe(6);
   });
 
   it("keeps hidden entities in the registry but flagged", () => {
-    expect(devices[2].visible).toBe(false);
+    expect(devices[3].visible).toBe(false);
   });
 
   it("de-duplicates colliding ids deterministically", () => {

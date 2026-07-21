@@ -113,7 +113,9 @@ export async function GET(req: NextRequest) {
           currentTemperature: attr("current_temperature"),
           targetTemperature: unitTarget ?? attr("temperature"),
           hvacMode: d.kind === "climate" ? s?.state ?? null : null,
+          batteryPct: d.kind === "vacuum" ? attr("battery_level") : null,
           lastUpdated: s?.last_updated ?? null,
+          note: null as string | null,
         };
       });
     // White noise is hidden from the registry (and thus the command,
@@ -143,6 +145,38 @@ export async function GET(req: NextRequest) {
         noiseType: null,
         volumePct: null,
       });
+    }
+
+    // Same pattern for the Roborocks: until the Roborock integration is added
+    // on the Green and the entity map re-exported, show display-only cards in
+    // their rooms so the feature reads as "coming", not missing. They become
+    // real vacuum devices the moment vacuum.* rows land in the entity map.
+    if (!registry().devices.some((d) => d.kind === "vacuum")) {
+      for (const v of [
+        { id: "lounge__robot_vacuum", room: "Lounge", floor: 6 as const },
+        { id: "den__robot_vacuum", room: "Den", floor: 5 as const },
+      ]) {
+        devices.push({
+          id: v.id,
+          label: "Robot vacuum",
+          room: v.room,
+          floor: v.floor,
+          group: "Appliances",
+          kind: "vacuum",
+          category: "vacuum",
+          capabilities: [],
+          requiresConfirmation: false,
+          state: "unknown",
+          available: false,
+          brightnessPct: null,
+          currentTemperature: null,
+          targetTemperature: null,
+          hvacMode: null,
+          batteryPct: null,
+          lastUpdated: null,
+          note: "not connected — add the Roborock integration in Home Assistant",
+        });
+      }
     }
 
     // The underfloor-heating valve relays are hidden as CONTROLS (plumbing,

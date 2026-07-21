@@ -31,6 +31,10 @@ export const CommandSchema = z.discriminatedUnion("command", [
     command: z.literal("set_volume"),
     volumePct: z.number().int().min(0).max(100),
   }),
+  // Vacuums (Roborock, one per floor). start doubles as resume-from-pause.
+  z.object({ command: z.literal("start_cleaning") }),
+  z.object({ command: z.literal("pause_cleaning") }),
+  z.object({ command: z.literal("return_to_dock") }),
 ]);
 
 export type Command = z.infer<typeof CommandSchema>;
@@ -51,6 +55,9 @@ const CAPABILITY_FOR_COMMAND: Record<Command["command"], string> = {
   set_position: "position",
   set_temperature: "set_temperature",
   set_volume: "volume",
+  start_cleaning: "vacuum_control",
+  pause_cleaning: "vacuum_control",
+  return_to_dock: "vacuum_control",
 };
 
 /** Per-kind safe set-point ranges (°C), enforced server-side. */
@@ -108,6 +115,12 @@ export function expectedStates(cmd: Command, kind?: Device["kind"]): string[] | 
       return ["open", "opening"];
     case "close":
       return ["closed", "closing"];
+    case "start_cleaning":
+      return ["cleaning"];
+    case "pause_cleaning":
+      return ["paused"];
+    case "return_to_dock":
+      return ["returning", "docked"];
     default:
       return null;
   }
@@ -164,5 +177,11 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
         service: "volume_set",
         data: { ...target, volume_level: cmd.volumePct / 100 },
       };
+    case "start_cleaning":
+      return { domain: "vacuum", service: "start", data: target };
+    case "pause_cleaning":
+      return { domain: "vacuum", service: "pause", data: target };
+    case "return_to_dock":
+      return { domain: "vacuum", service: "return_to_base", data: target };
   }
 }

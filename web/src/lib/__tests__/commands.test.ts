@@ -60,6 +60,46 @@ describe("climate zone on/off (hvac_mode capability)", () => {
   });
 });
 
+describe("vacuum commands", () => {
+  const vacuum: Device = {
+    id: "lounge__lounge_roborock",
+    entityId: "vacuum.roborock_lounge",
+    kind: "vacuum",
+    label: "Lounge Roborock",
+    room: "Lounge",
+    floor: 6,
+    group: "Appliances",
+    category: "vacuum",
+    visible: true,
+    capabilities: ["vacuum_control"],
+  };
+
+  it("maps clean/pause/dock to the vacuum domain services", () => {
+    expect(buildServiceCall(vacuum, { command: "start_cleaning" })).toEqual({
+      domain: "vacuum", service: "start", data: { entity_id: vacuum.entityId },
+    });
+    expect(buildServiceCall(vacuum, { command: "pause_cleaning" })).toEqual({
+      domain: "vacuum", service: "pause", data: { entity_id: vacuum.entityId },
+    });
+    expect(buildServiceCall(vacuum, { command: "return_to_dock" })).toEqual({
+      domain: "vacuum", service: "return_to_base", data: { entity_id: vacuum.entityId },
+    });
+  });
+
+  it("refuses vacuum commands elsewhere and non-vacuum commands on the vacuum", () => {
+    expect(() => buildServiceCall(shade, { command: "start_cleaning" })).toThrow(/does not support/);
+    expect(() => buildServiceCall(dimmer, { command: "return_to_dock" })).toThrow(/does not support/);
+    expect(() => buildServiceCall(vacuum, { command: "turn_on" })).toThrow(/does not support/);
+    expect(() => buildServiceCall(vacuum, { command: "stop" })).toThrow(/does not support/);
+  });
+
+  it("verifies by vacuum activity state", () => {
+    expect(expectedStates({ command: "start_cleaning" })).toEqual(["cleaning"]);
+    expect(expectedStates({ command: "pause_cleaning" })).toEqual(["paused"]);
+    expect(expectedStates({ command: "return_to_dock" })).toEqual(["returning", "docked"]);
+  });
+});
+
 describe("CommandSchema", () => {
   it("accepts a valid brightness command", () => {
     expect(

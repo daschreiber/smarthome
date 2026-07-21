@@ -15,11 +15,12 @@ export type Capability =
   | "position"
   | "set_temperature"
   | "hvac_mode"
-  | "volume";
+  | "volume"
+  | "vacuum_control";
 
 export interface MapRow {
   entity_id: string;
-  domain: "light" | "cover" | "climate" | "media_player";
+  domain: "light" | "cover" | "climate" | "media_player" | "vacuum";
   original_name: string;
   display_name: string;
   room: string;
@@ -71,6 +72,8 @@ function capabilitiesFor(row: MapRow): Capability[] {
       return ["set_temperature", "hvac_mode"];
     case "media_player":
       return ["on_off", "volume"];
+    case "vacuum":
+      return ["vacuum_control"];
   }
 }
 

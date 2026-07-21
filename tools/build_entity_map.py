@@ -114,7 +114,7 @@ GROUPS = {
     "fan": "Climate & Comfort", "hvac_master_switch": "Climate & Comfort",
     "infrastructure_climate": "Utilities",
     "media": "Media", "scene_switch": "Scenes",
-    "kitchen_appliance": "Appliances",
+    "kitchen_appliance": "Appliances", "vacuum": "Appliances",
     "infrastructure": "Utilities", "controlled_socket": "Utilities",
     "motorized_furniture": "Utilities",
 }
@@ -194,6 +194,11 @@ def classify(e):
         return "shade"
     if domain == "media_player":
         return "media"
+    if domain == "vacuum":
+        # The two Roborocks (one per floor). Room comes from the friendly
+        # name — name them "Lounge Roborock" / "Den Roborock" in the Roborock
+        # app (or HA) before exporting, or pin them in ROOM_OVERRIDES.
+        return "vacuum"
     if domain == "light":
         for pattern, category in LIGHT_RULES:
             if re.search(pattern, low):
@@ -208,7 +213,7 @@ def main():
 
     out, categories = [], {}
     for e in entities:
-        if e["domain"] not in ("light", "cover", "climate", "media_player"):
+        if e["domain"] not in ("light", "cover", "climate", "media_player", "vacuum"):
             continue
         category = classify(e)
         room = (ROOM_OVERRIDES.get(e["entity_id"])

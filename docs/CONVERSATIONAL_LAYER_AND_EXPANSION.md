@@ -67,7 +67,32 @@ model when they land:
 | Samsung Smart TVs | Samsung TV / SmartThings (55" QLED already discovered) | power, volume, source |
 | Yale Linus lock | Yale Home cloud or Matter (see Phase F prerequisites) | lock/unlock — security tier: PIN + confirm + audit, excluded from conversation initially |
 | Sauna | **integrated 2026-07-16** as a virtual device in the app backend, consuming the existing sauna service's `/api/quick/*` endpoints (all KLAFS session/watchdog logic stays in that service). **Committed next step (owner decision):** promote to Home Assistant entities (switch + temperature sensors wrapping the same endpoints) so HA automations and scenes can target it; the backend then reads it via HA like every other device. | on/off, target temp (40-100°C server-side bounds), `confirm:true` required on every command |
-| Roborock ×2 | official Roborock integration | start/stop/dock, per-floor/room cleaning |
+| Roborock ×2 | official Roborock integration | **app support landed 2026-07-21** (see below) — start/pause/dock; per-room (segment) cleaning deferred until the integration exposes the map segments |
+
+### Roborock commissioning steps (the app side is ready)
+
+The app models a `vacuum` kind end to end: registry, typed commands
+(`start_cleaning` / `pause_cleaning` / `return_to_dock` → HA `vacuum.start` /
+`pause` / `return_to_base`, verified by read-back against
+cleaning/paused/returning/docked), a room card with Clean/Pause/Dock and
+battery, and the assistant vocabulary ("clean the lounge" resolves to that
+floor's vacuum). Until vacuum entities exist, the Lounge and Den show
+display-only "not connected" cards.
+
+To bring the two Roborocks live:
+
+1. Put both vacuums on the same network as Home Assistant Green and add the
+   official **Roborock** integration (sign in with the Roborock account;
+   day-to-day commands are local, the cloud login fetches maps).
+2. Name the devices **"Lounge Roborock"** and **"Den Roborock"** (in the
+   Roborock app or HA) so room inference lands them in Lounge (floor 6) and
+   Den (floor 5) — or pin their entity IDs in `ROOM_OVERRIDES` in
+   `tools/build_entity_map.py`.
+3. Re-run `tools/export_inventory.py`, then `tools/build_entity_map.py`, and
+   redeploy. The placeholder cards are replaced by the real devices.
+4. Later, per-room cleaning: name the map segments in the Roborock app, then
+   extend the command layer with a segment-clean command (Roborock exposes
+   segment IDs via the integration).
 
 ## UI consequences (for the design brainstorm)
 

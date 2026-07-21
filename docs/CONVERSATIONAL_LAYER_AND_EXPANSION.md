@@ -84,9 +84,11 @@ To bring the two Roborocks live:
 1. Put both vacuums on the same network as Home Assistant Green and add the
    official **Roborock** integration (sign in with the Roborock account;
    day-to-day commands are local, the cloud login fetches maps).
-2. Name the devices **"Lounge Roborock"** and **"Den Roborock"** (in the
-   Roborock app or HA) so room inference lands them in Lounge (floor 6) and
-   Den (floor 5) — or pin their entity IDs in `ROOM_OVERRIDES` in
+2. Name the devices (in the Roborock app or HA) either by room —
+   **"Lounge Roborock"** / **"Den Roborock"** — or by floor —
+   **"Floor 6 Roborock"** / **"Floor 5 Roborock"**. Both work: floor-named
+   vacuums are mapped to their dock rooms (floor 6 → Lounge, floor 5 → Den).
+   Any other naming needs a `ROOM_OVERRIDES` entry in
    `tools/build_entity_map.py`.
 3. Re-run `tools/export_inventory.py`, then `tools/build_entity_map.py`, and
    redeploy. The placeholder cards are replaced by the real devices.

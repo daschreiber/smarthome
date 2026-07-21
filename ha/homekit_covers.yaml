@@ -6,169 +6,197 @@
 # position, so raising blinds from the Home app does nothing, while the
 # open/close/stop services work (proven by the PWA and runbook Stage 3).
 #
-# These template covers wrap each blind with ONLY open/close/stop and no
-# value_template, making them optimistic (state = last command). Expose
-# these to the HomeKit Bridge and exclude the cover.* Control4 originals.
+# Modern `template:` format (the legacy `cover: - platform: template` block
+# loads but never sets up on current HA — attempt 1, 2026-07-21). With no
+# `state`/`position` template these covers are optimistic: state follows the
+# last command instead of the broken feedback. Only open/close/stop are
+# offered, so HomeKit renders plain up/down controls.
 #
-# Install: copy this block into configuration.yaml on the Green (or include
-# it as a package), validate config, restart Home Assistant.
+# Install: copy this block into configuration.yaml on the Green, validate,
+# restart. Then exclude the 13 original cover.* Control4 entities from the
+# HomeKit Bridge; these HK wrappers join the bridge automatically.
 
-cover:
-  - platform: template
-    covers:
-      hk_daniel_study_blinds:
+template:
+  - cover:
+      - name: "HK Daniel Study Blinds"
         unique_id: hk_daniel_study_blinds
-        friendly_name: "HK Daniel Study Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.daniel_s_study_daniel_study_blinds }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.daniel_s_study_daniel_study_blinds
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.daniel_s_study_daniel_study_blinds }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.daniel_s_study_daniel_study_blinds
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.daniel_s_study_daniel_study_blinds }
-      hk_daniella_study_blinds:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.daniel_s_study_daniel_study_blinds
+      - name: "HK Daniella Study Blinds"
         unique_id: hk_daniella_study_blinds
-        friendly_name: "HK Daniella Study Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.daniella_s_study_daniella_study_blinds }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.daniella_s_study_daniella_study_blinds
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.daniella_s_study_daniella_study_blinds }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.daniella_s_study_daniella_study_blinds
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.daniella_s_study_daniella_study_blinds }
-      hk_den_blinds:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.daniella_s_study_daniella_study_blinds
+      - name: "HK Den Blinds"
         unique_id: hk_den_blinds
-        friendly_name: "HK Den Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.den_den_blinds }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.den_den_blinds
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.den_den_blinds }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.den_den_blinds
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.den_den_blinds }
-      hk_guest_bathroom_blinds:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.den_den_blinds
+      - name: "HK Guest Bathroom Blinds"
         unique_id: hk_guest_bathroom_blinds
-        friendly_name: "HK Guest Bathroom Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.guest_bathroom_guest_bathroom_blinds }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.guest_bathroom_guest_bathroom_blinds
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.guest_bathroom_guest_bathroom_blinds }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.guest_bathroom_guest_bathroom_blinds
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.guest_bathroom_guest_bathroom_blinds }
-      hk_kitchen_left_blinds:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.guest_bathroom_guest_bathroom_blinds
+      - name: "HK Kitchen Left Blinds"
         unique_id: hk_kitchen_left_blinds
-        friendly_name: "HK Kitchen Left Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.kitchen_kitchen_left }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.kitchen_kitchen_left
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.kitchen_kitchen_left }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.kitchen_kitchen_left
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.kitchen_kitchen_left }
-      hk_kitchen_right_blinds:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.kitchen_kitchen_left
+      - name: "HK Kitchen Right Blinds"
         unique_id: hk_kitchen_right_blinds
-        friendly_name: "HK Kitchen Right Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.kitchen_kitchen_right }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.kitchen_kitchen_right
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.kitchen_kitchen_right }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.kitchen_kitchen_right
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.kitchen_kitchen_right }
-      hk_large_guest_room_blinds:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.kitchen_kitchen_right
+      - name: "HK Large Guest Room Blinds"
         unique_id: hk_large_guest_room_blinds
-        friendly_name: "HK Large Guest Room Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.large_guest_room_large_guest_room_blinds }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.large_guest_room_large_guest_room_blinds
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.large_guest_room_large_guest_room_blinds }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.large_guest_room_large_guest_room_blinds
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.large_guest_room_large_guest_room_blinds }
-      hk_lounge_left_blinds:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.large_guest_room_large_guest_room_blinds
+      - name: "HK Lounge Left Blinds"
         unique_id: hk_lounge_left_blinds
-        friendly_name: "HK Lounge Left Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.lounge_lounge_left }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.lounge_lounge_left
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.lounge_lounge_left }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.lounge_lounge_left
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.lounge_lounge_left }
-      hk_lounge_right_blinds:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.lounge_lounge_left
+      - name: "HK Lounge Right Blinds"
         unique_id: hk_lounge_right_blinds
-        friendly_name: "HK Lounge Right Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.lounge_lounge_right }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.lounge_lounge_right
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.lounge_lounge_right }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.lounge_lounge_right
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.lounge_lounge_right }
-      hk_master_bedroom_balcony_left:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.lounge_lounge_right
+      - name: "HK Master Bedroom Balcony Left"
         unique_id: hk_master_bedroom_balcony_left
-        friendly_name: "HK Master Bedroom Balcony Left"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.master_bedroom_master_bedroom_balcony_left }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_left
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.master_bedroom_master_bedroom_balcony_left }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_left
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.master_bedroom_master_bedroom_balcony_left }
-      hk_master_bedroom_balcony_right:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_left
+      - name: "HK Master Bedroom Balcony Right"
         unique_id: hk_master_bedroom_balcony_right
-        friendly_name: "HK Master Bedroom Balcony Right"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.master_bedroom_master_bedroom_balcony_right }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_right
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.master_bedroom_master_bedroom_balcony_right }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_right
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.master_bedroom_master_bedroom_balcony_right }
-      hk_master_bedroom_window:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_balcony_right
+      - name: "HK Master Bedroom Window"
         unique_id: hk_master_bedroom_window
-        friendly_name: "HK Master Bedroom Window"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.master_bedroom_master_bedroom_window }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_window
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.master_bedroom_master_bedroom_window }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_window
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.master_bedroom_master_bedroom_window }
-      hk_medium_guest_room_blinds:
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.master_bedroom_master_bedroom_window
+      - name: "HK Medium Guest Room Blinds"
         unique_id: hk_medium_guest_room_blinds
-        friendly_name: "HK Medium Guest Room Blinds"
         open_cover:
-          action: cover.open_cover
-          target: { entity_id: cover.medium_guest_room_medium_guest_room_blinds }
+          - action: cover.open_cover
+            target:
+              entity_id: cover.medium_guest_room_medium_guest_room_blinds
         close_cover:
-          action: cover.close_cover
-          target: { entity_id: cover.medium_guest_room_medium_guest_room_blinds }
+          - action: cover.close_cover
+            target:
+              entity_id: cover.medium_guest_room_medium_guest_room_blinds
         stop_cover:
-          action: cover.stop_cover
-          target: { entity_id: cover.medium_guest_room_medium_guest_room_blinds }
+          - action: cover.stop_cover
+            target:
+              entity_id: cover.medium_guest_room_medium_guest_room_blinds

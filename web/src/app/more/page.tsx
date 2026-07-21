@@ -57,9 +57,9 @@ export default function More() {
       <h1 className="h-title">More</h1>
       <p className="h-sub">History, people, and account.</p>
       <div className="dev-list">
-        {row(<PulseIcon size={24} />, "Activity", "Every command the app has issued", { href: "/activity" })}
+        {role === "admin" && row(<PulseIcon size={24} />, "Activity", "Every command the app has issued", { href: "/activity" })}
         {role === "admin" && row(<UsersIcon size={24} />, "Users", "Who can sign in, and with what role", { href: "/users" })}
-        {row(<KeyIcon size={24} />, "App key", showKey ? "Set below" : "Only needed if APP_KEY is set", {
+        {role === "admin" && row(<KeyIcon size={24} />, "App key", showKey ? "Set below" : "Only needed if APP_KEY is set", {
           onClick: (e?: unknown) => { (e as Event | undefined)?.preventDefault?.(); setShowKey((v) => !v); },
         })}
         {row(<SignOutIcon size={24} />, "Sign out", "This device only", {

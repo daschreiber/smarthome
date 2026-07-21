@@ -6,7 +6,7 @@ import {
   addUser, createResetToken, ensureSeeded, getUser, hashPassword, listUsers,
   removeUser, setPassword, setRole, verifyPassword, verifyResetToken,
 } from "../users";
-import { canManageUsers, canProgram } from "../permissions";
+import { canDeleteRecord, canManageUsers, canProgram, canViewActivity } from "../permissions";
 
 let dir: string;
 
@@ -25,6 +25,19 @@ describe("roles and permissions", () => {
     expect(canManageUsers("guest")).toBe(false);
     expect(canManageUsers("member")).toBe(false);
     expect(canManageUsers("admin")).toBe(true);
+  });
+
+  it("only admins see the activity log", () => {
+    expect(canViewActivity("admin")).toBe(true);
+    expect(canViewActivity("member")).toBe(false);
+    expect(canViewActivity("guest")).toBe(false);
+  });
+
+  it("members delete only their own records; admins delete anything", () => {
+    expect(canDeleteRecord("member", "kid@x.com", "kid@x.com")).toBe(true);
+    expect(canDeleteRecord("member", "kid@x.com", "admin@x.com")).toBe(false);
+    expect(canDeleteRecord("member", "kid@x.com", "dev")).toBe(false);
+    expect(canDeleteRecord("admin", "admin@x.com", "kid@x.com")).toBe(true);
   });
 
   it("changes a user's role but never demotes the last admin", () => {

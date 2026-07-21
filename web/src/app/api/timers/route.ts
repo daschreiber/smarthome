@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { canProgram } from "@/lib/permissions";
+import { canDeleteRecord, canProgram } from "@/lib/permissions";
 import { createTimer, deleteTimer, listTimers, setTimerEnabled } from "@/lib/timers";
+import type { Role } from "@/lib/users";
+
+function timersFor(auth: { role: Role; user: string }) {
+  return listTimers().map((t) => ({
+    ...t,
+    canDelete: canDeleteRecord(auth.role, auth.user, t.createdBy),
+  }));
+}
 
 export async function GET(req: NextRequest) {
   const auth = authenticate(req);
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  return NextResponse.json({ timers: listTimers() });
+  return NextResponse.json({ timers: timersFor(auth) });
 }
 
 export async function POST(req: NextRequest) {
@@ -33,10 +41,17 @@ export async function POST(req: NextRequest) {
         entityId: `timer.${rule.id}`, command: "create_timer",
         args: { afterMinutes: rule.afterMinutes }, ok: true, durationMs: 0,
       });
-      return NextResponse.json({ ok: true, timers: listTimers() });
+      return NextResponse.json({ ok: true, timers: timersFor(auth) });
     }
     if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
     if (body.action === "delete") {
+      const target = listTimers().find((t) => t.id === body.id);
+      if (target && !canDeleteRecord(auth.role, auth.user, target.createdBy)) {
+        return NextResponse.json(
+          { error: "only the person who created a timer (or an admin) can delete it" },
+          { status: 403 },
+        );
+      }
       deleteTimer(body.id);
       audit({
         ts: new Date().toISOString(), user: auth.user, deviceId: "timers",
@@ -45,7 +60,7 @@ export async function POST(req: NextRequest) {
     } else {
       setTimerEnabled(body.id, body.enabled !== false);
     }
-    return NextResponse.json({ ok: true, timers: listTimers() });
+    return NextResponse.json({ ok: true, timers: timersFor(auth) });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "failed" }, { status: 400 });
   }

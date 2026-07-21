@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
-import { canProgram } from "@/lib/permissions";
+import { canDeleteRecord, canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import { getStates } from "@/lib/ha";
 import { registry } from "@/lib/registry";
 import { applySceneById } from "@/lib/execute";
-import { buildSceneStates, createScene, deleteScene, listScenes } from "@/lib/scenes";
+import { buildSceneStates, createScene, deleteScene, getScene, listScenes } from "@/lib/scenes";
 
 export async function GET(req: NextRequest) {
   const auth = authenticate(req);
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   return NextResponse.json({
-    scenes: listScenes().map(({ states, ...meta }) => ({ ...meta, deviceCount: states.length })),
+    scenes: listScenes().map(({ states, ...meta }) => ({
+      ...meta,
+      deviceCount: states.length,
+      canDelete: canDeleteRecord(auth.role, auth.user, meta.createdBy),
+    })),
   });
 }
 
@@ -47,6 +51,13 @@ export async function POST(req: NextRequest) {
 
     if (body.action === "delete") {
       if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+      const scene = getScene(body.id);
+      if (scene && !canDeleteRecord(auth.role, auth.user, scene.createdBy)) {
+        return NextResponse.json(
+          { error: "only the person who created a scene (or an admin) can delete it" },
+          { status: 403 },
+        );
+      }
       deleteScene(body.id);
       audit({
         ts: new Date().toISOString(), user: auth.user, deviceId: "scenes", entityId: `scene.${body.id}`,

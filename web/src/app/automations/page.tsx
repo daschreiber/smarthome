@@ -35,6 +35,8 @@ interface Automation {
   enabled: boolean;
   steps: Step[];
   createdBy: string;
+  /** Server-decided: admins delete anything, others only their own. */
+  canDelete: boolean;
 }
 
 interface SceneMeta { id: string; name: string; }
@@ -44,6 +46,8 @@ interface TimerRule {
   deviceId: string;
   afterMinutes: number;
   enabled: boolean;
+  /** Server-decided: admins delete anything, others only their own. */
+  canDelete: boolean;
 }
 
 interface LightDevice { id: string; label: string; room: string; }
@@ -561,7 +565,7 @@ export default function Automations() {
                 disabled={busy}
                 onClick={() => post({ action: "toggle", id: a.id, enabled: !a.enabled })}
               />
-              {open && (
+              {open && a.canDelete && (
                 <button
                   className="mini-btn"
                   disabled={busy}
@@ -812,15 +816,17 @@ export default function Automations() {
               <button className="mini-btn" disabled={busy} onClick={() => timerOp({ action: "toggle", id: t.id, enabled: !t.enabled })}>
                 {t.enabled ? "Pause" : "Resume"}
               </button>
-              <button
-                className="mini-btn"
-                disabled={busy}
-                onClick={() => {
-                  if (window.confirm("Delete this auto-off timer?")) timerOp({ action: "delete", id: t.id });
-                }}
-              >
-                Delete
-              </button>
+              {t.canDelete && (
+                <button
+                  className="mini-btn"
+                  disabled={busy}
+                  onClick={() => {
+                    if (window.confirm("Delete this auto-off timer?")) timerOp({ action: "delete", id: t.id });
+                  }}
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         );

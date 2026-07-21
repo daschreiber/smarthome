@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
-import { canProgram } from "@/lib/permissions";
+import { canDeleteRecord, canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import {
   AutomationSpecSchema, createAutomation, deleteAutomation, listAutomations, setEnabled,
@@ -13,7 +13,10 @@ export async function GET(req: NextRequest) {
   // nextSun is TTL-cached and swallows HA failures (nulls), so listing
   // automations never breaks on a flaky upstream.
   return NextResponse.json({
-    automations: listAutomations(),
+    automations: listAutomations().map((a) => ({
+      ...a,
+      canDelete: canDeleteRecord(auth.role, auth.user, a.createdBy),
+    })),
     tz: process.env.APP_TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     sun: await nextSun(),
   });
@@ -47,6 +50,13 @@ export async function POST(req: NextRequest) {
     }
     if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
     if (body.action === "delete") {
+      const target = listAutomations().find((a) => a.id === body.id);
+      if (target && !canDeleteRecord(auth.role, auth.user, target.createdBy)) {
+        return NextResponse.json(
+          { error: "only the person who created an automation (or an admin) can delete it" },
+          { status: 403 },
+        );
+      }
       deleteAutomation(body.id);
       audit({
         ts: new Date().toISOString(), user: auth.user, deviceId: "automations",

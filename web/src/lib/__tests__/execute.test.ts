@@ -59,8 +59,20 @@ describe("executeSystemCommand", () => {
   });
 
   it("declares only simple, reversible commands per system", () => {
-    expect(SYSTEM_COMMANDS.lighting).toEqual(["turn_on", "turn_off"]);
+    expect(SYSTEM_COMMANDS.lighting).toEqual(["turn_on", "turn_off", "set_brightness"]);
     expect(SYSTEM_COMMANDS.climate).toEqual(["turn_on", "turn_off"]);
     expect(SYSTEM_COMMANDS.shades).toEqual(["open", "close", "stop"]);
+  });
+
+  it("set_brightness requires a value and only targets dimmable lights", async () => {
+    await expect(executeSystemCommand("lighting", "set_brightness", ["Master Bedroom"])).rejects.toThrow();
+    // Master Bedroom has 3 dimmers and 5 switches; the group dim must sweep
+    // exactly the dimmers (network calls fail in tests, so count via failed).
+    const dimmers = systemDevices("lighting").filter(
+      (d) => d.room === "Master Bedroom" && d.capabilities.includes("brightness"),
+    );
+    expect(dimmers.length).toBeGreaterThan(0);
+    const result = await executeSystemCommand("lighting", "set_brightness", ["Master Bedroom"], 40);
+    expect(result.total).toBe(dimmers.length);
   });
 });

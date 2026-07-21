@@ -231,6 +231,35 @@ export default function Page() {
     [headers, refresh],
   );
 
+  // Room-scoped system fan-out ("Room lights off", "Shades open") — one
+  // request, the server sweeps the room. Busy/flash are keyed per room+system
+  // so the combined cards get the same feedback as single devices.
+  const sendSystem = useCallback(
+    async (system: string, command: string, room: string, extra?: Record<string, unknown>): Promise<SendResult> => {
+      const key = `sys:${system}:${room}`;
+      setBusy((b) => ({ ...b, [key]: true }));
+      try {
+        const res = await fetch("/api/systems/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers() },
+          body: JSON.stringify({ system, command, rooms: [room], ...extra }),
+        });
+        const out = await res.json();
+        if (!res.ok || out.ok === false) throw new Error(out.error ?? "command failed");
+        setFlash((f) => ({ ...f, [key]: "sent" }));
+        return { ok: true, status: "sent", error: undefined };
+      } catch (err) {
+        setFlash((f) => ({ ...f, [key]: "fail" }));
+        return { ok: false, error: err instanceof Error ? err.message : "command failed" };
+      } finally {
+        setBusy((b) => ({ ...b, [key]: false }));
+        setTimeout(() => setFlash((f) => { const n = { ...f }; delete n[key]; return n; }), 1500);
+        refresh();
+      }
+    },
+    [headers, refresh],
+  );
+
   const scenes = useMemo(
     () => devices.filter((d) => d.category === "scene_switch"),
     [devices],
@@ -462,6 +491,7 @@ export default function Page() {
           flash={flash}
           busy={busy}
           send={send}
+          sendSystem={sendSystem}
           favs={favs}
           onFav={toggleFav}
           onCapture={
@@ -616,19 +646,37 @@ function Login({ onDone }: { onDone: () => void }) {
   );
 }
 
+/** Bedrooms get the collapsed lighting view: one room control + reading lights. */
+const isBedroom = (room: string) => /bedroom|guest room/i.test(room);
+/** Reading lights keep their own rows ("Reading Left", "Read Right", "Reading light"). */
+const isReadingLight = (d: UiDevice) => /\bread/i.test(d.label);
+
 function RoomView({
-  room, groups, flash, busy, send, favs, onFav, onCapture, back,
+  room, groups, flash, busy, send, sendSystem, favs, onFav, onCapture, back,
 }: {
   room: string;
   groups: [string, UiDevice[]][];
   flash: Record<string, Flash>;
   busy: Record<string, boolean>;
   send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
+  sendSystem: (system: string, command: string, room: string, extra?: Record<string, unknown>) => Promise<SendResult>;
   favs: string[];
   onFav: (id: string) => void;
   onCapture: ((room: string) => void) | null;
   back: () => void;
 }) {
+  const rows = (ds: UiDevice[]) =>
+    ds.map((d) => (
+      <Device
+        key={d.id}
+        d={d}
+        flash={flash[d.id]}
+        busy={!!busy[d.id]}
+        send={send}
+        fav={favs.includes(d.id)}
+        onFav={onFav}
+      />
+    ));
   return (
     <>
       <button className="h-back" onClick={back}>‹ Home</button>
@@ -646,22 +694,131 @@ function RoomView({
       {groups.map(([group, ds]) => (
         <section key={group}>
           <div className="section-label">{group}</div>
-          <div className="dev-list">
-            {ds.map((d) => (
-              <Device
-                key={d.id}
-                d={d}
-                flash={flash[d.id]}
-                busy={!!busy[d.id]}
-                send={send}
-                fav={favs.includes(d.id)}
-                onFav={onFav}
-              />
-            ))}
-          </div>
+          {group === "Lighting" && isBedroom(room) ? (
+            <RoomLightsBlock room={room} lights={ds} flash={flash} busy={busy} sendSystem={sendSystem} rows={rows} />
+          ) : group === "Shades" && ds.length > 1 ? (
+            <RoomShadesBlock room={room} shades={ds} flash={flash} busy={busy} sendSystem={sendSystem} rows={rows} />
+          ) : (
+            <div className="dev-list">{rows(ds)}</div>
+          )}
         </section>
       ))}
     </>
+  );
+}
+
+/**
+ * Collapsed bedroom lighting: one "Room lights" card (on/off + a dim slider
+ * for the room's dimmers) and the reading lights on their own rows. Every
+ * other fixture stays reachable behind "All lights…".
+ */
+function RoomLightsBlock({
+  room, lights, flash, busy, sendSystem, rows,
+}: {
+  room: string;
+  lights: UiDevice[];
+  flash: Record<string, Flash>;
+  busy: Record<string, boolean>;
+  sendSystem: (system: string, command: string, room: string, extra?: Record<string, unknown>) => Promise<SendResult>;
+  rows: (ds: UiDevice[]) => React.ReactNode;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [drag, setDrag] = useState<number | null>(null);
+  const key = `sys:lighting:${room}`;
+  const isBusy = !!busy[key];
+  const reading = lights.filter(isReadingLight);
+  const others = lights.filter((d) => !isReadingLight(d));
+  const onCount = lights.filter((d) => d.state === "on").length;
+  const anyOn = onCount > 0;
+  const dimmers = lights.filter((d) => d.capabilities.includes("brightness"));
+  // The slider reads the brightest on dimmer (0 when everything is off);
+  // committing fans set_brightness across the room's dimmers.
+  const current = Math.max(0, ...dimmers.filter((d) => d.state === "on").map((d) => d.brightnessPct ?? 100));
+  const value = drag ?? current;
+  const commit = (v: number) => {
+    setDrag(null);
+    if (v === 0) sendSystem("lighting", "turn_off", room);
+    else sendSystem("lighting", "set_brightness", room, { brightnessPct: v });
+  };
+  return (
+    <div className="dev-list">
+      <div className={`dev-block ${flashClass(flash[key])}`}>
+        <div className={`dev ${anyOn ? "on" : ""}`}>
+          <div>
+            <div className="nm">Room lights</div>
+            <div className="st">{isBusy ? "…" : anyOn ? `${onCount} of ${lights.length} on` : "off"}</div>
+          </div>
+          <button
+            className="toggle"
+            aria-pressed={anyOn}
+            aria-label={`${room} lights ${anyOn ? "off" : "on"}`}
+            disabled={isBusy}
+            onClick={() => sendSystem("lighting", anyOn ? "turn_off" : "turn_on", room)}
+          />
+        </div>
+        {dimmers.length > 0 && (
+          <div className="slider-row">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={value}
+              aria-label={`${room} lights brightness`}
+              disabled={isBusy}
+              onChange={(e) => setDrag(Number(e.target.value))}
+              onPointerUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
+              onKeyUp={(e) => { if (e.key === "Enter") commit(Number((e.target as HTMLInputElement).value)); }}
+            />
+          </div>
+        )}
+      </div>
+      {rows(reading)}
+      {others.length > 0 && (
+        <button className="mini-btn" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+          {showAll ? "Hide individual lights" : `All lights… (${others.length})`}
+        </button>
+      )}
+      {showAll && rows(others)}
+    </div>
+  );
+}
+
+/** Rooms with several shades: one card moves them all; each stays reachable. */
+function RoomShadesBlock({
+  room, shades, flash, busy, sendSystem, rows,
+}: {
+  room: string;
+  shades: UiDevice[];
+  flash: Record<string, Flash>;
+  busy: Record<string, boolean>;
+  sendSystem: (system: string, command: string, room: string, extra?: Record<string, unknown>) => Promise<SendResult>;
+  rows: (ds: UiDevice[]) => React.ReactNode;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const key = `sys:shades:${room}`;
+  const isBusy = !!busy[key];
+  const states = new Set(shades.map((d) => d.state));
+  const summary = states.size === 1 ? shades[0].state : "mixed";
+  return (
+    <div className="dev-list">
+      <div className={`dev ${flashClass(flash[key])}`}>
+        <div>
+          <div className="nm">Shades</div>
+          <div className="st">{isBusy ? "…" : `${summary} · ${shades.length} shades`}</div>
+        </div>
+        <div className="btn-row">
+          <button className="mini-btn" disabled={isBusy} onClick={() => sendSystem("shades", "open", room)}>Open</button>
+          <button className="mini-btn" disabled={isBusy} onClick={() => sendSystem("shades", "stop", room)}>Stop</button>
+          <button className="mini-btn" disabled={isBusy} onClick={() => sendSystem("shades", "close", room)}>Close</button>
+        </div>
+      </div>
+      {shades.length > 1 && (
+        <button className="mini-btn" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+          {showAll ? "Hide individual shades" : `Each shade… (${shades.length})`}
+        </button>
+      )}
+      {showAll && rows(shades)}
+    </div>
   );
 }
 

@@ -12,8 +12,9 @@ import { executeSystemCommand } from "@/lib/execute";
 
 const Body = z.object({
   system: z.enum(["lighting", "climate", "heating", "shades"]),
-  command: z.enum(["turn_on", "turn_off", "open", "close", "stop"]),
+  command: z.enum(["turn_on", "turn_off", "open", "close", "stop", "set_brightness"]),
   rooms: z.array(z.string()).max(50).optional(),
+  brightnessPct: z.number().int().min(1).max(100).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -22,11 +23,14 @@ export async function POST(req: NextRequest) {
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid request" }, { status: 400 });
-  const { system, command, rooms } = parsed.data;
+  const { system, command, rooms, brightnessPct } = parsed.data;
+  if (command === "set_brightness" && brightnessPct == null) {
+    return NextResponse.json({ error: "set_brightness needs brightnessPct" }, { status: 400 });
+  }
 
   const started = Date.now();
   try {
-    const result = await executeSystemCommand(system, command, rooms);
+    const result = await executeSystemCommand(system, command, rooms, brightnessPct);
     audit({
       ts: new Date().toISOString(), user: auth.user, deviceId: `system:${system}`,
       entityId: `system.${system}`, command,

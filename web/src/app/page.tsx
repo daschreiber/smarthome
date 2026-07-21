@@ -988,38 +988,57 @@ function ClimateCard({
   };
 
   const active = d.hvacMode != null && d.hvacMode !== "off";
+  const pretty = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, " ");
   return (
     <div className={`climate-card ${active ? "on" : ""} ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        {star}
-        <div>
-          <div className="now">{d.currentTemperature != null ? `${d.currentTemperature}°` : "—"}</div>
-          <div className={`mode ${active ? "active" : ""}`}>
-            {d.available ? (d.hvacMode ?? "unknown") : "unavailable"}
+      <div className="climate-main">
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {star}
+          <div>
+            <div className="now">{d.currentTemperature != null ? `${d.currentTemperature}°` : "—"}</div>
+            <div className={`mode ${active ? "active" : ""}`}>
+              {d.available ? (d.hvacMode ?? "unknown") : "unavailable"}
+            </div>
+          </div>
+        </div>
+        <div className="climate-set">
+          <button className="round-btn" disabled={busy || !d.available} onClick={() => step(-0.5)} aria-label="Lower target">−</button>
+          <div className="target">{hasTarget ? `${shown}°` : "—"}</div>
+          <button className="round-btn" disabled={busy || !d.available} onClick={() => step(0.5)} aria-label="Raise target">+</button>
+          <div className="onoff" role="group" aria-label={`${d.label} power`}>
+            <button
+              aria-pressed={active}
+              disabled={busy || !d.available}
+              onClick={() => { if (!active) send(d.id, { command: "turn_on" }); }}
+            >
+              On
+            </button>
+            <button
+              aria-pressed={!active}
+              disabled={busy || !d.available}
+              onClick={() => { if (active) send(d.id, { command: "turn_off" }); }}
+            >
+              Off
+            </button>
           </div>
         </div>
       </div>
-      <div className="climate-set">
-        <button className="round-btn" disabled={busy || !d.available} onClick={() => step(-0.5)} aria-label="Lower target">−</button>
-        <div className="target">{hasTarget ? `${shown}°` : "—"}</div>
-        <button className="round-btn" disabled={busy || !d.available} onClick={() => step(0.5)} aria-label="Raise target">+</button>
-        <div className="onoff" role="group" aria-label={`${d.label} power`}>
-          <button
-            aria-pressed={active}
-            disabled={busy || !d.available}
-            onClick={() => { if (!active) send(d.id, { command: "turn_on" }); }}
-          >
-            On
-          </button>
-          <button
-            aria-pressed={!active}
-            disabled={busy || !d.available}
-            onClick={() => { if (active) send(d.id, { command: "turn_off" }); }}
-          >
-            Off
-          </button>
+      {active && d.fanSpeedList && d.fanSpeedList.length > 0 && (
+        <div className="climate-fan" role="group" aria-label={`${d.label} fan strength`}>
+          <span className="st">Fan</span>
+          {d.fanSpeedList.map((f) => (
+            <button
+              key={f}
+              className="fan-chip"
+              aria-pressed={d.fanSpeed === f}
+              disabled={busy}
+              onClick={() => { if (d.fanSpeed !== f) send(d.id, { command: "set_fan_mode", fanMode: f }); }}
+            >
+              {pretty(f)}
+            </button>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }

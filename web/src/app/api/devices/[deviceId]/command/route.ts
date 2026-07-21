@@ -201,6 +201,21 @@ export async function POST(
         );
       }
     }
+    // A/C fan strength: the CoolMaster unit's fan_modes is the authority
+    // (the Control4 zone entity reports no fan data).
+    if (cmd.command === "set_fan_mode") {
+      const unitIds = unitEntityIds(device);
+      const s = await getState(unitIds?.[0] ?? device.entityId).catch(() => null);
+      const list = Array.isArray(s?.attributes?.fan_modes)
+        ? (s.attributes.fan_modes as unknown[]).filter((v) => typeof v === "string")
+        : null;
+      if (list && !list.includes(cmd.fanMode)) {
+        return NextResponse.json(
+          { error: `fan mode must be one of: ${list.join(", ")}` },
+          { status: 400 },
+        );
+      }
+    }
     const call = buildServiceCall(device, cmd);
     await callService(call.domain, call.service, call.data);
 

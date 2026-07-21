@@ -10,6 +10,10 @@ import { noiseConfigured, noiseStatus } from "@/lib/whitenoise";
  * Full visible-device snapshot joined with live HA state.
  * One bulk /api/states call, not N per-entity reads.
  */
+
+const strAttr = (v: unknown): string | null => (typeof v === "string" ? v : null);
+const strListAttr = (v: unknown): string[] | null =>
+  Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : null;
 export async function GET(req: NextRequest) {
   const auth = authenticate(req);
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -114,16 +118,23 @@ export async function GET(req: NextRequest) {
           targetTemperature: unitTarget ?? attr("temperature"),
           hvacMode: d.kind === "climate" ? s?.state ?? null : null,
           batteryPct: d.kind === "vacuum" ? attr("battery_level") : null,
+          // Fan strength: vacuums report their own; climate zones read the
+          // CoolMaster unit (the Control4 proxy reports no fan data), falling
+          // back to the zone entity if the unit isn't available.
           fanSpeed:
             d.kind === "vacuum" && typeof s?.attributes.fan_speed === "string"
               ? (s.attributes.fan_speed as string)
-              : null,
+              : d.kind === "climate"
+                ? strAttr(unit?.attributes.fan_mode) ?? strAttr(s?.attributes.fan_mode)
+                : null,
           fanSpeedList:
             d.kind === "vacuum" && Array.isArray(s?.attributes.fan_speed_list)
               ? (s.attributes.fan_speed_list as unknown[]).filter(
                   (v): v is string => typeof v === "string",
                 )
-              : null,
+              : d.kind === "climate"
+                ? strListAttr(unit?.attributes.fan_modes) ?? strListAttr(s?.attributes.fan_modes)
+                : null,
           lastUpdated: s?.last_updated ?? null,
           note: null as string | null,
         };

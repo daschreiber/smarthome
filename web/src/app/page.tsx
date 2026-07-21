@@ -646,8 +646,13 @@ function Login({ onDone }: { onDone: () => void }) {
   );
 }
 
-/** Bedrooms get the collapsed lighting view: one room control + reading lights. */
-const isBedroom = (room: string) => /bedroom|guest room/i.test(room);
+/**
+ * Rooms with this many fixtures get the collapsed lighting view: one
+ * "Room lights" control + pinned reading lights, the rest behind an
+ * expander. 4+ covers the bedrooms, studies, Den, Kitchen, Lounge, and
+ * bathrooms; corridors and balconies (1-3 lights) stay as plain rows.
+ */
+const COLLAPSE_LIGHTS_AT = 4;
 /** Reading lights keep their own rows ("Reading Left", "Read Right", "Reading light"). */
 const isReadingLight = (d: UiDevice) => /\bread/i.test(d.label);
 
@@ -694,7 +699,7 @@ function RoomView({
       {groups.map(([group, ds]) => (
         <section key={group}>
           <div className="section-label">{group}</div>
-          {group === "Lighting" && isBedroom(room) ? (
+          {group === "Lighting" && ds.length >= COLLAPSE_LIGHTS_AT ? (
             <RoomLightsBlock room={room} lights={ds} flash={flash} busy={busy} sendSystem={sendSystem} rows={rows} />
           ) : group === "Shades" && ds.length > 1 ? (
             <RoomShadesBlock room={room} shades={ds} flash={flash} busy={busy} sendSystem={sendSystem} rows={rows} />
@@ -708,8 +713,8 @@ function RoomView({
 }
 
 /**
- * Collapsed bedroom lighting: one "Room lights" card (on/off + a dim slider
- * for the room's dimmers) and the reading lights on their own rows. Every
+ * Collapsed room lighting: one "Room lights" card (on/off + a dim slider
+ * for the room's dimmers) and any reading lights on their own rows. Every
  * other fixture stays reachable behind "All lights…".
  */
 function RoomLightsBlock({

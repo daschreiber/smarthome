@@ -32,9 +32,22 @@ export const CommandSchema = z.discriminatedUnion("command", [
     volumePct: z.number().int().min(0).max(100),
   }),
   // Vacuums (Roborock, one per floor). start doubles as resume-from-pause.
-  z.object({ command: z.literal("start_cleaning") }),
+  // segments: Roborock map segment ids ("clean only these rooms"); omitted =
+  // whole floor. repeat: passes over each segment (Roborock allows 1-3) —
+  // only meaningful with segments, the plain start service has no repeat.
+  z.object({
+    command: z.literal("start_cleaning"),
+    segments: z.array(z.number().int().min(0).max(255)).min(1).max(64).optional(),
+    repeat: z.number().int().min(1).max(3).optional(),
+  }),
   z.object({ command: z.literal("pause_cleaning") }),
   z.object({ command: z.literal("return_to_dock") }),
+  // Suction power; valid values are whatever the entity's fan_speed_list
+  // reports (the command route validates against it before sending).
+  z.object({
+    command: z.literal("set_fan_speed"),
+    fanSpeed: z.string().min(1).max(32).regex(/^[a-z0-9_ ]+$/i),
+  }),
 ]);
 
 export type Command = z.infer<typeof CommandSchema>;
@@ -58,6 +71,7 @@ const CAPABILITY_FOR_COMMAND: Record<Command["command"], string> = {
   start_cleaning: "vacuum_control",
   pause_cleaning: "vacuum_control",
   return_to_dock: "vacuum_control",
+  set_fan_speed: "vacuum_control",
 };
 
 /** Per-kind safe set-point ranges (°C), enforced server-side. */
@@ -178,10 +192,32 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
         data: { ...target, volume_level: cmd.volumePct / 100 },
       };
     case "start_cleaning":
+      // Segment (per-room) cleaning goes through Roborock's own command;
+      // vacuum.start has no notion of rooms or passes.
+      if (cmd.segments?.length) {
+        return {
+          domain: "vacuum",
+          service: "send_command",
+          data: {
+            ...target,
+            command: "app_segment_clean",
+            params: [{
+              segments: cmd.segments,
+              ...(cmd.repeat && cmd.repeat > 1 ? { repeat: cmd.repeat } : {}),
+            }],
+          },
+        };
+      }
       return { domain: "vacuum", service: "start", data: target };
     case "pause_cleaning":
       return { domain: "vacuum", service: "pause", data: target };
     case "return_to_dock":
       return { domain: "vacuum", service: "return_to_base", data: target };
+    case "set_fan_speed":
+      return {
+        domain: "vacuum",
+        service: "set_fan_speed",
+        data: { ...target, fan_speed: cmd.fanSpeed },
+      };
   }
 }

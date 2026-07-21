@@ -38,6 +38,8 @@ interface UiDevice {
   volumePct?: number | null;
   /** Vacuums only. */
   batteryPct?: number | null;
+  fanSpeed?: string | null;
+  fanSpeedList?: string[] | null;
 }
 
 type View = { t: "home" } | { t: "room"; room: string };
@@ -852,9 +854,10 @@ function ClimateCard({
 }
 
 /**
- * Roborock vacuums (one per floor). Clean / Pause / Dock ride the standard
- * command path; state and battery are whatever Home Assistant reports.
- * "Clean" doubles as resume when the vacuum is paused (vacuum.start resumes).
+ * Roborock vacuums (one per floor). Clean opens an options panel — rooms
+ * (map segments fetched from the vacuum's own map), suction level, and
+ * passes — then Start fires through the standard command path. Pause and
+ * Dock stay one-tap. State and battery are whatever Home Assistant reports.
  */
 function VacuumCard({
   d, flash, busy, send, star,
@@ -865,10 +868,56 @@ function VacuumCard({
   send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   star?: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
+  const [segs, setSegs] = useState<{ id: number; name: string }[] | null>(null);
+  const [segsFailed, setSegsFailed] = useState(false);
+  const [sel, setSel] = useState<number[]>([]);
+  const [passes, setPasses] = useState(1);
+  const [fan, setFan] = useState<string | null>(null);
   const cleaning = d.state === "cleaning";
   const paused = d.state === "paused";
-  return (
-    <div className={`dev ${cleaning ? "on" : ""} ${d.available ? "" : "unavailable"} ${flashClass(flash)}`}>
+
+  // Room list is lazy: fetched from the vacuum's map the first time the
+  // panel opens (roborock.get_maps is a real round trip to the robot).
+  useEffect(() => {
+    if (!open || segs !== null || segsFailed) return;
+    fetch(`/api/devices/${d.id}/vacuum`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error();
+        const out = (await res.json()) as { segments: { id: number; name: string }[] };
+        setSegs(out.segments);
+        if (out.segments.length === 0) setSegsFailed(true);
+      })
+      .catch(() => setSegsFailed(true));
+  }, [open, segs, segsFailed, d.id]);
+
+  const toggleSeg = (id: number) =>
+    setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  const pretty = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, " ");
+  const shownFan = fan ?? d.fanSpeed ?? null;
+
+  const start = async () => {
+    setOpen(false);
+    if (fan && fan !== d.fanSpeed) {
+      const r = await send(d.id, { command: "set_fan_speed", fanSpeed: fan });
+      if (!r.ok) return; // send() already flashed the failure
+    }
+    const body: Record<string, unknown> = { command: "start_cleaning" };
+    // Explicit rooms clean just those; no selection means everywhere. Extra
+    // passes only exist in Roborock's segment clean, so "everywhere with
+    // passes" sends the full segment list.
+    if (sel.length > 0) body.segments = sel;
+    else if (passes > 1 && segs && segs.length > 0) body.segments = segs.map((s) => s.id);
+    if (passes > 1 && Array.isArray(body.segments)) body.repeat = passes;
+    await send(d.id, body);
+    setSel([]);
+    setPasses(1);
+    setFan(null);
+  };
+
+  const row = (
+    <div className={`dev ${cleaning ? "on" : ""} ${d.available ? "" : "unavailable"}`}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         {star}
         <div>
@@ -877,25 +926,101 @@ function VacuumCard({
             {busy
               ? "…"
               : d.available
-                ? `${d.state}${d.batteryPct != null ? ` · ${d.batteryPct}%` : ""}`
+                ? `${d.state}${d.batteryPct != null ? ` · ${d.batteryPct}%` : ""}` +
+                  (d.fanSpeed && (cleaning || paused) ? ` · ${pretty(d.fanSpeed).toLowerCase()}` : "")
                 : `unavailable${d.note ? ` — ${d.note}` : ""}`}
           </div>
         </div>
       </div>
       <div className="btn-row">
+        {cleaning ? (
+          <button className="mini-btn" disabled={busy} onClick={() => send(d.id, { command: "pause_cleaning" })}>
+            Pause
+          </button>
+        ) : paused ? (
+          // Resume is one tap: a plain start continues the interrupted job.
+          <button className="mini-btn" disabled={busy} onClick={() => send(d.id, { command: "start_cleaning" })}>
+            Resume
+          </button>
+        ) : (
+          <button
+            className="mini-btn"
+            disabled={busy || !d.available}
+            aria-expanded={open}
+            style={open ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
+            onClick={() => setOpen((v) => !v)}
+          >
+            Clean
+          </button>
+        )}
         <button
           className="mini-btn"
           disabled={busy || !d.available}
-          onClick={() => send(d.id, { command: cleaning ? "pause_cleaning" : "start_cleaning" })}
-        >
-          {cleaning ? "Pause" : paused ? "Resume" : "Clean"}
-        </button>
-        <button
-          className="mini-btn"
-          disabled={busy || !d.available}
-          onClick={() => send(d.id, { command: "return_to_dock" })}
+          onClick={() => { setOpen(false); send(d.id, { command: "return_to_dock" }); }}
         >
           Dock
+        </button>
+      </div>
+    </div>
+  );
+
+  if (!open || cleaning || paused) return <div className={`dev-block ${flashClass(flash)}`}>{row}</div>;
+
+  return (
+    <div className={`dev-block ${flashClass(flash)}`}>
+      {row}
+      <div className="slider-row" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", paddingBottom: 6 }}>
+        <span className="st">Rooms</span>
+        {segs === null && !segsFailed && <span className="st">loading map…</span>}
+        {segsFailed && <span className="st">whole floor (no named rooms on the map)</span>}
+        {(segs ?? []).map((s) => (
+          <button
+            key={s.id}
+            className="mini-btn"
+            style={sel.includes(s.id) ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : undefined}
+            onClick={() => toggleSeg(s.id)}
+          >
+            {s.name}
+          </button>
+        ))}
+      </div>
+      {d.fanSpeedList && d.fanSpeedList.length > 0 && (
+        <div className="slider-row" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", paddingBottom: 6 }}>
+          <span className="st">Suction</span>
+          {d.fanSpeedList.map((f) => (
+            <button
+              key={f}
+              className="mini-btn"
+              style={shownFan === f ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : undefined}
+              onClick={() => setFan(f)}
+            >
+              {pretty(f)}
+            </button>
+          ))}
+        </div>
+      )}
+      {segs && segs.length > 0 && (
+        <div className="slider-row" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", paddingBottom: 6 }}>
+          <span className="st">Passes</span>
+          {[1, 2, 3].map((n) => (
+            <button
+              key={n}
+              className="mini-btn"
+              style={passes === n ? { borderColor: "var(--accent)", color: "var(--accent)" } : undefined}
+              onClick={() => setPasses(n)}
+            >
+              {n}×
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="slider-row">
+        <button className="mini-btn" style={{ width: "100%", padding: 10 }} disabled={busy} onClick={start}>
+          {`Start · ${
+            sel.length > 0
+              ? `${sel.length} room${sel.length === 1 ? "" : "s"}`
+              : "everywhere"
+          }${passes > 1 ? ` · ${passes} passes` : ""}`}
         </button>
       </div>
     </div>

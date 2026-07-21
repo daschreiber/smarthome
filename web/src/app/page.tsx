@@ -1003,13 +1003,22 @@ function ClimateCard({
         <button className="round-btn" disabled={busy || !d.available} onClick={() => step(-0.5)} aria-label="Lower target">−</button>
         <div className="target">{hasTarget ? `${shown}°` : "—"}</div>
         <button className="round-btn" disabled={busy || !d.available} onClick={() => step(0.5)} aria-label="Raise target">+</button>
-        <button
-          className="mini-btn"
-          disabled={busy || !d.available}
-          onClick={() => send(d.id, { command: active ? "turn_off" : "turn_on" })}
-        >
-          {active ? "Off" : "On"}
-        </button>
+        <div className="onoff" role="group" aria-label={`${d.label} power`}>
+          <button
+            aria-pressed={active}
+            disabled={busy || !d.available}
+            onClick={() => { if (!active) send(d.id, { command: "turn_on" }); }}
+          >
+            On
+          </button>
+          <button
+            aria-pressed={!active}
+            disabled={busy || !d.available}
+            onClick={() => { if (active) send(d.id, { command: "turn_off" }); }}
+          >
+            Off
+          </button>
+        </div>
       </div>
     </div>
   );

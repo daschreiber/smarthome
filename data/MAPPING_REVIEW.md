@@ -164,14 +164,14 @@ Controllable entities mapped: **186**
 - [Utility Room] Utility Room Spot (light_switch)  `light.knx_switch_utility_room_spot`
 - [Utility Room] Utility Room Strip (light_switch)  `light.knx_switch_utility_room_strip`
 
-## Media (14)
+## Media (14, 1 hidden)
 
+- [hidden] [NO ROOM] 55" QLED (media)  `media_player.55_qled`
 - [Balcony (6th)] Balcony (media)  `media_player.balcony_2`
 - [Balcony (6th)] Balcony (media)  `media_player.balcony`
 - [Den] Den (media)  `media_player.den`
 - [Gym] Gym (media)  `media_player.gym_gym`
 - [Kitchen] Kitchen (media)  `media_player.kitchen`
-- [Lounge] 55" QLED (media)  `media_player.55_qled`
 - [Lounge] Lounge (media)  `media_player.lounge`
 - [Master Bathroom] Master Bathroom (media)  `media_player.master_bathroom`
 - [Master Bedroom] Master Bedroom (media)  `media_player.master_bedroom`

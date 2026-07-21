@@ -1,5 +1,16 @@
 [
   {
+    "entity_id": "media_player.55_qled",
+    "domain": "media_player",
+    "original_name": "55\" QLED",
+    "display_name": "55\" QLED",
+    "room": "",
+    "floor": null,
+    "category": "media",
+    "group": "Media",
+    "visible": false
+  },
+  {
     "entity_id": "light.knx_switch_5th_balcony_lights",
     "domain": "light",
     "original_name": "KNX Switch 5th Balcony lights",
@@ -1121,17 +1132,6 @@
     "floor": 6,
     "category": "light_switch",
     "group": "Lighting",
-    "visible": true
-  },
-  {
-    "entity_id": "media_player.55_qled",
-    "domain": "media_player",
-    "original_name": "55\" QLED",
-    "display_name": "55\" QLED",
-    "room": "Lounge",
-    "floor": 6,
-    "category": "media",
-    "group": "Media",
     "visible": true
   },
   {

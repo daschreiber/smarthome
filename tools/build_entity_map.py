@@ -49,7 +49,7 @@ ROOMS = [
     ("roof", "Utility Room"),
     ("electricity board", "Utility Room"), ("games closet", "Den"),
     ("rack", "Utility Room"), ("all house", "Whole House"), ("all rooms", "Whole House"),
-    ("welcome", "Whole House"), ("55\" qled", "Lounge"),
+    ("welcome", "Whole House"),
 ]
 
 # (regex on friendly name, category) - first match wins. Nothing is excluded:
@@ -104,6 +104,10 @@ VISIBILITY_OVERRIDES = {
     "light.knx_switch_boiler_6th_floor": False,
     "light.knx_switch_boiler_roof": False,
     "light.knx_switch_contrroled_sockets_near_boiler": False,
+    # Network-discovered Samsung TV of unknown location. It was wrongly
+    # assumed to be the Lounge TV (the lounge set is ~80"); hidden until
+    # someone identifies which physical TV it is (owner decision 2026-07-21).
+    "media_player.55_qled": False,
 }
 
 GROUPS = {

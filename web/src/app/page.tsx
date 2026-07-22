@@ -1262,10 +1262,19 @@ function VacuumCard({
 /**
  * Media zone with selectable inputs — the Control4 matrix rooms. These zones
  * have NO turn_on: tapping a source is how a zone wakes, so the card leads
- * with the source chips. "Unknown Device - …" matrix inputs stay hidden until
- * they're identified and named in Composer. Transport (play/pause) and Off
- * appear once something is active; volume always works.
+ * with the source chips. Transport (play/pause) and Off appear once
+ * something is active; volume always works.
+ *
+ * Chips show only inputs that produce sound in this house: physical sources
+ * (Gramophone, the room's TV, XBox). Hidden on purpose:
+ * - "Unknown Device - …": unnamed matrix inputs, until identified in
+ *   Composer (leading suspects for the VSSL streaming feeds).
+ * - TuneIn / My Music / Digital Media: Control4's built-in streaming apps,
+ *   never configured on the Core — selecting them switches the zone to a
+ *   silent app. Streaming here is Spotify Connect / AirPlay via the VSSL
+ *   amps instead (docs plan, phase M3).
  */
+const HIDDEN_SOURCES = /^(Unknown Device\b|TuneIn$|My Music$|Digital Media$)/i;
 function MediaCard({
   d, flash, busy, send, star,
 }: {
@@ -1279,7 +1288,7 @@ function MediaCard({
   const active = ["playing", "paused", "buffering", "on"].includes(d.state);
   const playing = d.state === "playing";
   const label = d.label === d.room ? "Speakers" : d.label;
-  const sources = (d.sourceList ?? []).filter((s) => !/^Unknown Device/i.test(s));
+  const sources = (d.sourceList ?? []).filter((s) => !HIDDEN_SOURCES.test(s));
   const volume = drag ?? d.volumePct ?? 0;
   return (
     <div className={`dev-block hero ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>

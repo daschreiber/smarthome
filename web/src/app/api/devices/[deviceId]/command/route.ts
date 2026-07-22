@@ -182,6 +182,20 @@ export async function POST(
         );
       }
     }
+    // Media sources vary per zone; the entity's source_list is the authority,
+    // so reject anything it doesn't advertise.
+    if (cmd.command === "select_source") {
+      const s = await getState(device.entityId);
+      const list = Array.isArray(s?.attributes.source_list)
+        ? (s.attributes.source_list as unknown[]).filter((v) => typeof v === "string")
+        : null;
+      if (list && !list.includes(cmd.source)) {
+        return NextResponse.json(
+          { error: `source must be one of: ${list.join(", ")}` },
+          { status: 400 },
+        );
+      }
+    }
     // A/C fan strength: the CoolMaster unit's fan_modes is the authority
     // (the Control4 zone entity reports no fan data).
     if (cmd.command === "set_fan_mode") {
@@ -212,11 +226,14 @@ export async function POST(
     const readbackId = setpointUnits?.[0] ?? device.entityId;
     const setpointReached = (s: { attributes: Record<string, unknown> } | null) =>
       !!setpointUnits && !!s && s.attributes.temperature === wantedTemp;
-    // Fan speed is the other attribute-verified command: state stays
-    // "docked"/"cleaning", but the entity echoes the accepted fan_speed.
+    // Fan speed and media source are the other attribute-verified commands:
+    // state alone can't prove them, but the entity echoes the accepted value.
     const wantedFan = cmd.command === "set_fan_speed" ? cmd.fanSpeed : null;
     const fanReached = (s: { attributes: Record<string, unknown> } | null) =>
       wantedFan != null && !!s && s.attributes.fan_speed === wantedFan;
+    const wantedSource = cmd.command === "select_source" ? cmd.source : null;
+    const sourceReached = (s: { attributes: Record<string, unknown> } | null) =>
+      wantedSource != null && !!s && s.attributes.source === wantedSource;
     const expected = expectedStates(cmd, device.kind);
     const deadline = Date.now() + 8000;
     let after = null;
@@ -228,6 +245,8 @@ export async function POST(
         if (!after) break; // unit entity absent — integration not added yet
       } else if (wantedFan != null) {
         if (fanReached(after)) break;
+      } else if (wantedSource != null) {
+        if (sourceReached(after)) break;
       } else if (!expected) break;
       else if (after && expected.includes(after.state)) break;
       if (Date.now() >= deadline) break;
@@ -236,7 +255,9 @@ export async function POST(
       ? setpointReached(after)
       : wantedFan != null
         ? fanReached(after)
-        : !!expected && !!after && expected.includes(after.state);
+        : wantedSource != null
+          ? sourceReached(after)
+          : !!expected && !!after && expected.includes(after.state);
     const status = verified ? "confirmed" : "sent";
 
     const durationMs = Date.now() - started;

@@ -90,9 +90,29 @@ body {
   .chat-bar { bottom: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 }
 
-/* Device lists: single column on phones, two columns from tablet width up. */
+/* Device lists: single column on phones, two columns from tablet width up.
+   A section's primary card (.hero — Room lights, Shades, Climate, the noise
+   machine, the sauna) spans the full row there; satellite rows and expanders
+   fill the two columns beneath it, so columns never drift out of line. */
 .dev-list { display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 8px; align-items: start; }
 .dev-list .dev, .dev-list .dev-block, .dev-list .climate-card { margin-bottom: 0; }
+
+/* Drill-down expanders ("All lights (6)"): quiet but visibly tappable —
+   outlined, not chip-filled, with a chevron that flips when open. */
+.mini-btn.expander {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: none; color: var(--dim); font-weight: 600; width: 100%;
+}
+.mini-btn.expander::after { content: "▾"; font-size: 11px; transition: transform 0.15s; }
+.mini-btn.expander[aria-expanded="true"]::after { transform: rotate(180deg); }
+
+/* Favorite stars: whisper until favorited (or hovered) — a page of hollow
+   stars is noise, but the affordance stays where it is. */
+.fav-star {
+  background: none; border: none; cursor: pointer; padding: 0 2px;
+  font-size: 16px; color: var(--dim); opacity: 0.3;
+}
+.fav-star.on { color: var(--active); opacity: 1; }
 
 /* Sign-in / reset forms stay a comfortable reading width on big screens. */
 .auth-form { max-width: 400px; margin: 18vh auto 0; }
@@ -202,6 +222,12 @@ body {
 .climate-fan .fan-chip:disabled { opacity: 0.6; cursor: default; }
 .climate-card .now { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .climate-card .mode { font-size: var(--fs-xs); color: var(--dim); }
+/* "Room" over the reading, "Set" over the target: the two numbers on the
+   card mean different things and neither should need guessing. */
+.temp-lbl {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--dim);
+}
 /* A running zone reads at a glance: tinted card + a small filled mode pill —
    a quiet echo of the selected floor tab's accent treatment. */
 .climate-card.on {
@@ -271,6 +297,7 @@ body {
   .shell { padding: 84px 24px 48px; }
   .rooms { grid-template-columns: repeat(3, 1fr); }
   .dev-list { grid-template-columns: 1fr 1fr; }
+  .dev-list .hero { grid-column: 1 / -1; }
   .floors { max-width: 420px; }
 }
 

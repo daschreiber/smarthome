@@ -135,6 +135,18 @@ export async function GET(req: NextRequest) {
               : d.kind === "climate"
                 ? strListAttr(unit?.attributes.fan_modes) ?? strListAttr(s?.attributes.fan_modes)
                 : null,
+          // Media zones: current source + source list drive the room
+          // MediaCard. canTurnOn separates streaming players (Cast,
+          // MusicCast) from Control4 matrix zones, which lack turn_on
+          // (supported_features bit 128) and wake by source selection.
+          source: d.kind === "media_player" ? strAttr(s?.attributes.source) : null,
+          sourceList: d.kind === "media_player" ? strListAttr(s?.attributes.source_list) : null,
+          volumePct:
+            d.kind === "media_player" && typeof s?.attributes.volume_level === "number"
+              ? Math.round(Math.min(1, Math.max(0, s.attributes.volume_level as number)) * 100)
+              : null,
+          canTurnOn:
+            d.kind !== "media_player" || ((attr("supported_features") ?? 0) & 128) !== 0,
           lastUpdated: s?.last_updated ?? null,
           note: null as string | null,
         };
@@ -196,6 +208,10 @@ export async function GET(req: NextRequest) {
           batteryPct: null,
           fanSpeed: null,
           fanSpeedList: null,
+          source: null,
+          sourceList: null,
+          volumePct: null,
+          canTurnOn: true,
           lastUpdated: null,
           note: "waiting for the Roborock integration in Home Assistant",
         });

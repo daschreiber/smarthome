@@ -31,6 +31,16 @@ export const CommandSchema = z.discriminatedUnion("command", [
     command: z.literal("set_volume"),
     volumePct: z.number().int().min(0).max(100),
   }),
+  // Media zones (Control4 matrix + streaming players). Selecting a source is
+  // also how a Control4 zone turns ON — the integration exposes no turn_on.
+  // Valid sources are whatever the entity's source_list reports (the command
+  // route validates against it before sending).
+  z.object({
+    command: z.literal("select_source"),
+    source: z.string().min(1).max(64).regex(/^[\x20-\x7e ]+$/),
+  }),
+  z.object({ command: z.literal("play") }),
+  z.object({ command: z.literal("pause") }),
   // Vacuums (Roborock, one per floor). start doubles as resume-from-pause.
   // segments: Roborock map segment ids ("clean only these rooms"); omitted =
   // whole floor. repeat: passes over each segment (Roborock allows 1-3) —
@@ -74,6 +84,9 @@ const CAPABILITY_FOR_COMMAND: Record<Command["command"], string> = {
   set_position: "position",
   set_temperature: "set_temperature",
   set_volume: "volume",
+  select_source: "select_source",
+  play: "transport",
+  pause: "transport",
   start_cleaning: "vacuum_control",
   pause_cleaning: "vacuum_control",
   return_to_dock: "vacuum_control",
@@ -142,6 +155,13 @@ export function expectedStates(cmd: Command, kind?: Device["kind"]): string[] | 
       return ["paused"];
     case "return_to_dock":
       return ["returning", "docked"];
+    case "play":
+      return ["playing"];
+    case "pause":
+      return ["paused"];
+    // select_source verifies by the entity echoing the source attribute
+    // (like set_fan_speed), not by state — the zone may land in playing,
+    // idle, or on depending on what the source is doing.
     default:
       return null;
   }
@@ -198,6 +218,16 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
         service: "volume_set",
         data: { ...target, volume_level: cmd.volumePct / 100 },
       };
+    case "select_source":
+      return {
+        domain: "media_player",
+        service: "select_source",
+        data: { ...target, source: cmd.source },
+      };
+    case "play":
+      return { domain: "media_player", service: "media_play", data: target };
+    case "pause":
+      return { domain: "media_player", service: "media_pause", data: target };
     case "start_cleaning":
       // Segment (per-room) cleaning goes through Roborock's own command;
       // vacuum.start has no notion of rooms or passes.

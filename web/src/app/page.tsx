@@ -35,7 +35,14 @@ interface UiDevice {
   stopAt?: string | null;
   /** White-noise machine only. */
   noiseType?: string | null;
+  /** White-noise machine and media players. */
   volumePct?: number | null;
+  /** Media players only: current input, the zone's inputs, and whether the
+   * player supports turn_on (Control4 matrix zones don't — they wake by
+   * source selection). */
+  source?: string | null;
+  sourceList?: string[] | null;
+  canTurnOn?: boolean;
   /** Vacuums only. */
   batteryPct?: number | null;
   fanSpeed?: string | null;
@@ -741,9 +748,11 @@ function RoomLightsBlock({
   const onCount = lights.filter((d) => d.state === "on").length;
   const anyOn = onCount > 0;
   const dimmers = lights.filter((d) => d.capabilities.includes("brightness"));
-  // The slider reads the brightest on dimmer (0 when everything is off);
-  // committing fans set_brightness across the room's dimmers.
-  const current = Math.max(0, ...dimmers.filter((d) => d.state === "on").map((d) => d.brightnessPct ?? 100));
+  // The slider reads the average of the lit dimmers (0 when everything is
+  // off) — with a mixed room, "brightest light" showed 100% while half the
+  // room was dark. Committing fans set_brightness across the room's dimmers.
+  const lit = dimmers.filter((d) => d.state === "on").map((d) => d.brightnessPct ?? 100);
+  const current = lit.length > 0 ? Math.round(lit.reduce((a, b) => a + b, 0) / lit.length) : 0;
   const value = drag ?? current;
   const commit = (v: number) => {
     setDrag(null);
@@ -752,7 +761,7 @@ function RoomLightsBlock({
   };
   return (
     <div className="dev-list">
-      <div className={`dev-block ${flashClass(flash[key])}`}>
+      <div className={`dev-block hero ${flashClass(flash[key])}`}>
         <div className={`dev ${anyOn ? "on" : ""}`}>
           <div>
             <div className="nm">Room lights</div>
@@ -784,8 +793,8 @@ function RoomLightsBlock({
       </div>
       {rows(reading)}
       {others.length > 0 && (
-        <button className="mini-btn" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
-          {showAll ? "Hide individual lights" : `All lights… (${others.length})`}
+        <button className="mini-btn expander" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+          {showAll ? "Hide individual lights" : `All lights (${others.length})`}
         </button>
       )}
       {showAll && rows(others)}
@@ -811,7 +820,7 @@ function RoomShadesBlock({
   const summary = states.size === 1 ? shades[0].state : "mixed";
   return (
     <div className="dev-list">
-      <div className={`dev ${flashClass(flash[key])}`}>
+      <div className={`dev hero ${flashClass(flash[key])}`}>
         <div>
           <div className="nm">Shades</div>
           <div className="st">{isBusy ? "…" : `${summary} · ${shades.length} shades`}</div>
@@ -823,8 +832,8 @@ function RoomShadesBlock({
         </div>
       </div>
       {shades.length > 1 && (
-        <button className="mini-btn" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
-          {showAll ? "Hide individual shades" : `Each shade… (${shades.length})`}
+        <button className="mini-btn expander" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+          {showAll ? "Hide individual shades" : `Each shade (${shades.length})`}
         </button>
       )}
       {showAll && rows(shades)}
@@ -835,12 +844,9 @@ function RoomShadesBlock({
 function Star({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
   return (
     <button
+      className={`fav-star ${on ? "on" : ""}`}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       aria-label={`${on ? "Remove" : "Add"} ${label} ${on ? "from" : "to"} favorites`}
-      style={{
-        background: "none", border: "none", cursor: "pointer", padding: "0 2px",
-        fontSize: 16, color: on ? "var(--active)" : "var(--dim)", opacity: on ? 1 : 0.55,
-      }}
     >
       {on ? "★" : "☆"}
     </button>
@@ -866,6 +872,11 @@ function Device({
   if (d.kind === "noise") return <NoiseCard d={d} busy={busy} send={send} />;
   if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} star={star} />;
   if (d.kind === "vacuum") return <VacuumCard d={d} flash={flash} busy={busy} send={send} star={star} />;
+  // Media zones with selectable inputs (the Control4 matrix rooms) get the
+  // full source/transport card; plain streamers keep the toggle row below.
+  if (d.kind === "media_player" && (d.sourceList?.length ?? 0) > 0) {
+    return <MediaCard d={d} flash={flash} busy={busy} send={send} star={star} />;
+  }
   if (d.kind === "cover") {
     return (
       <div className={`dev ${d.available ? "" : "unavailable"} ${flashClass(flash)}`}>
@@ -888,21 +899,33 @@ function Device({
   // Lights and media players: toggle, plus a dimmer slider where supported.
   const on = d.state === "on";
   const hasDimmer = d.capabilities.includes("brightness");
+  // Display-name fixes, presentational only (device ids stay stable):
+  // most rooms' media player carries the room's own name — inside that
+  // room's page "Speakers" says what it is; the TV lift's "on/off" hides
+  // which way the TV actually went.
+  const label =
+    d.kind === "media_player" && d.label === d.room
+      ? "Speakers"
+      : d.category === "motorized_furniture"
+        ? d.label.replace(/^MBR\s+/, "")
+        : d.label;
+  const stateText =
+    d.category === "motorized_furniture" ? (on ? "TV up" : "TV hidden") : d.state;
   const row = (
     <div className={`dev ${on ? "on" : ""} ${d.available ? "" : "unavailable"} ${hasDimmer ? "" : flashClass(flash)}`}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         {star}
         <div>
-          <div className="nm">{d.label}</div>
+          <div className="nm">{label}</div>
           <div className="st">
-            {busy ? "…" : d.available ? `${d.state}${on && d.brightnessPct != null ? ` · ${d.brightnessPct}%` : ""}` : "unavailable"}
+            {busy ? "…" : d.available ? `${stateText}${on && d.brightnessPct != null ? ` · ${d.brightnessPct}%` : ""}` : "unavailable"}
           </div>
         </div>
       </div>
       <button
         className="toggle"
         aria-pressed={on}
-        aria-label={`${d.label} ${on ? "off" : "on"}`}
+        aria-label={`${label} ${on ? "off" : "on"}`}
         disabled={busy || !d.available}
         onClick={() => send(d.id, { command: on ? "turn_off" : "turn_on" })}
       />
@@ -994,22 +1017,36 @@ function ClimateCard({
 
   const active = d.hvacMode != null && d.hvacMode !== "off";
   const pretty = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, " ");
+  // The card answers "how warm is it / what did I ask for": both numbers are
+  // labelled, and the setpoint row only exists while the zone runs — when it's
+  // off the On|Off segment is the whole story, so a second "off" and a stale
+  // target would just be noise.
   return (
-    <div className={`climate-card ${active ? "on" : ""} ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
+    <div className={`climate-card hero ${active ? "on" : ""} ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
       <div className="climate-main">
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {star}
           <div>
+            <div className="temp-lbl">Room</div>
             <div className="now">{d.currentTemperature != null ? `${d.currentTemperature}°` : "—"}</div>
-            <div className={`mode ${active ? "active" : ""}`}>
-              {d.available ? (d.hvacMode ?? "unknown") : "unavailable"}
-            </div>
+            {!d.available ? (
+              <div className="mode">unavailable</div>
+            ) : active ? (
+              <div className="mode active">{pretty(d.hvacMode ?? "").toLowerCase()}</div>
+            ) : null}
           </div>
         </div>
         <div className="climate-set">
-          <button className="round-btn" disabled={busy || !d.available} onClick={() => step(-0.5)} aria-label="Lower target">−</button>
-          <div className="target">{hasTarget ? `${shown}°` : "—"}</div>
-          <button className="round-btn" disabled={busy || !d.available} onClick={() => step(0.5)} aria-label="Raise target">+</button>
+          {active && (
+            <>
+              <button className="round-btn" disabled={busy || !d.available} onClick={() => step(-0.5)} aria-label="Lower target">−</button>
+              <div>
+                <div className="temp-lbl" style={{ textAlign: "center" }}>Set</div>
+                <div className="target">{hasTarget ? `${shown}°` : "—"}</div>
+              </div>
+              <button className="round-btn" disabled={busy || !d.available} onClick={() => step(0.5)} aria-label="Raise target">+</button>
+            </>
+          )}
           <div className="onoff" role="group" aria-label={`${d.label} power`}>
             <button
               aria-pressed={active}
@@ -1223,6 +1260,102 @@ function VacuumCard({
 }
 
 /**
+ * Media zone with selectable inputs — the Control4 matrix rooms. These zones
+ * have NO turn_on: tapping a source is how a zone wakes, so the card leads
+ * with the source chips. "Unknown Device - …" matrix inputs stay hidden until
+ * they're identified and named in Composer. Transport (play/pause) and Off
+ * appear once something is active; volume always works.
+ */
+function MediaCard({
+  d, flash, busy, send, star,
+}: {
+  d: UiDevice;
+  flash?: Flash;
+  busy: boolean;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
+  star?: React.ReactNode;
+}) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const active = ["playing", "paused", "buffering", "on"].includes(d.state);
+  const playing = d.state === "playing";
+  const label = d.label === d.room ? "Speakers" : d.label;
+  const sources = (d.sourceList ?? []).filter((s) => !/^Unknown Device/i.test(s));
+  const volume = drag ?? d.volumePct ?? 0;
+  return (
+    <div className={`dev-block hero ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
+      <div className={`dev ${active ? "on" : ""}`}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {star}
+          <div>
+            <div className="nm">{label}</div>
+            <div className="st">
+              {busy
+                ? "…"
+                : !d.available
+                  ? "unavailable"
+                  : active && d.source
+                    ? `${d.state} · ${d.source}`
+                    : d.state}
+            </div>
+          </div>
+        </div>
+        <div className="btn-row">
+          {active && (
+            <button
+              className="mini-btn"
+              disabled={busy}
+              onClick={() => send(d.id, { command: playing ? "pause" : "play" })}
+            >
+              {playing ? "Pause" : "Play"}
+            </button>
+          )}
+          {(active || d.canTurnOn) && (
+            <button
+              className="mini-btn"
+              disabled={busy || !d.available}
+              onClick={() => send(d.id, { command: active ? "turn_off" : "turn_on" })}
+            >
+              {active ? "Off" : "On"}
+            </button>
+          )}
+        </div>
+      </div>
+      {sources.length > 0 && (
+        <div className="slider-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", paddingBottom: 6 }}>
+          {sources.map((s) => (
+            <button
+              key={s}
+              className="mini-btn"
+              disabled={busy || !d.available}
+              style={d.source === s ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : undefined}
+              onClick={() => send(d.id, { command: "select_source", source: s })}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="slider-row">
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={volume}
+          aria-label={`${label} volume`}
+          disabled={busy || !d.available}
+          onChange={(e) => setDrag(Number(e.target.value))}
+          onPointerUp={(e) => {
+            const v = Number((e.target as HTMLInputElement).value);
+            setDrag(null);
+            send(d.id, { command: "set_volume", volumePct: v });
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
  * White-noise machine: the sound (type + volume) is ours to control; on/off
  * belongs to the Control4 bedside button, so the card reports playing/idle
  * honestly from the server's listener count instead of pretending.
@@ -1259,7 +1392,7 @@ function NoiseCard({
   };
 
   return (
-    <div className={`dev-block ${d.available ? "" : "unavailable"}`}>
+    <div className={`dev-block hero ${d.available ? "" : "unavailable"}`}>
       <div className={`dev ${playing ? "on" : ""}`}>
         <div>
           <div className="nm">{d.label}</div>
@@ -1275,7 +1408,7 @@ function NoiseCard({
         <button
           className="toggle"
           aria-pressed={playing}
-          aria-label={`White noise ${playing ? "off" : "on"}`}
+          aria-label={`${d.label} ${playing ? "off" : "on"}`}
           disabled={busy || !d.available}
           onClick={() =>
             send(d.id, { command: playing ? "turn_off" : "turn_on" }).then((r) => {
@@ -1417,7 +1550,7 @@ function SaunaCard({
   };
 
   return (
-    <div className="dev-block">
+    <div className="dev-block hero">
       <div className={`dev ${on ? "on" : ""} ${d.available ? "" : "unavailable"}`}>
         <div>
           <div className="nm">{d.label}</div>

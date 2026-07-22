@@ -18,6 +18,8 @@ export type Capability =
   | "hvac_mode"
   | "fan_mode"
   | "volume"
+  | "select_source"
+  | "transport"
   | "vacuum_control";
 
 export interface MapRow {
@@ -73,7 +75,11 @@ function capabilitiesFor(row: MapRow): Capability[] {
     case "climate":
       return ["set_temperature", "hvac_mode", "fan_mode"];
     case "media_player":
-      return ["on_off", "volume"];
+      // Control4 matrix zones have no turn_on and no play_media — a zone
+      // wakes by selecting a source. The UI decides which controls to show
+      // from the entity's live supported_features; unsupported service calls
+      // are rejected by HA either way.
+      return ["on_off", "volume", "select_source", "transport"];
     case "vacuum":
       return ["vacuum_control"];
   }

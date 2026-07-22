@@ -167,6 +167,54 @@ describe("vacuum commands", () => {
   });
 });
 
+describe("media zone commands (Control4 matrix rooms)", () => {
+  const zone: Device = {
+    id: "den__den",
+    entityId: "media_player.den",
+    kind: "media_player",
+    label: "Den",
+    room: "Den",
+    floor: 5,
+    group: "Media",
+    category: "media",
+    visible: true,
+    capabilities: ["on_off", "volume", "select_source", "transport"],
+  };
+
+  it("maps select_source and transport to media_player services", () => {
+    expect(buildServiceCall(zone, { command: "select_source", source: "TuneIn" })).toEqual({
+      domain: "media_player",
+      service: "select_source",
+      data: { entity_id: zone.entityId, source: "TuneIn" },
+    });
+    expect(buildServiceCall(zone, { command: "play" })).toEqual({
+      domain: "media_player", service: "media_play", data: { entity_id: zone.entityId },
+    });
+    expect(buildServiceCall(zone, { command: "pause" })).toEqual({
+      domain: "media_player", service: "media_pause", data: { entity_id: zone.entityId },
+    });
+  });
+
+  it("refuses source/transport on devices without the capabilities", () => {
+    expect(() => buildServiceCall(dimmer, { command: "select_source", source: "TuneIn" })).toThrow(/does not support/);
+    expect(() => buildServiceCall(shade, { command: "play" })).toThrow(/does not support/);
+  });
+
+  it("verifies play/pause by state; select_source verifies by attribute echo", () => {
+    expect(expectedStates({ command: "play" })).toEqual(["playing"]);
+    expect(expectedStates({ command: "pause" })).toEqual(["paused"]);
+    expect(expectedStates({ command: "select_source", source: "TuneIn" })).toBeNull();
+  });
+
+  it("schema accepts real source names and rejects junk", () => {
+    // Real names in this house include spaces, quotes, and hyphens.
+    expect(CommandSchema.safeParse({ command: "select_source", source: "Smart TV Lounge" }).success).toBe(true);
+    expect(CommandSchema.safeParse({ command: "select_source", source: "Gramophone" }).success).toBe(true);
+    expect(CommandSchema.safeParse({ command: "select_source", source: "" }).success).toBe(false);
+    expect(CommandSchema.safeParse({ command: "select_source", source: "x".repeat(80) }).success).toBe(false);
+  });
+});
+
 describe("CommandSchema", () => {
   it("accepts a valid brightness command", () => {
     expect(

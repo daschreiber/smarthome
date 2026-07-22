@@ -35,7 +35,14 @@ interface UiDevice {
   stopAt?: string | null;
   /** White-noise machine only. */
   noiseType?: string | null;
+  /** White-noise machine and media players. */
   volumePct?: number | null;
+  /** Media players only: current input, the zone's inputs, and whether the
+   * player supports turn_on (Control4 matrix zones don't — they wake by
+   * source selection). */
+  source?: string | null;
+  sourceList?: string[] | null;
+  canTurnOn?: boolean;
   /** Vacuums only. */
   batteryPct?: number | null;
   fanSpeed?: string | null;
@@ -865,6 +872,11 @@ function Device({
   if (d.kind === "noise") return <NoiseCard d={d} busy={busy} send={send} />;
   if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} star={star} />;
   if (d.kind === "vacuum") return <VacuumCard d={d} flash={flash} busy={busy} send={send} star={star} />;
+  // Media zones with selectable inputs (the Control4 matrix rooms) get the
+  // full source/transport card; plain streamers keep the toggle row below.
+  if (d.kind === "media_player" && (d.sourceList?.length ?? 0) > 0) {
+    return <MediaCard d={d} flash={flash} busy={busy} send={send} star={star} />;
+  }
   if (d.kind === "cover") {
     return (
       <div className={`dev ${d.available ? "" : "unavailable"} ${flashClass(flash)}`}>
@@ -1242,6 +1254,102 @@ function VacuumCard({
               : "everywhere"
           }${passes > 1 ? ` · ${passes} passes` : ""}`}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Media zone with selectable inputs — the Control4 matrix rooms. These zones
+ * have NO turn_on: tapping a source is how a zone wakes, so the card leads
+ * with the source chips. "Unknown Device - …" matrix inputs stay hidden until
+ * they're identified and named in Composer. Transport (play/pause) and Off
+ * appear once something is active; volume always works.
+ */
+function MediaCard({
+  d, flash, busy, send, star,
+}: {
+  d: UiDevice;
+  flash?: Flash;
+  busy: boolean;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
+  star?: React.ReactNode;
+}) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const active = ["playing", "paused", "buffering", "on"].includes(d.state);
+  const playing = d.state === "playing";
+  const label = d.label === d.room ? "Speakers" : d.label;
+  const sources = (d.sourceList ?? []).filter((s) => !/^Unknown Device/i.test(s));
+  const volume = drag ?? d.volumePct ?? 0;
+  return (
+    <div className={`dev-block hero ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
+      <div className={`dev ${active ? "on" : ""}`}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {star}
+          <div>
+            <div className="nm">{label}</div>
+            <div className="st">
+              {busy
+                ? "…"
+                : !d.available
+                  ? "unavailable"
+                  : active && d.source
+                    ? `${d.state} · ${d.source}`
+                    : d.state}
+            </div>
+          </div>
+        </div>
+        <div className="btn-row">
+          {active && (
+            <button
+              className="mini-btn"
+              disabled={busy}
+              onClick={() => send(d.id, { command: playing ? "pause" : "play" })}
+            >
+              {playing ? "Pause" : "Play"}
+            </button>
+          )}
+          {(active || d.canTurnOn) && (
+            <button
+              className="mini-btn"
+              disabled={busy || !d.available}
+              onClick={() => send(d.id, { command: active ? "turn_off" : "turn_on" })}
+            >
+              {active ? "Off" : "On"}
+            </button>
+          )}
+        </div>
+      </div>
+      {sources.length > 0 && (
+        <div className="slider-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", paddingBottom: 6 }}>
+          {sources.map((s) => (
+            <button
+              key={s}
+              className="mini-btn"
+              disabled={busy || !d.available}
+              style={d.source === s ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : undefined}
+              onClick={() => send(d.id, { command: "select_source", source: s })}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="slider-row">
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={volume}
+          aria-label={`${label} volume`}
+          disabled={busy || !d.available}
+          onChange={(e) => setDrag(Number(e.target.value))}
+          onPointerUp={(e) => {
+            const v = Number((e.target as HTMLInputElement).value);
+            setDrag(null);
+            send(d.id, { command: "set_volume", volumePct: v });
+          }}
+        />
       </div>
     </div>
   );

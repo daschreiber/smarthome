@@ -94,12 +94,20 @@ To bring the two Roborocks live:
    redeploy. The placeholder cards are replaced by the real devices.
 4. **Done 2026-07-21** — per-room cleaning, suction level, and passes: the
    card's Clean button opens an options panel. Rooms come live from
-   `roborock.get_maps` (name the segments in the Roborock app and they appear
-   after the 15-min cache expires); suction options come from the entity's
+   `roborock.get_maps`; suction options come from the entity's
    `fan_speed_list`; passes (1-3×) ride Roborock's `app_segment_clean`
    command. Room-targeted cleaning through the conversational layer
    ("vacuum the kitchen") is the remaining piece — the segment vocabulary
    would need to join the assistant's tool schema.
+5. **Done 2026-07-22** — segment names live in the app. The robots' maps
+   were never named, so `get_maps` returns bare ids ("Room 16"). Rather
+   than naming them in the Roborock app, the Clean panel's **Name rooms**
+   mode (admin/member) maps each segment id to one of the app's own room
+   names for that floor; the mapping is stored in `data/vacuum_rooms.json`
+   (`web/data/` copy for the deployed app, `VACUUM_ROOMS_PATH` override)
+   and overlaid on every segment response. Like `favorites.json`, runtime
+   edits live on Railway's ephemeral filesystem — commit the settled
+   mapping back to the repo so a redeploy doesn't lose it.
 
 ## UI consequences (for the design brainstorm)
 

@@ -6,7 +6,7 @@ import { audit } from "@/lib/audit";
 import { authenticate } from "@/lib/auth";
 import { unitEntityIds } from "@/lib/coolmaster";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
-import { noiseMediaEntity, noiseMediaSource, noiseStatusFresh, noiseStreamUrl, setNoiseVolume } from "@/lib/whitenoise";
+import { noiseStatusFresh, noiseTurnOff, noiseTurnOn, setNoiseVolume } from "@/lib/whitenoise";
 
 /**
  * Command execution flow per IMPLEMENTATION_SPEC §9:
@@ -57,29 +57,10 @@ export async function POST(
         message = `volume ${s.volume}%`;
         listeners = s.listeners;
       } else if (cmd.command === "turn_on" || cmd.command === "turn_off") {
-        // On/off drives the room's media_player. Two dialects:
-        // - WHITENOISE_MEDIA_SOURCE set: Control4's matrix model — the room
-        //   JOINS the named source (select_source); play_media is ignored by
-        //   the Control4 integration, so URL playback can't work there.
-        // - Unset: play the stream URL directly (DLNA/Sonos/Cast entities).
-        // The token-bearing URL stays server-side (never sent to the browser).
-        if (cmd.command === "turn_on") {
-          const source = noiseMediaSource();
-          if (source) {
-            await callService("media_player", "select_source", {
-              entity_id: noiseMediaEntity(),
-              source,
-            });
-          } else {
-            await callService("media_player", "play_media", {
-              entity_id: noiseMediaEntity(),
-              media_content_id: noiseStreamUrl(),
-              media_content_type: "music",
-            });
-          }
-        } else {
-          await callService("media_player", "turn_off", { entity_id: noiseMediaEntity() });
-        }
+        // On/off via the shared playback path (lib/whitenoise): select_source
+        // in Control4 source mode, play_media with the stream URL otherwise.
+        if (cmd.command === "turn_on") await noiseTurnOn();
+        else await noiseTurnOff();
         // The noise server's listener count is the ground truth: poll a few
         // seconds for the zone to connect (or drop). "confirmed" only when it
         // proves the intent; otherwise "sent" (the play_media may be a no-op

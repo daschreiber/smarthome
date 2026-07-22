@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { SYSTEM_COMMANDS, executeSystemCommand, roomLights, systemDevices } from "../execute";
+import { describe, expect, it, vi } from "vitest";
+import { SYSTEM_COMMANDS, executeOnDevice, executeSystemCommand, roomLights, systemDevices } from "../execute";
 import { registry } from "../registry";
 
 describe("systemDevices", () => {
@@ -74,5 +74,68 @@ describe("executeSystemCommand", () => {
     expect(dimmers.length).toBeGreaterThan(0);
     const result = await executeSystemCommand("lighting", "set_brightness", ["Master Bedroom"], 40);
     expect(result.total).toBe(dimmers.length);
+  });
+});
+
+describe("executeOnDevice noise routing", () => {
+  // The white-noise device is virtual — virtual.white_noise doesn't exist in
+  // HA, so on/off must go through lib/whitenoise's playback path (play_media
+  // or select_source), NEVER buildServiceCall's light branch. This pins the
+  // fix for automations/scenes firing noise at a phantom entity.
+  const noiseDevice = {
+    id: "master_bedroom__white_noise",
+    entityId: "virtual.white_noise",
+    kind: "noise",
+    label: "White noise",
+    room: "Master Bedroom",
+    floor: 6,
+    group: "Media",
+    category: "noise_machine",
+    visible: true,
+    capabilities: ["on_off", "volume"],
+  } as Parameters<typeof executeOnDevice>[0];
+
+  it("turn_on plays the stream on the media entity, not light.turn_on on the phantom", async () => {
+    process.env.WHITENOISE_BASE_URL = "https://noise.example";
+    process.env.WHITENOISE_TOKEN = "tok";
+    process.env.HA_BASE_URL = "http://ha.example";
+    process.env.HA_TOKEN = "ha-tok";
+    const calls: Array<{ url: string; body?: string }> = [];
+    vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), body: init?.body ? String(init.body) : undefined });
+      return new Response("{}", { status: 200 });
+    });
+    try {
+      await executeOnDevice(noiseDevice, { command: "turn_on" });
+      const ha = calls.find((c) => c.url.includes("/api/services/"));
+      expect(ha, "must call an HA media_player service").toBeDefined();
+      expect(ha!.url).toContain("/api/services/media_player/play_media");
+      expect(ha!.body).toContain("media_player.");
+      expect(ha!.body).not.toContain("virtual.white_noise");
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.WHITENOISE_BASE_URL;
+      delete process.env.WHITENOISE_TOKEN;
+      delete process.env.HA_BASE_URL;
+      delete process.env.HA_TOKEN;
+    }
+  });
+
+  it("set_volume goes to the noise server, not HA", async () => {
+    process.env.WHITENOISE_BASE_URL = "https://noise.example";
+    process.env.WHITENOISE_TOKEN = "tok";
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string | URL) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ noise_type: "white", volume: 30, listeners: 0 }), { status: 200 });
+    });
+    try {
+      await executeOnDevice(noiseDevice, { command: "set_volume", volumePct: 30 });
+      expect(calls).toEqual(["https://noise.example/api/volume/30"]);
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.WHITENOISE_BASE_URL;
+      delete process.env.WHITENOISE_TOKEN;
+    }
   });
 });

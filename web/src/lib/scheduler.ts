@@ -1,6 +1,7 @@
 import { dueSteps, listAutomations, markFired, nowParts, type SunEvents } from "./automations";
 import { executeAction, executeOnDevice } from "./execute";
 import { dueTimers, listTimers } from "./timers";
+import { tickSleepwatch } from "./sleepwatch";
 import { getStates } from "./ha";
 import { sunEvents } from "./sun";
 import { audit } from "./audit";
@@ -72,6 +73,7 @@ export async function tick(): Promise<void> {
   }
 
   await tickTimers();
+  await tickSleepwatch();
 }
 
 /**

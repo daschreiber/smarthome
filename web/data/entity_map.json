@@ -1132,7 +1132,7 @@
     "floor": 6,
     "category": "media",
     "group": "Media",
-    "visible": true
+    "visible": false
   },
   {
     "entity_id": "media_player.lounge",
@@ -1399,7 +1399,7 @@
     "floor": 6,
     "category": "media",
     "group": "Media",
-    "visible": true
+    "visible": false
   },
   {
     "entity_id": "light.knx_switch_mbr_tv_lift",

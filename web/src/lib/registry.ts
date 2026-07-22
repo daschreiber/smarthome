@@ -165,7 +165,10 @@ function virtualDevices(): Device[] {
       id: "master_bedroom__white_noise",
       entityId: "virtual.white_noise",
       kind: "noise",
-      label: "White noise",
+      // "Sleep sound", matching the Alexa/HA name (the entity was renamed to
+      // dodge Amazon's Ambient Sounds phrase-hijack) — one vocabulary across
+      // voice and screen. The id keeps the historical slug.
+      label: "Sleep sound",
       room: "Master Bedroom",
       floor: 6,
       group: "Media",

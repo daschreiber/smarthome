@@ -1,13 +1,27 @@
 /**
- * Adapter for the white-noise machine (daschreiber/whitenoise, its own
- * Railway service). Division of labor per that repo's README: Control4 owns
- * on/off (the bedside button connects/disconnects the bedroom zone), the
- * noise server owns the SOUND (type + volume of the endless stream), and
- * `listeners` tells the truth about whether anything is actually playing.
- * This module is the only code that talks to it.
+ * Adapter for the white-noise machine (daschreiber/whitenoise). Two shapes:
+ *
+ * - Direct mode: the noise server is reachable from this app (the original
+ *   Railway deployment). WHITENOISE_BASE_URL + WHITENOISE_TOKEN; this module
+ *   calls its API straight.
+ * - Via-HA mode (WHITENOISE_VIA_HA): the noise server runs as a Home
+ *   Assistant add-on on the LAN, serving plain HTTP because the bedroom
+ *   Yamaha's MusicCast player cannot do TLS (COMMISSIONING_LOG 2026-07-22).
+ *   This app runs in the cloud and can't reach the LAN, so sound control and
+ *   status ride through HA: rest_command.whitenoise_set_noise /
+ *   whitenoise_set_volume, and sensor.white_noise_status (a REST sensor
+ *   mirroring /api/status). Those live in configuration.yaml on the Green.
+ *
+ * Either way `listeners` tells the truth about whether anything is actually
+ * playing, and on/off is the room's media_player joining/leaving the stream.
  */
 
+import { callService, getState } from "./ha";
+
 const TIMEOUT_MS = 5000;
+
+/** The HA REST sensor that mirrors the add-on's /api/status. */
+const STATUS_ENTITY = "sensor.white_noise_status";
 
 export type NoiseType = "white" | "brown" | "pink";
 
@@ -17,8 +31,14 @@ export interface NoiseStatus {
   listeners: number;
 }
 
+/** True when sound control goes through Home Assistant (LAN add-on mode). */
+export function noiseViaHa(): boolean {
+  const v = (process.env.WHITENOISE_VIA_HA ?? "").trim().toLowerCase();
+  return v === "1" || v === "true";
+}
+
 export function noiseConfigured(): boolean {
-  return Boolean(process.env.WHITENOISE_BASE_URL && process.env.WHITENOISE_TOKEN);
+  return noiseViaHa() || Boolean(process.env.WHITENOISE_BASE_URL && process.env.WHITENOISE_TOKEN);
 }
 
 /**
@@ -36,8 +56,10 @@ function noiseBaseUrl(): string {
 
 /**
  * The Home Assistant media_player entity for the room whose speakers play the
- * stream. On/off is done by telling this Control4 zone to play (or stop) the
- * stream URL — no bedside button required. Defaults to the Master Bedroom.
+ * stream. On/off is done by telling this zone to play (or stop) the stream
+ * URL. The bedroom speakers are the Yamaha's MAIN zone,
+ * media_player.master_bedroom_2 — set WHITENOISE_MEDIA_ENTITY accordingly
+ * (the historical default is kept for compatibility).
  */
 export function noiseMediaEntity(): string {
   return process.env.WHITENOISE_MEDIA_ENTITY || "media_player.master_bedroom";
@@ -55,9 +77,16 @@ export function noiseMediaSource(): string | null {
   return process.env.WHITENOISE_MEDIA_SOURCE || null;
 }
 
-/** The token-bearing stream URL the zone connects to. Server-side only —
- *  it carries the token and must never reach the browser. */
+/**
+ * The token-bearing stream URL the zone connects to. WHITENOISE_STREAM_URL
+ * wins when set — in via-HA mode that's the add-on's LAN plain-HTTP URL
+ * (`http://<green>:8099/stream?token=…`), which the Yamaha can actually play;
+ * the HTTPS fallback built from the base URL is only for TLS-capable players.
+ * Server-side only — it carries the token and must never reach the browser.
+ */
 export function noiseStreamUrl(): string {
+  const explicit = (process.env.WHITENOISE_STREAM_URL ?? "").trim();
+  if (explicit) return explicit;
   const base = noiseBaseUrl();
   const token = process.env.WHITENOISE_TOKEN ?? "";
   return `${base}/stream?token=${encodeURIComponent(token)}`;
@@ -90,15 +119,47 @@ async function call(path: string, method: "GET" | "POST"): Promise<NoiseStatus> 
   }
 }
 
+/** Read the mirrored status out of the HA REST sensor's attributes. */
+async function statusFromSensor(): Promise<NoiseStatus> {
+  const s = await getState(STATUS_ENTITY);
+  if (!s) throw new Error(`${STATUS_ENTITY} not found — is the rest sensor configured in HA?`);
+  const a = s.attributes;
+  return {
+    noiseType: (a.noise_type as NoiseType) ?? "white",
+    volume: Number(a.volume ?? 0),
+    listeners: Number(a.listeners ?? 0),
+  };
+}
+
 export async function noiseStatus(): Promise<NoiseStatus> {
+  if (noiseViaHa()) return statusFromSensor();
   return call("/api/status", "GET");
 }
 
+/**
+ * Status with freshness guaranteed. The REST sensor polls every 60s, which is
+ * fine for display but useless for verifying an on/off command; force an
+ * update first. In direct mode a status call is always fresh.
+ */
+export async function noiseStatusFresh(): Promise<NoiseStatus> {
+  if (!noiseViaHa()) return call("/api/status", "GET");
+  await callService("homeassistant", "update_entity", { entity_id: STATUS_ENTITY });
+  return statusFromSensor();
+}
+
 export async function setNoiseType(type: NoiseType): Promise<NoiseStatus> {
+  if (noiseViaHa()) {
+    await callService("rest_command", "whitenoise_set_noise", { noise_type: type });
+    return noiseStatusFresh();
+  }
   return call(`/api/noise/${type}`, "POST");
 }
 
 export async function setNoiseVolume(volume: number): Promise<NoiseStatus> {
   const v = Math.min(100, Math.max(0, Math.round(volume)));
+  if (noiseViaHa()) {
+    await callService("rest_command", "whitenoise_set_volume", { volume: v });
+    return noiseStatusFresh();
+  }
   return call(`/api/volume/${v}`, "POST");
 }

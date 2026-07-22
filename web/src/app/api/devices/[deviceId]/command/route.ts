@@ -6,7 +6,7 @@ import { audit } from "@/lib/audit";
 import { authenticate } from "@/lib/auth";
 import { unitEntityIds } from "@/lib/coolmaster";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
-import { noiseMediaEntity, noiseMediaSource, noiseStatus, noiseStreamUrl, setNoiseVolume } from "@/lib/whitenoise";
+import { noiseMediaEntity, noiseMediaSource, noiseStatusFresh, noiseStreamUrl, setNoiseVolume } from "@/lib/whitenoise";
 
 /**
  * Command execution flow per IMPLEMENTATION_SPEC §9:
@@ -88,7 +88,7 @@ export async function POST(
         const deadline = Date.now() + 8000;
         for (;;) {
           await new Promise((r) => setTimeout(r, 1000));
-          listeners = (await noiseStatus().catch(() => null))?.listeners ?? listeners;
+          listeners = (await noiseStatusFresh().catch(() => null))?.listeners ?? listeners;
           if (listeners != null && wantPlaying === listeners > 0) break;
           if (Date.now() >= deadline) break;
         }

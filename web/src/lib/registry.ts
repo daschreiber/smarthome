@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { noiseConfigured } from "./whitenoise";
 
 /**
  * Device registry: loads the generated entity map (data/entity_map.json at the
@@ -156,10 +157,10 @@ function virtualDevices(): Device[] {
       requiresConfirmation: true,
     });
   }
-  // The white-noise machine (daschreiber/whitenoise): Control4 owns on/off
-  // via the bedside button; the app controls sound type and volume, and
-  // shows honest playing/idle state from the server's listener count.
-  if (process.env.WHITENOISE_BASE_URL && process.env.WHITENOISE_TOKEN) {
+  // The white-noise machine (daschreiber/whitenoise): the app drives on/off
+  // (the room's media_player joins/leaves the stream), controls sound type
+  // and volume, and shows honest playing/idle state from the listener count.
+  if (noiseConfigured()) {
     devices.push({
       id: "master_bedroom__white_noise",
       entityId: "virtual.white_noise",

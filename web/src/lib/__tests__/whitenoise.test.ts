@@ -1,11 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { noiseMediaEntity, noiseMediaSource, noiseStatus, noiseStreamUrl, setNoiseType, setNoiseVolume } from "../whitenoise";
+import {
+  noiseConfigured,
+  noiseMediaEntity,
+  noiseMediaSource,
+  noiseStatus,
+  noiseStatusFresh,
+  noiseStreamUrl,
+  setNoiseType,
+  setNoiseVolume,
+} from "../whitenoise";
+import { callService, getState } from "../ha";
+
+vi.mock("../ha", () => ({
+  callService: vi.fn(async () => undefined),
+  getState: vi.fn(async () => null),
+}));
 
 /**
  * Pins the wire contract with the white-noise machine
  * (daschreiber/whitenoise app/api.py, verified 2026-07-17): Bearer token
  * auth, GET /api/status and POST /api/noise/{type} | /api/volume/{level},
  * all answering {noise_type, volume, listeners}; errors as {detail}.
+ *
+ * Via-HA mode (verified against the Green 2026-07-22): control rides HA's
+ * rest_command.whitenoise_set_noise / whitenoise_set_volume, status is
+ * mirrored in sensor.white_noise_status's attributes.
  */
 
 const calls: Array<{ url: string; method?: string; auth?: string | null }> = [];
@@ -15,8 +34,12 @@ let status = 200;
 beforeEach(() => {
   process.env.WHITENOISE_BASE_URL = "https://noise.example/";
   process.env.WHITENOISE_TOKEN = "tok9";
+  delete process.env.WHITENOISE_VIA_HA;
+  delete process.env.WHITENOISE_STREAM_URL;
   calls.length = 0;
   status = 200;
+  vi.mocked(callService).mockClear();
+  vi.mocked(getState).mockClear();
   vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
     calls.push({
       url: String(url),
@@ -76,5 +99,61 @@ describe("white-noise adapter wire contract", () => {
     await noiseStatus();
     expect(calls[0].url).toBe("https://whitenoise-production.up.railway.app/api/status");
     expect(noiseStreamUrl()).toBe("https://whitenoise-production.up.railway.app/stream?token=tok9");
+  });
+});
+
+describe("via-HA mode (LAN add-on behind Home Assistant)", () => {
+  const sensor = (attrs: Record<string, unknown>) => ({
+    entity_id: "sensor.white_noise_status",
+    state: String(attrs.listeners ?? 0),
+    attributes: attrs,
+    last_updated: "",
+    last_changed: "",
+  });
+
+  beforeEach(() => {
+    process.env.WHITENOISE_VIA_HA = "1";
+    delete process.env.WHITENOISE_BASE_URL;
+    delete process.env.WHITENOISE_TOKEN;
+    vi.mocked(getState).mockResolvedValue(sensor({ noise_type: "pink", volume: 72, listeners: 1 }));
+  });
+
+  it("counts as configured without base URL and token", () => {
+    expect(noiseConfigured()).toBe(true);
+  });
+
+  it("reads status from the HA sensor's attributes, no direct fetch", async () => {
+    const s = await noiseStatus();
+    expect(s).toEqual({ noiseType: "pink", volume: 72, listeners: 1 });
+    expect(vi.mocked(getState)).toHaveBeenCalledWith("sensor.white_noise_status");
+    expect(calls).toHaveLength(0); // never talks to the noise server itself
+  });
+
+  it("fresh status forces an update_entity before reading", async () => {
+    await noiseStatusFresh();
+    expect(vi.mocked(callService)).toHaveBeenCalledWith("homeassistant", "update_entity", {
+      entity_id: "sensor.white_noise_status",
+    });
+  });
+
+  it("sound changes ride the rest_commands and clamp volume", async () => {
+    await setNoiseType("brown");
+    expect(vi.mocked(callService)).toHaveBeenCalledWith("rest_command", "whitenoise_set_noise", {
+      noise_type: "brown",
+    });
+    await setNoiseVolume(155);
+    expect(vi.mocked(callService)).toHaveBeenCalledWith("rest_command", "whitenoise_set_volume", {
+      volume: 100,
+    });
+  });
+
+  it("WHITENOISE_STREAM_URL overrides the built stream URL (LAN plain HTTP)", () => {
+    process.env.WHITENOISE_STREAM_URL = "http://10.0.0.69:8099/stream?token=abc";
+    expect(noiseStreamUrl()).toBe("http://10.0.0.69:8099/stream?token=abc");
+  });
+
+  it("fails loudly when the sensor is missing (rest sensor not configured)", async () => {
+    vi.mocked(getState).mockResolvedValue(null);
+    await expect(noiseStatus()).rejects.toThrow(/not found/);
   });
 });

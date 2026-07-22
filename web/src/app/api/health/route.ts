@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     whiteNoise = {
       configured: false,
       ok: false,
-      message: "WHITENOISE_BASE_URL / WHITENOISE_TOKEN not set — the Master Bedroom noise card is hidden until both are configured",
+      message: "white noise not configured — set WHITENOISE_VIA_HA=1 (HA add-on mode) or WHITENOISE_BASE_URL + WHITENOISE_TOKEN; the Master Bedroom card is hidden until then",
     };
   } else {
     try {

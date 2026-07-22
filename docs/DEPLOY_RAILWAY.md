@@ -55,9 +55,11 @@ network-scoped, only the login restriction was.
    | `APP_BASE_URL` | the Railway URL (fill in after step 5; used in reset links) |
    | `SAUNA_BASE_URL` | the sauna app's URL (optional, enables the sauna card) |
    | `SAUNA_API_TOKEN` | the sauna app's API token (optional) |
-   | `WHITENOISE_BASE_URL` | the white-noise machine's URL (optional, enables the Master Bedroom noise card) |
-   | `WHITENOISE_TOKEN` | the white-noise machine's SECRET_TOKEN (optional) |
-   | `WHITENOISE_MEDIA_ENTITY` | optional — the HA media_player entity the app tells to play/stop the stream for in-app on/off (defaults to `media_player.master_bedroom`) |
+   | `WHITENOISE_VIA_HA` | `1` — the white-noise server runs as an HA add-on on the LAN (the bedroom Yamaha can't play HTTPS, so the stream must be LAN plain-HTTP). Sound control and status ride through HA: `rest_command.whitenoise_set_noise` / `whitenoise_set_volume` and `sensor.white_noise_status`, configured in the Green's `configuration.yaml`. Enables the Master Bedroom noise card without the two vars below |
+   | `WHITENOISE_STREAM_URL` | with `WHITENOISE_VIA_HA`: the add-on's LAN stream URL incl. token, e.g. `http://10.0.0.69:8099/stream?token=…` — what the app tells the media_player to play |
+   | `WHITENOISE_BASE_URL` | direct mode only — the cloud noise server's URL (optional, enables the Master Bedroom noise card) |
+   | `WHITENOISE_TOKEN` | direct mode only — the noise server's SECRET_TOKEN (optional) |
+   | `WHITENOISE_MEDIA_ENTITY` | optional — the HA media_player entity the app tells to play/stop the stream for in-app on/off (defaults to `media_player.master_bedroom`; the actual bedroom speakers are the Yamaha MAIN zone `media_player.master_bedroom_2`) |
    | `WHITENOISE_MEDIA_SOURCE` | optional — Control4 rooms join *sources* rather than playing URLs (its HA integration ignores `play_media`). Once the stream is programmed into Control4 as a source (web-radio/station driver), set this to that source's exact name from the entity's `source_list`; "on" then does `select_source` on the room. Unset, the app falls back to `play_media` with the stream URL, which works on URL-capable entities (DLNA renderer, Sonos, Cast). Either way, "on" only reports confirmed once the noise server sees a listener connect |
    | `ANTHROPIC_API_KEY` | optional — enables the "Ask the house" conversational assistant (console.anthropic.com → API keys); without it the chat screen shows a friendly "not configured" message |
    | `GOOGLE_CLIENT_ID` | optional — enables "Continue with Google" on the sign-in screen (Google Cloud Console → OAuth client, redirect URI `<APP_BASE_URL>/api/auth/google/callback`) |

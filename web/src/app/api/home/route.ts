@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
     // automation, and assistant layers) until it's configured. But hiding it
     // outright reads as "the feature is missing," so the home view surfaces a
     // display-only, unavailable card that names what's absent. It becomes the
-    // real card the moment WHITENOISE_BASE_URL / WHITENOISE_TOKEN are set.
+    // real card the moment the white-noise envs are set (see lib/whitenoise).
     if (!noiseConfigured()) {
       devices.push({
         id: "master_bedroom__white_noise",
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
         targetTemperature: null,
         hvacMode: null,
         lastUpdated: null,
-        note: "not configured — set WHITENOISE_BASE_URL and WHITENOISE_TOKEN",
+        note: "not configured — set WHITENOISE_VIA_HA=1 (HA add-on) or WHITENOISE_BASE_URL + WHITENOISE_TOKEN",
         noiseType: null,
         volumePct: null,
       });

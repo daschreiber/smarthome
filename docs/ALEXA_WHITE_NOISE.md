@@ -19,36 +19,45 @@ can trigger the same switch — pick a phrase that doesn't start with
 
 Add to `configuration.yaml`, next to the existing
 `rest_command.whitenoise_*` / `sensor.white_noise_status` block (see
-COMMISSIONING_LOG 2026-07-22), then restart HA or reload YAML:
+COMMISSIONING_LOG 2026-07-22), then reload Template entities (Developer tools → YAML):
 
 ```yaml
-switch:
-  - platform: template
-    switches:
-      white_noise:
-        friendly_name: "White Noise"
+template:
+  # Append to the EXISTING `template:` list (the HK covers). Modern format
+  # only: a legacy `switch: - platform: template` block loads but never
+  # sets up on current HA (2026.7, same as the covers — see the config's
+  # comments). Verified live 2026-07-22.
+  - switch:
+      - name: "White Noise"
         unique_id: white_noise_master_bedroom
         # Honest state: the add-on's listener count, mirrored by the REST
         # sensor. The sensor polls every 60s, so Alexa's reported state can
         # lag up to a minute — commands are immediate, only the readback
         # lags.
-        value_template: >-
+        state: >-
           {{ (state_attr('sensor.white_noise_status', 'listeners') | int(0)) > 0 }}
         turn_on:
-          - service: media_player.play_media
+          # Same LAN plain-HTTP stream URL as WHITENOISE_STREAM_URL on
+          # Railway (the Yamaha can't play HTTPS). Keep the token out of
+          # the file proper:
+          - action: media_player.play_media
             target:
               entity_id: media_player.master_bedroom_2
             data:
-              # Same LAN plain-HTTP stream URL as WHITENOISE_STREAM_URL on
-              # Railway (the Yamaha can't play HTTPS). Keep the token out of
-              # the file proper:
               media_content_id: !secret whitenoise_stream_url
               media_content_type: music
         turn_off:
-          - service: media_player.turn_off
+          - action: media_player.turn_off
             target:
               entity_id: media_player.master_bedroom_2
 ```
+
+Gotcha: the Supervisor pre-registers a (disabled) `switch.white_noise`
+for the add-on itself, so the template switch first lands as
+`switch.white_noise_2`. Fix in the entity registry: rename the add-on's
+entry to `switch.white_noise_addon`, then rename ours to
+`switch.white_noise`. Reload is enough — no restart: template entities
+reload picks the switch up once it's in modern format.
 
 And in `secrets.yaml`:
 

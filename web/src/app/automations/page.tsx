@@ -578,6 +578,8 @@ export default function Automations() {
       <p className="h-sub">Times are {tz ? `${tz.split("/").pop()!.replace(/_/g, " ")} time` : "house time"}. One-shot automations disable themselves after firing.</p>
       {error && <div className="error-banner">{error}</div>}
 
+      <SleepSense />
+
       {sorted.map(({ a, nf, sunFallback }) => {
         const open = expandedId === a.id;
         return (
@@ -934,5 +936,64 @@ export default function Automations() {
       )}
       <NavBar />
     </main>
+  );
+}
+
+/**
+ * The sleep watcher's card: a standing house rule, not a user-authored
+ * automation — it triggers on the room's STATE (dark, closed, TV stowed
+ * after 22:00), which the step builder can't express. Server logic lives in
+ * lib/sleepwatch; this card only reads status and flips enabled.
+ */
+function SleepSense() {
+  const [st, setSt] = useState<{
+    enabled: boolean; active: boolean; configured: boolean; canToggle: boolean;
+    window: { start: string; end: string };
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/sleepwatch")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setSt)
+      .catch(() => setSt(null));
+  }, []);
+
+  if (!st) return null;
+
+  const toggle = () => {
+    setBusy(true);
+    fetch("/api/sleepwatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !st.enabled }),
+    })
+      .then((r) => r.json())
+      .then((out) => { if (out.ok) setSt({ ...st, enabled: out.enabled, active: false }); })
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className={`dev${st.enabled ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="nm">Sleep sense — white noise</div>
+        <div className="st">
+          {!st.configured
+            ? "white noise isn't configured yet"
+            : !st.enabled
+              ? "paused"
+              : st.active
+                ? `noise is on — stops by ${st.window.end}, or when a light comes on or a shade opens`
+                : `${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count), all shades are closed, and the TV is stowed`}
+        </div>
+      </div>
+      <button
+        className="toggle"
+        aria-pressed={st.enabled}
+        aria-label={`Sleep sense ${st.enabled ? "on" : "paused"}`}
+        disabled={busy || !st.configured || !st.canToggle}
+        onClick={toggle}
+      />
+    </div>
   );
 }

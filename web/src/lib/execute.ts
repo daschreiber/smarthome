@@ -1,7 +1,8 @@
-import { CommandSchema, buildServiceCall, type Command } from "./commands";
+import { CommandSchema, assertCommandAllowed, buildServiceCall, type Command } from "./commands";
 import { callService } from "./ha";
 import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
+import { noiseTurnOff, noiseTurnOn, setNoiseVolume } from "./whitenoise";
 import { getScene } from "./scenes";
 import type { Action } from "./automations";
 
@@ -18,6 +19,17 @@ export async function executeOnDevice(device: Device, cmd: Command): Promise<voi
     else if (cmd.command === "turn_off") await saunaStop();
     else if (cmd.command === "set_temperature") await saunaSetTemperature(cmd.temperature);
     else throw new Error(`sauna does not support ${cmd.command}`);
+    return;
+  }
+  // White noise is a virtual device: its entity doesn't exist in HA, so it
+  // must never reach buildServiceCall (which would target the phantom
+  // entity). Same playback path as the interactive card — lib/whitenoise.
+  if (device.kind === "noise") {
+    assertCommandAllowed(device, cmd);
+    if (cmd.command === "turn_on") await noiseTurnOn();
+    else if (cmd.command === "turn_off") await noiseTurnOff();
+    else if (cmd.command === "set_volume") await setNoiseVolume(cmd.volumePct);
+    else throw new Error(`white noise does not support ${cmd.command}`);
     return;
   }
   const call = buildServiceCall(device, cmd);

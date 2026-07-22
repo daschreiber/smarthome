@@ -147,6 +147,35 @@ export async function noiseStatusFresh(): Promise<NoiseStatus> {
   return statusFromSensor();
 }
 
+/**
+ * Start playback on the room's speakers — the ONE way noise turns on, used
+ * by the command route, scenes/automations, and the sleep watcher alike.
+ * Speaks both dialects: select_source when the stream is a programmed
+ * Control4 source, play_media with the URL otherwise (MusicCast, DLNA…).
+ * Fire-and-forget at this layer: the noise server's listener count is the
+ * ground truth for whether sound actually started.
+ */
+export async function noiseTurnOn(): Promise<void> {
+  const source = noiseMediaSource();
+  if (source) {
+    await callService("media_player", "select_source", {
+      entity_id: noiseMediaEntity(),
+      source,
+    });
+  } else {
+    await callService("media_player", "play_media", {
+      entity_id: noiseMediaEntity(),
+      media_content_id: noiseStreamUrl(),
+      media_content_type: "music",
+    });
+  }
+}
+
+/** Stop playback: the room's media_player goes off/standby. */
+export async function noiseTurnOff(): Promise<void> {
+  await callService("media_player", "turn_off", { entity_id: noiseMediaEntity() });
+}
+
 export async function setNoiseType(type: NoiseType): Promise<NoiseStatus> {
   if (noiseViaHa()) {
     await callService("rest_command", "whitenoise_set_noise", { noise_type: type });

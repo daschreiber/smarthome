@@ -15,6 +15,7 @@ export type Capability =
   | "position"
   | "set_temperature"
   | "hvac_mode"
+  | "fan_mode"
   | "volume"
   | "vacuum_control";
 
@@ -69,7 +70,7 @@ function capabilitiesFor(row: MapRow): Capability[] {
       // so expose stop-capable control and treat position as best-effort.
       return ["open_close_stop", "position"];
     case "climate":
-      return ["set_temperature", "hvac_mode"];
+      return ["set_temperature", "hvac_mode", "fan_mode"];
     case "media_player":
       return ["on_off", "volume"];
     case "vacuum":

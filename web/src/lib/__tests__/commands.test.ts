@@ -60,6 +60,29 @@ describe("climate zone on/off (hvac_mode capability)", () => {
   });
 });
 
+describe("climate fan mode", () => {
+  const zone: Device = {
+    ...climate,
+    capabilities: ["set_temperature", "hvac_mode", "fan_mode"],
+    coolmasterUnits: ["L1.111", "L1.114"],
+  };
+  it("targets the zone's CoolMaster units, like setpoints do", () => {
+    expect(buildServiceCall(zone, { command: "set_fan_mode", fanMode: "high" })).toEqual({
+      domain: "climate",
+      service: "set_fan_mode",
+      data: { entity_id: ["climate.l1_111", "climate.l1_114"], fan_mode: "high" },
+    });
+  });
+  it("requires the fan_mode capability", () => {
+    expect(() => assertCommandAllowed(shade, { command: "set_fan_mode", fanMode: "high" })).toThrow();
+  });
+  it("schema accepts sane modes and rejects junk", () => {
+    expect(CommandSchema.safeParse({ command: "set_fan_mode", fanMode: "low" }).success).toBe(true);
+    expect(CommandSchema.safeParse({ command: "set_fan_mode", fanMode: "" }).success).toBe(false);
+    expect(CommandSchema.safeParse({ command: "set_fan_mode", fanMode: "x".repeat(40) }).success).toBe(false);
+  });
+});
+
 describe("vacuum commands", () => {
   const vacuum: Device = {
     id: "lounge__lounge_roborock",

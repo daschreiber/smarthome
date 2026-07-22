@@ -189,8 +189,17 @@ body {
 
 .climate-card {
   background: var(--card); border: 1px solid var(--card-line); border-radius: var(--radius);
-  padding: 15px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+  padding: 15px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 10px;
 }
+.climate-main { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+.climate-fan { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; width: 100%; }
+.climate-fan .fan-chip {
+  border: 1px solid var(--card-line); background: var(--chip); color: var(--chip-ink);
+  font-family: inherit; font-size: var(--fs-xs); font-weight: 600;
+  padding: 7px 12px; border-radius: 999px; cursor: pointer; min-height: 34px;
+}
+.climate-fan .fan-chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.climate-fan .fan-chip:disabled { opacity: 0.6; cursor: default; }
 .climate-card .now { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .climate-card .mode { font-size: var(--fs-xs); color: var(--dim); }
 /* A running zone reads at a glance: tinted card + a small filled mode pill —

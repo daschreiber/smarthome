@@ -48,6 +48,12 @@ export const CommandSchema = z.discriminatedUnion("command", [
     command: z.literal("set_fan_speed"),
     fanSpeed: z.string().min(1).max(32).regex(/^[a-z0-9_ ]+$/i),
   }),
+  // A/C fan strength; valid values are whatever the CoolMaster unit's
+  // fan_modes reports (low/medium/high/auto and friends).
+  z.object({
+    command: z.literal("set_fan_mode"),
+    fanMode: z.string().min(1).max(32).regex(/^[a-z0-9_ ]+$/i),
+  }),
 ]);
 
 export type Command = z.infer<typeof CommandSchema>;
@@ -72,6 +78,7 @@ const CAPABILITY_FOR_COMMAND: Record<Command["command"], string> = {
   pause_cleaning: "vacuum_control",
   return_to_dock: "vacuum_control",
   set_fan_speed: "vacuum_control",
+  set_fan_mode: "fan_mode",
 };
 
 /** Per-kind safe set-point ranges (°C), enforced server-side. */
@@ -218,6 +225,13 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
         domain: "vacuum",
         service: "set_fan_speed",
         data: { ...target, fan_speed: cmd.fanSpeed },
+      };
+    case "set_fan_mode":
+      // Like setpoints, fan strength is a CoolMaster-unit operation.
+      return {
+        domain: "climate",
+        service: "set_fan_mode",
+        data: { ...climateTarget(), fan_mode: cmd.fanMode },
       };
   }
 }

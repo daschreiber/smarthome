@@ -70,6 +70,10 @@ interface CustomScene {
 }
 
 const GROUP_ORDER = ["Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
+/** Display names for groups whose entity-map name reads wrong in the UI.
+ * "Media" is owner-renamed to "Music" — the section is the room's sound,
+ * not a device category. The map keeps "Media" (ids/groups are data). */
+const GROUP_DISPLAY: Record<string, string> = { Media: "Music" };
 
 /** A room's A/C (or sauna) counts as running for the card indicators. */
 function climateActive(c: UiDevice | null): boolean {
@@ -711,7 +715,7 @@ function RoomView({
       )}
       {groups.map(([group, ds]) => (
         <section key={group}>
-          <div className="section-label">{group}</div>
+          <div className="section-label">{GROUP_DISPLAY[group] ?? group}</div>
           {group === "Lighting" && ds.length >= COLLAPSE_LIGHTS_AT ? (
             <RoomLightsBlock room={room} lights={ds} flash={flash} busy={busy} sendSystem={sendSystem} rows={rows} />
           ) : group === "Shades" && ds.length > 1 ? (
@@ -1275,7 +1279,12 @@ function VacuumCard({
  *   silent app. Streaming here is Spotify Connect / AirPlay via the VSSL
  *   amps instead (docs plan, phase M3).
  */
-const HIDDEN_SOURCES = /^(Unknown Device\b|TuneIn$|My Music$|Digital Media$)/i;
+const HIDDEN_SOURCES =
+  // Owner's call (2026-07-23): the Music card is play + volume, not an
+  // input matrix — TV/XBox chips went the way of the C4 apps. Gramophone
+  // survives as the one physical chip (a spinning record can't be started
+  // remotely; the chip routes it to the room).
+  /^(Unknown Device\b|TuneIn$|My Music$|Digital Media$|Smart TV\b|XBox$)/i;
 /**
  * MusicCast receivers (Den/Lounge/MBR Yamahas) list ~25 inputs, nearly all
  * noise for this house: unused music services (Napster/TIDAL/…), bare HDMI

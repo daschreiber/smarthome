@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import NavBar from "../NavBar";
 import {
   fireSortKey, houseNow, nextAutomationFire, nextFireLabel, resolveStepTime,
   type NextSunIso,
 } from "@/lib/nextfire";
+import { automationGroup } from "@/lib/automationGroups";
 
 /**
- * Automations screen: a compact schedule-ordered list + a room-first builder.
+ * Automations screen: a room-grouped, schedule-ordered list + a room-first
+ * builder.
  * Pick a room, get chips for what that room can actually do (lights, shades,
  * AC at a set-point, the sauna in the Sauna…) derived from device
  * capabilities. Richer creation (natural language) arrives with the
@@ -549,6 +551,18 @@ export default function Automations() {
       return key(x) - key(y) || x.a.name.localeCompare(y.a.name);
     });
 
+  // Room-grouped so an on/off pair sits together instead of scattering through
+  // the schedule order. Groups appear soonest-first (order of first member in
+  // the sorted list); inside a group the schedule order reads as the room's
+  // daily cycle, with its paused automations sinking to the group's end.
+  const grouped: Array<{ name: string; rows: typeof sorted }> = [];
+  for (const w of sorted) {
+    const g = automationGroup(w.a.steps, (id) => targets.find((t) => t.id === id)?.room);
+    const existing = grouped.find((x) => x.name === g);
+    if (existing) existing.rows.push(w);
+    else grouped.push({ name: g, rows: [w] });
+  }
+
   const tempInput = (kind: string | undefined) => {
     const b = tempBoundsFor(kind);
     return (
@@ -580,7 +594,10 @@ export default function Automations() {
 
       <SleepSense />
 
-      {sorted.map(({ a, nf, sunFallback }) => {
+      {grouped.map((g) => (
+        <Fragment key={g.name}>
+          {grouped.length > 1 && <div className="section-label">{g.name}</div>}
+          {g.rows.map(({ a, nf, sunFallback }) => {
         const open = expandedId === a.id;
         return (
           <div key={a.id} className={`dev${a.enabled ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
@@ -636,7 +653,9 @@ export default function Automations() {
             </div>
           </div>
         );
-      })}
+          })}
+        </Fragment>
+      ))}
       {items.length === 0 && <p className="h-sub">No automations yet.</p>}
 
       {!builderOpen && (

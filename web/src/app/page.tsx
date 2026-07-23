@@ -1106,11 +1106,18 @@ function VacuumCard({
   star?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [segs, setSegs] = useState<{ id: number; name: string }[] | null>(null);
+  const [segs, setSegs] = useState<{ id: number; name: string; named?: boolean }[] | null>(null);
   const [segsFailed, setSegsFailed] = useState(false);
   const [sel, setSel] = useState<number[]>([]);
   const [passes, setPasses] = useState(1);
   const [fan, setFan] = useState<string | null>(null);
+  // "Name rooms" mode: the robot's map only knows numbers ("Room 16"), so
+  // the panel lets you attach the app's own room names to the segment ids.
+  const [roomOptions, setRoomOptions] = useState<string[]>([]);
+  const [canRename, setCanRename] = useState(false);
+  const [naming, setNaming] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<number | null>(null);
+  const [renameFailed, setRenameFailed] = useState(false);
   const cleaning = d.state === "cleaning";
   const paused = d.state === "paused";
 
@@ -1121,8 +1128,14 @@ function VacuumCard({
     fetch(`/api/devices/${d.id}/vacuum`)
       .then(async (res) => {
         if (!res.ok) throw new Error();
-        const out = (await res.json()) as { segments: { id: number; name: string }[] };
+        const out = (await res.json()) as {
+          segments: { id: number; name: string; named?: boolean }[];
+          roomOptions?: string[];
+          canRename?: boolean;
+        };
         setSegs(out.segments);
+        setRoomOptions(out.roomOptions ?? []);
+        setCanRename(!!out.canRename);
         if (out.segments.length === 0) setSegsFailed(true);
       })
       .catch(() => setSegsFailed(true));
@@ -1130,6 +1143,26 @@ function VacuumCard({
 
   const toggleSeg = (id: number) =>
     setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  const rename = async (segId: number, name: string | null) => {
+    setRenameFailed(false);
+    try {
+      const res = await fetch(`/api/devices/${d.id}/vacuum`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ segment: segId, name }),
+      });
+      if (!res.ok) throw new Error();
+      setSegs((cur) =>
+        cur?.map((s) =>
+          s.id === segId ? { id: segId, name: name ?? `Room ${segId}`, named: name != null } : s,
+        ) ?? cur,
+      );
+      setRenameTarget(null);
+    } catch {
+      setRenameFailed(true);
+    }
+  };
 
   const pretty = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, " ");
   const shownFan = fan ?? d.fanSpeed ?? null;
@@ -1209,18 +1242,56 @@ function VacuumCard({
       <div className="slider-row" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", paddingBottom: 6 }}>
         <span className="st">Rooms</span>
         {segs === null && !segsFailed && <span className="st">loading map…</span>}
-        {segsFailed && <span className="st">whole floor (no named rooms on the map)</span>}
+        {segsFailed && <span className="st">whole floor (no rooms on the map)</span>}
         {(segs ?? []).map((s) => (
           <button
             key={s.id}
             className="mini-btn"
-            style={sel.includes(s.id) ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" } : undefined}
-            onClick={() => toggleSeg(s.id)}
+            style={
+              (naming ? renameTarget === s.id : sel.includes(s.id))
+                ? { background: "var(--accent)", color: "var(--accent-ink)", borderColor: "var(--accent)" }
+                : undefined
+            }
+            onClick={() => (naming ? setRenameTarget((t) => (t === s.id ? null : s.id)) : toggleSeg(s.id))}
           >
-            {s.name}
+            {naming && s.named ? `${s.id} · ${s.name}` : s.name}
           </button>
         ))}
+        {canRename && segs && segs.length > 0 && (
+          <button
+            className="mini-btn"
+            style={naming ? { borderColor: "var(--accent)", color: "var(--accent)" } : { color: "var(--dim)" }}
+            onClick={() => { setNaming((v) => !v); setRenameTarget(null); setRenameFailed(false); }}
+          >
+            {naming ? "Done" : "Name rooms"}
+          </button>
+        )}
       </div>
+      {naming && (
+        <div className="slider-row" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", paddingBottom: 6 }}>
+          {renameTarget === null ? (
+            <span className="st">
+              {renameFailed ? "rename failed — try again" : "tap a room number, then pick which room it is"}
+            </span>
+          ) : (
+            <>
+              <span className="st">{`${renameFailed ? "failed, try again — " : ""}Room ${renameTarget} is`}</span>
+              {roomOptions.map((r) => (
+                <button key={r} className="mini-btn" onClick={() => rename(renameTarget, r)}>
+                  {r}
+                </button>
+              ))}
+              <button
+                className="mini-btn"
+                style={{ color: "var(--dim)" }}
+                onClick={() => rename(renameTarget, null)}
+              >
+                Clear name
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {d.fanSpeedList && d.fanSpeedList.length > 0 && (
         <div className="slider-row" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", paddingBottom: 6 }}>
           <span className="st">Suction</span>

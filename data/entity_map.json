@@ -2086,5 +2086,27 @@
     "category": "scene_switch",
     "group": "Scenes",
     "visible": true
+  },
+  {
+    "entity_id": "media_player.room_den",
+    "domain": "media_player",
+    "original_name": "Room Den",
+    "display_name": "Receiver",
+    "room": "Den",
+    "floor": 5,
+    "category": "media",
+    "group": "Media",
+    "visible": true
+  },
+  {
+    "entity_id": "media_player.room_lounge",
+    "domain": "media_player",
+    "original_name": "Room Lounge",
+    "display_name": "Receiver",
+    "room": "Lounge",
+    "floor": 6,
+    "category": "media",
+    "group": "Media",
+    "visible": true
   }
 ]

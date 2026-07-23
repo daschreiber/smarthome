@@ -74,7 +74,7 @@ Controllable entities mapped: **186**
 - [Daniel's Study] Daniel Study Hidden (light_switch)  `light.knx_switch_daniel_study_hidden`
 - [Daniel's Study] Daniel Study Strip 1 (light_dimmer)  `light.knx_dimmer_daniel_study_strip_1`
 - [Daniel's Study] Daniel Study Strip 2 (light_dimmer)  `light.knx_dimmer_daniel_study_strip_2`
-- [Daniel's Study] Daniel Study lights (light_dimmer)  `light.knx_dimmer_daniel_study_lights`
+- [Daniel's Study] Study Spots (light_dimmer)  `light.knx_dimmer_daniel_study_lights`
 - [Daniella's Study] Daniella Study Desk (light_switch)  `light.knx_switch_daniella_study_desk`
 - [Daniella's Study] Daniella Study Hidden (light_switch)  `light.knx_switch_daniella_study_hidden`
 - [Daniella's Study] Daniella Study Shelfs led (light_switch)  `light.knx_switch_daniella_study_shelfs_led`
@@ -164,17 +164,17 @@ Controllable entities mapped: **186**
 - [Utility Room] Utility Room Spot (light_switch)  `light.knx_switch_utility_room_spot`
 - [Utility Room] Utility Room Strip (light_switch)  `light.knx_switch_utility_room_strip`
 
-## Media (14)
+## Media (14, 2 hidden)
 
 - [Balcony (6th)] Balcony (media)  `media_player.balcony_2`
 - [Balcony (6th)] Balcony (media)  `media_player.balcony`
 - [Den] Den (media)  `media_player.den`
 - [Gym] Gym (media)  `media_player.gym_gym`
 - [Kitchen] Kitchen (media)  `media_player.kitchen`
-- [Lounge] 55" QLED (media)  `media_player.55_qled`
 - [Lounge] Lounge (media)  `media_player.lounge`
 - [Master Bathroom] Master Bathroom (media)  `media_player.master_bathroom`
-- [Master Bedroom] Master Bedroom (media)  `media_player.master_bedroom`
+- [hidden] [Master Bedroom] 55" QLED (media)  `media_player.55_qled`
+- [hidden] [Master Bedroom] Master Bedroom (media)  `media_player.master_bedroom`
 - [Master Bedroom Balcony] MBR balcony (media)  `media_player.mbr_balcony`
 - [Master Bedroom Balcony] Master Bedroom Balcony (media)  `media_player.master_bedroom_balcony`
 - [Sauna] Sauna (media)  `media_player.sauna`

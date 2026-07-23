@@ -48,6 +48,8 @@ interface UiDevice {
   batteryPct?: number | null;
   fanSpeed?: string | null;
   fanSpeedList?: string[] | null;
+  /** Lights only: keeps its own card instead of collapsing into "Room lights". */
+  pinned?: boolean;
 }
 
 type View = { t: "home" } | { t: "room"; room: string };
@@ -670,8 +672,12 @@ function Login({ onDone }: { onDone: () => void }) {
  * bathrooms; corridors and balconies (1-3 lights) stay as plain rows.
  */
 const COLLAPSE_LIGHTS_AT = 4;
-/** Reading lights keep their own rows ("Reading Left", "Read Right", "Reading light"). */
-const isReadingLight = (d: UiDevice) => /\bread/i.test(d.label);
+/**
+ * Lights that keep their own rows in a collapsed room: reading lights by name
+ * ("Reading Left", "Read Right", "Reading light") and anything pinned in the
+ * entity map (e.g. the Study Spots).
+ */
+const keepsOwnRow = (d: UiDevice) => /\bread/i.test(d.label) || !!d.pinned;
 
 function RoomView({
   room, groups, flash, busy, send, sendSystem, favs, onFav, onCapture, back,
@@ -748,8 +754,8 @@ function RoomLightsBlock({
   const [drag, setDrag] = useState<number | null>(null);
   const key = `sys:lighting:${room}`;
   const isBusy = !!busy[key];
-  const reading = lights.filter(isReadingLight);
-  const others = lights.filter((d) => !isReadingLight(d));
+  const featured = lights.filter(keepsOwnRow);
+  const others = lights.filter((d) => !keepsOwnRow(d));
   const onCount = lights.filter((d) => d.state === "on").length;
   const anyOn = onCount > 0;
   const dimmers = lights.filter((d) => d.capabilities.includes("brightness"));
@@ -796,7 +802,7 @@ function RoomLightsBlock({
           </div>
         )}
       </div>
-      {rows(reading)}
+      {rows(featured)}
       {others.length > 0 && (
         <button className="mini-btn expander" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
           {showAll ? "Hide individual lights" : `All lights (${others.length})`}

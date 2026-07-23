@@ -34,6 +34,8 @@ export interface MapRow {
   visible: boolean;
   /** CoolMaster indoor units behind this zone (climate commands bypass Control4). */
   coolmaster_units?: string[];
+  /** Keeps its own card in the room view instead of collapsing into "Room lights". */
+  pinned?: boolean;
 }
 
 export interface Device {
@@ -51,6 +53,8 @@ export interface Device {
   requiresConfirmation?: boolean;
   /** See MapRow.coolmaster_units. */
   coolmasterUnits?: string[];
+  /** See MapRow.pinned. */
+  pinned?: boolean;
 }
 
 function slug(s: string): string {
@@ -137,6 +141,7 @@ export function buildDevices(rows: MapRow[]): Device[] {
       visible: row.visible,
       capabilities: capabilitiesFor(row),
       ...(row.coolmaster_units?.length ? { coolmasterUnits: row.coolmaster_units } : {}),
+      ...(row.pinned ? { pinned: true } : {}),
     };
   });
 }

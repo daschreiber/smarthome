@@ -152,6 +152,7 @@ export async function GET(req: NextRequest) {
             d.kind !== "media_player" || ((attr("supported_features") ?? 0) & 128) !== 0,
           lastUpdated: s?.last_updated ?? null,
           note: null as string | null,
+          ...(d.pinned ? { pinned: true } : {}),
         };
       });
     // White noise is hidden from the registry (and thus the command,

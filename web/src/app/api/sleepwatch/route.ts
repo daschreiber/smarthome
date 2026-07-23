@@ -4,7 +4,7 @@ import { canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import {
   READING_LIGHTS, SLEEP_ROOM, WINDOW_END, WINDOW_START,
-  loadSleepwatch, saveSleepwatch, shadeEntities, watchedLightEntities,
+  loadSleepwatch, saveSleepwatch, watchedLightEntities,
 } from "@/lib/sleepwatch";
 import { noiseConfigured } from "@/lib/whitenoise";
 
@@ -22,7 +22,6 @@ export async function GET(req: NextRequest) {
     window: { start: WINDOW_START, end: WINDOW_END },
     watchedLights: watchedLightEntities().length,
     readingLights: READING_LIGHTS.size,
-    shades: shadeEntities().length,
     canToggle: canProgram(auth.role),
   });
 }

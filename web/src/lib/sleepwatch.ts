@@ -11,11 +11,17 @@ import { noiseConfigured, noiseStatusFresh, noiseTurnOff, noiseTurnOn } from "./
  *
  * The rooms's state IS the trigger — no button pressed, no time picked.
  * Between 22:00 and 08:00, when the room "looks like bedtime" — every light
- * off (the two bedside reading lights are allowed on), all three shades
- * closed, the TV lift stowed — the noise starts. It stops at 08:00, or the
- * moment a watched light comes on or a shade opens. Evaluated by the
- * in-process scheduler on its 30s tick; a small JSON file carries state
- * across restarts.
+ * off (the two bedside reading lights are allowed on) and the TV lift
+ * stowed — the noise starts. It stops at 08:00 or the moment a watched
+ * light comes on. Evaluated by the in-process scheduler on its 30s tick; a
+ * small JSON file carries state across restarts.
+ *
+ * Shades are deliberately NOT a condition (learned the hard way on
+ * 2026-07-22's first real night): the Control4 covers' position feedback is
+ * stuck near 1%, so the entities report "open" forever — even shut tight.
+ * "All shades closed" could never be true and the watcher never armed. A
+ * condition that reality can't satisfy isn't a condition, it's an off
+ * switch.
  *
  * Deliberate semantics, so the watcher never fights a human:
  * - If noise is already playing when conditions are met, the watcher ADOPTS
@@ -23,8 +29,12 @@ import { noiseConfigured, noiseStatusFresh, noiseTurnOff, noiseTurnOn } from "./
  * - If the watcher started the noise and someone turns it off (bedside
  *   remote, the app) while the room still looks asleep, it LATCHES off for
  *   the night instead of re-firing 30s later. The latch clears when a
- *   cancel condition appears — opening a shade or turning on a light resets
- *   the night, and the next fully-met bedtime starts fresh.
+ *   cancel condition appears — a light on / window end resets the night,
+ *   and the next fully-met bedtime arms fresh.
+ * - EXCEPT within the first 3 minutes of a watcher-started stream: the
+ *   same night the shades bug surfaced, the Control4 goodnight sweep
+ *   turned the Yamaha off twice ~40s after the stream started. A death
+ *   that early is interference, not intent — retry (twice, then latch).
  * - The TV lift going down does NOT stop the noise (it only gates arming):
  *   late-night TV with noise running is the couple's call, not ours.
  */
@@ -53,9 +63,19 @@ export interface SleepwatchState {
   active: boolean;
   /** Fired-and-manually-stopped this bedtime episode; don't re-fire. */
   latched: boolean;
+  /** When the watcher last STARTED the stream (ms epoch); null if adopted.
+   *  Grounds the early-death retry window. */
+  startedAtMs?: number | null;
+  /** Early-death retries used this episode. */
+  retries?: number;
 }
 
 const DEFAULT_STATE: SleepwatchState = { enabled: true, active: false, latched: false };
+
+/** A watcher-started stream dying this soon is interference (the C4
+ *  goodnight sweep), not a human choice. */
+export const RETRY_WINDOW_MS = 3 * 60_000;
+export const MAX_RETRIES = 2;
 
 function storePath(): string {
   return process.env.SLEEPWATCH_PATH || path.join(process.cwd(), "sleepwatch.json");
@@ -96,12 +116,6 @@ export function watchedLightEntities(): string[] {
     .map((d) => d.entityId);
 }
 
-export function shadeEntities(): string[] {
-  return registry()
-    .devices.filter((d) => d.room === SLEEP_ROOM && d.kind === "cover" && d.visible)
-    .map((d) => d.entityId);
-}
-
 export type SleepwatchAction = "start" | "stop" | null;
 
 export interface SleepwatchDecision {
@@ -116,32 +130,27 @@ export interface SleepwatchDecision {
  */
 export function evaluateSleepwatch(opts: {
   hhmm: string;
+  nowMs: number;
   states: Map<string, { state: string }>;
   playing: boolean;
   st: SleepwatchState;
 }): SleepwatchDecision {
-  const { hhmm, states, playing, st } = opts;
+  const { hhmm, nowMs, states, playing, st } = opts;
   const get = (id: string) => states.get(id)?.state ?? "unknown";
 
   const lightsOn = watchedLightEntities().filter((id) => get(id) === "on");
-  const shadesOpen = shadeEntities().filter((id) =>
-    ["open", "opening"].includes(get(id)),
-  );
-  // Cancel needs positive evidence (a light truly on, a shade truly open) —
-  // an entity going "unavailable" must not kill the noise mid-night.
-  const cancel = !inWindow(hhmm) || lightsOn.length > 0 || shadesOpen.length > 0;
+  // Cancel needs positive evidence (a light truly on) — an entity going
+  // "unavailable" must not kill the noise mid-night. Shades are no signal
+  // at all: see the header comment.
+  const cancel = !inWindow(hhmm) || lightsOn.length > 0;
 
   if (cancel) {
-    const why = !inWindow(hhmm)
-      ? `window ended (${hhmm})`
-      : lightsOn.length > 0
-        ? `light on: ${lightsOn[0]}`
-        : `shade open: ${shadesOpen[0]}`;
+    const why = !inWindow(hhmm) ? `window ended (${hhmm})` : `light on: ${lightsOn[0]}`;
     // A cancel condition resets the night: clear the latch so the next
     // fully-met bedtime (tonight or tomorrow) arms fresh.
     return {
       action: st.active && playing ? "stop" : null,
-      next: { ...st, active: false, latched: false },
+      next: { ...st, active: false, latched: false, startedAtMs: null, retries: 0 },
       reason: why,
     };
   }
@@ -151,29 +160,43 @@ export function evaluateSleepwatch(opts: {
   const armed =
     inWindow(hhmm) &&
     watchedLightEntities().every((id) => get(id) === "off") &&
-    shadeEntities().every((id) => get(id) === "closed") &&
     get(TV_LIFT_ENTITY) === liftSleepState();
 
   if (playing) {
     // Adopt whatever is playing during a met-conditions bedtime so the
     // 08:00 stop applies to it, however it was started.
     return armed && !st.active
-      ? { action: null, next: { ...st, active: true }, reason: "adopted playing noise" }
+      ? { action: null, next: { ...st, active: true, startedAtMs: null, retries: 0 }, reason: "adopted playing noise" }
       : { action: null, next: st, reason: "playing" };
   }
 
   if (st.active) {
-    // We started it, nothing is playing, and no cancel condition explains
-    // it: someone turned it off on purpose. Stand down for the night.
+    // We started it and nothing is playing. Within the grace window that's
+    // interference (the C4 goodnight sweep killed the Yamaha ~40s after
+    // both starts on the first real night) — retry. Beyond it, someone
+    // turned it off on purpose: stand down for the night.
+    const withinGrace =
+      st.startedAtMs != null && nowMs - st.startedAtMs < RETRY_WINDOW_MS;
+    if (armed && withinGrace && (st.retries ?? 0) < MAX_RETRIES) {
+      return {
+        action: "start",
+        next: { ...st, active: true, startedAtMs: nowMs, retries: (st.retries ?? 0) + 1 },
+        reason: "stream died right after start — retrying past the goodnight sweep",
+      };
+    }
     return {
       action: null,
-      next: { ...st, active: false, latched: true },
+      next: { ...st, active: false, latched: true, startedAtMs: null },
       reason: "noise stopped manually — latched for the night",
     };
   }
 
   if (armed && !st.latched) {
-    return { action: "start", next: { ...st, active: true }, reason: "bedtime conditions met" };
+    return {
+      action: "start",
+      next: { ...st, active: true, startedAtMs: nowMs, retries: 0 },
+      reason: "bedtime conditions met",
+    };
   }
 
   return { action: null, next: st, reason: st.latched ? "latched" : "conditions not met" };
@@ -201,7 +224,7 @@ export async function tickSleepwatch(): Promise<void> {
       noiseStatusFresh().catch(() => null),
     ]);
     const playing = (noise?.listeners ?? 0) > 0;
-    const { action, next, reason } = evaluateSleepwatch({ hhmm, states, playing, st });
+    const { action, next, reason } = evaluateSleepwatch({ hhmm, nowMs: Date.now(), states, playing, st });
 
     if (action) {
       const started = Date.now();

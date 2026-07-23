@@ -983,8 +983,8 @@ function SleepSense() {
             : !st.enabled
               ? "paused"
               : st.active
-                ? `noise is on — stops by ${st.window.end}, or when a light comes on or a shade opens`
-                : `${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count), all shades are closed, and the TV is stowed · stops at ${st.window.end}, or when a light comes on or a shade opens · plays the sound and volume the White noise card is set to`}
+                ? `noise is on — stops by ${st.window.end}, or when a light comes on`
+                : `${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count) and the TV is stowed · stops at ${st.window.end}, or when a light comes on · plays the sound and volume the Sleep sound card is set to`}
         </div>
       </div>
       <button

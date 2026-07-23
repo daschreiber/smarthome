@@ -1345,8 +1345,17 @@ function MediaCard({
                     ? "unavailable"
                     : active && (d.mediaTitle || d.source)
                       ? // What's actually playing beats the input name: C4 zones
-                        // report the Spotify track (or session name) as media_title.
-                        `${d.state} · ${d.mediaTitle ?? d.source}`
+                        // report the track as media_title — except a zone
+                        // that JOINED another room's stream reports C4's
+                        // internal session name ("Spotify C4 Terrace" in the
+                        // Den means "listening to the shared Spotify
+                        // stream", not the Terrace's speakers). Show plain
+                        // "Spotify" rather than leak that jargon.
+                        `${d.state} · ${
+                          d.mediaTitle
+                            ? d.mediaTitle.replace(/^Spotify C4 .*$/, "Spotify")
+                            : d.source
+                        }`
                       : d.state)}
             </div>
           </div>

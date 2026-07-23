@@ -1303,6 +1303,7 @@ function MediaCard({
   star?: React.ReactNode;
 }) {
   const [drag, setDrag] = useState<number | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const active = ["playing", "paused", "buffering", "on"].includes(d.state);
   const playing = d.state === "playing";
   const label = d.label === d.room ? "Speakers" : d.label;
@@ -1311,6 +1312,24 @@ function MediaCard({
     isReceiver ? RECEIVER_SOURCES.includes(s) : !HIDDEN_SOURCES.test(s),
   );
   const volume = drag ?? d.volumePct ?? 0;
+  // Idle Play = "continue my Spotify here": the backend resumes the
+  // household account on this room's Connect endpoint (/api/music/play).
+  const playHere = () => {
+    setNote("starting…");
+    fetch("/api/music/play", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ room: d.room }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? "play failed");
+        setNote(null);
+      })
+      .catch((e) => {
+        setNote(e instanceof Error ? e.message : "play failed");
+        setTimeout(() => setNote(null), 8000);
+      });
+  };
   return (
     <div className={`dev-block hero ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
       <div className={`dev ${active ? "on" : ""}`}>
@@ -1319,28 +1338,27 @@ function MediaCard({
           <div>
             <div className="nm">{label}</div>
             <div className="st">
-              {busy
-                ? "…"
-                : !d.available
-                  ? "unavailable"
-                  : active && (d.mediaTitle || d.source)
-                    ? // What's actually playing beats the input name: C4 zones
-                      // report the Spotify track (or session name) as media_title.
-                      `${d.state} · ${d.mediaTitle ?? d.source}`
-                    : d.state}
+              {note ??
+                (busy
+                  ? "…"
+                  : !d.available
+                    ? "unavailable"
+                    : active && (d.mediaTitle || d.source)
+                      ? // What's actually playing beats the input name: C4 zones
+                        // report the Spotify track (or session name) as media_title.
+                        `${d.state} · ${d.mediaTitle ?? d.source}`
+                      : d.state)}
             </div>
           </div>
         </div>
         <div className="btn-row">
-          {active && (
-            <button
-              className="mini-btn"
-              disabled={busy}
-              onClick={() => send(d.id, { command: playing ? "pause" : "play" })}
-            >
-              {playing ? "Pause" : "Play"}
-            </button>
-          )}
+          <button
+            className="mini-btn"
+            disabled={busy || !d.available}
+            onClick={() => (active ? send(d.id, { command: playing ? "pause" : "play" }) : playHere())}
+          >
+            {playing ? "Pause" : "Play"}
+          </button>
           {(active || d.canTurnOn) && (
             <button
               className="mini-btn"

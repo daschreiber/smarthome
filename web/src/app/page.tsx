@@ -1032,13 +1032,13 @@ function ClimateCard({
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {star}
           <div>
-            <div className="temp-lbl">Room</div>
-            <div className="now">{d.currentTemperature != null ? `${d.currentTemperature}°` : "—"}</div>
-            {!d.available ? (
-              <div className="mode">unavailable</div>
-            ) : active ? (
-              <div className="mode active">{pretty(d.hvacMode ?? "").toLowerCase()}</div>
-            ) : null}
+            {/* Owner's call: the room reading is context, not the hero —
+                quiet and grey; no mode pill (the tinted card + On segment
+                already say "running", and the fan row implies the mode). */}
+            <div className="now-quiet">
+              Room {d.currentTemperature != null ? `${d.currentTemperature}°` : "—"}
+            </div>
+            {!d.available && <div className="mode">unavailable</div>}
           </div>
         </div>
         <div className="climate-set">
@@ -1280,11 +1280,19 @@ function VacuumCard({
  *   amps instead (docs plan, phase M3).
  */
 const HIDDEN_SOURCES =
-  // Owner's call (2026-07-23): the Music card is play + volume, not an
-  // input matrix — TV/XBox chips went the way of the C4 apps. Gramophone
-  // survives as the one physical chip (a spinning record can't be started
-  // remotely; the chip routes it to the room).
-  /^(Unknown Device\b|TuneIn$|My Music$|Digital Media$|Smart TV\b|XBox$)/i;
+  // Owner's call (2026-07-23, twice refined): the Music card is play +
+  // volume, full stop — no input chips. TV/XBox, the C4 apps, and finally
+  // the Gramophone too. C4's own automation still routes TV audio when a
+  // TV turns on; the turntable stays reachable from the Control4 keypads.
+  /^(Unknown Device\b|TuneIn$|My Music$|Digital Media$|Smart TV\b|XBox$|Gramophone$)/i;
+/** The now-playing line names C4's internals in installer-speak; translate
+ * the two a family member actually meets. ("Spotify C4 Terrace" on the Den
+ * card = the shared Spotify stream, not the Terrace's speakers.) */
+function prettyNowPlaying(t: string): string {
+  if (/^Spotify C4 /.test(t)) return "Spotify";
+  if (/^Smart TV /.test(t)) return "TV";
+  return t;
+}
 /**
  * MusicCast receivers (Den/Lounge/MBR Yamahas) list ~25 inputs, nearly all
  * noise for this house: unused music services (Napster/TIDAL/…), bare HDMI
@@ -1344,18 +1352,10 @@ function MediaCard({
                   : !d.available
                     ? "unavailable"
                     : active && (d.mediaTitle || d.source)
-                      ? // What's actually playing beats the input name: C4 zones
-                        // report the track as media_title — except a zone
-                        // that JOINED another room's stream reports C4's
-                        // internal session name ("Spotify C4 Terrace" in the
-                        // Den means "listening to the shared Spotify
-                        // stream", not the Terrace's speakers). Show plain
-                        // "Spotify" rather than leak that jargon.
-                        `${d.state} · ${
-                          d.mediaTitle
-                            ? d.mediaTitle.replace(/^Spotify C4 .*$/, "Spotify")
-                            : d.source
-                        }`
+                      ? // What's actually playing beats the input name; both
+                        // pass through prettyNowPlaying (session names →
+                        // "Spotify", C4 TV inputs → "TV").
+                        `${d.state} · ${prettyNowPlaying(d.mediaTitle ?? d.source ?? "")}`
                       : d.state)}
             </div>
           </div>

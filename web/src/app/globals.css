@@ -221,6 +221,8 @@ body {
 .climate-fan .fan-chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .climate-fan .fan-chip:disabled { opacity: 0.6; cursor: default; }
 .climate-card .now { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Room reading demoted to context (owner's call): the setpoint is the hero. */
+.climate-card .now-quiet { font-size: var(--fs-sm); color: var(--dim); font-weight: 600; font-variant-numeric: tabular-nums; }
 .climate-card .mode { font-size: var(--fs-xs); color: var(--dim); }
 /* "Room" over the reading, "Set" over the target: the two numbers on the
    card mean different things and neither should need guessing. */
@@ -250,7 +252,7 @@ body {
 }
 .onoff button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .onoff button:disabled { opacity: 0.6; cursor: default; }
-.climate-set .target { font-size: var(--fs-lg); font-weight: 650; min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+.climate-set .target { font-size: 22px; font-weight: 700; min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
 .round-btn {
   width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--card-line);
   background: var(--chip); color: var(--ink); font-size: 18px; font-family: inherit; cursor: pointer;

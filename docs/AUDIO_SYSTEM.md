@@ -105,13 +105,36 @@ Apple TV "Basement Jerusalem". Rack has its own AC (`climate.rack_unit_109`).
   from display-name slugs de-duped in file order; re-sorting breaks stored
   favorites/scenes.
 
+## Spotify integration (backend, lib/spotify.ts)
+
+The app's Play button on an idle Music card means "continue my Spotify
+here": the backend (owner's account, Authorization Code flow) targets the
+room's Connect endpoint — the Core's "Spotify C4 …" devices, which nothing
+else (incl. Music Assistant) can reach. One-time setup:
+
+1. https://developer.spotify.com/dashboard → create an app. Redirect URI:
+   `https://<railway domain>/api/spotify/callback`. Needs the owner's
+   Spotify account (Premium required for Connect control).
+2. Railway env: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
+   `SPOTIFY_TOKEN_PATH=/data/spotify_token.json` (the persistent volume),
+   optional `SPOTIFY_DEFAULT_CONTEXT=spotify:playlist:…` (cold-start
+   fallback when the account has nothing to resume).
+3. App → More → Spotify (admin-only) → consent page → done. Refresh token
+   persists on the volume; re-link any time the same way.
+
+Semantics: resume-first (bare `PUT /me/player/play?device_id=`), fall back
+to `SPOTIFY_DEFAULT_CONTEXT`. Spotify allows ONE active playback per
+account — playing in the Kitchen moves the session from the Lounge. Room →
+device names live in `ROOM_DEVICE` (lib/spotify.ts); the Core's naming
+("Spotify C4 MBR", "Spotify C4 Balcony") differs from app room names, so
+the map is explicit.
+
 ## Open items
 
 1. Ethernet cable for the A.3x (optional; adds direct Cast/AirPlay/Spotify
    to outdoor zones + brings them back into HA).
 2. Identify the `Unknown Device` matrix inputs by ear someday (likely the
    Core's own streamer sessions and/or VSSL line-ins); rename in Composer.
-3. Music Assistant add-on for in-app/voice playlist starts ("play X in the
-   Lounge" without touching the Spotify app) and cross-system grouping.
-4. Consider surfacing "Spotify C4" guidance in the app's media cards (e.g.
-   a hint that streaming starts from the Spotify picker until MA lands).
+3. Music Assistant add-on — still interesting for cross-system grouping and
+   library browsing, but no longer required for Play (the Web API covers
+   the C4 zones, which MA cannot).

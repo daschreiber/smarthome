@@ -10,7 +10,16 @@ export default function More() {
   const [role, setRole] = useState<string | null>(null);
   const [appKey, setAppKey] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [spotifyNote, setSpotifyNote] = useState<string | null>(null);
   const keyRef = useRef("");
+
+  // The OAuth callback bounces back here with ?spotify=linked|denied.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search).get("spotify");
+    if (q === "linked") setSpotifyNote("Linked — room Play buttons are live");
+    else if (q === "denied") setSpotifyNote("Link cancelled on the Spotify consent page");
+    if (q) history.replaceState(null, "", "/more");
+  }, []);
 
   useEffect(() => {
     const k = localStorage.getItem("appKey") ?? "";
@@ -59,6 +68,13 @@ export default function More() {
       <div className="dev-list">
         {role === "admin" && row(<PulseIcon size={24} />, "Activity", "Every command the app has issued", { href: "/activity" })}
         {role === "admin" && row(<UsersIcon size={24} />, "Users", "Who can sign in, and with what role", { href: "/users" })}
+        {role === "admin" &&
+          row(
+            <PulseIcon size={24} />,
+            "Spotify",
+            spotifyNote ?? "Link the household account so room Play buttons work",
+            { href: "/api/spotify/login" },
+          )}
         {role === "admin" && row(<KeyIcon size={24} />, "App key", showKey ? "Set below" : "Only needed if APP_KEY is set", {
           onClick: (e?: unknown) => { (e as Event | undefined)?.preventDefault?.(); setShowKey((v) => !v); },
         })}

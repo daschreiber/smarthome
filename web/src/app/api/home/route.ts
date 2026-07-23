@@ -141,6 +141,9 @@ export async function GET(req: NextRequest) {
           // (supported_features bit 128) and wake by source selection.
           source: d.kind === "media_player" ? strAttr(s?.attributes.source) : null,
           sourceList: d.kind === "media_player" ? strListAttr(s?.attributes.source_list) : null,
+          // Now playing: C4 zones report the track (or the streaming-session
+          // name) here whenever a Core Spotify session or source feeds them.
+          mediaTitle: d.kind === "media_player" ? strAttr(s?.attributes.media_title) : null,
           volumePct:
             d.kind === "media_player" && typeof s?.attributes.volume_level === "number"
               ? Math.round(Math.min(1, Math.max(0, s.attributes.volume_level as number)) * 100)
@@ -210,6 +213,7 @@ export async function GET(req: NextRequest) {
           fanSpeedList: null,
           source: null,
           sourceList: null,
+          mediaTitle: null,
           volumePct: null,
           canTurnOn: true,
           lastUpdated: null,

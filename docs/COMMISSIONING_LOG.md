@@ -254,3 +254,25 @@ Two related fixes shipped on the way to the diagnosis:
 - Error surfacing: the card now shows the server's actual reason
   (`unavailable — Invalid token` is what cracked the case) instead of a
   mute label. Diagnosability is a feature.
+
+## 2026-07-22/23 — Media capability: from dead cards to whole-home Spotify
+
+Full topology survey and findings in **docs/AUDIO_SYSTEM.md**. Summary:
+
+- Room media cards were dead because Control4 matrix zones support no
+  `turn_on`/`play_media` — a zone wakes by source selection. App now has
+  select_source/play/pause commands and a real MediaCard (PRs #58/#59).
+- Owner's live test (Lounge): source selection audibly switches the matrix.
+  TuneIn/My Music/Digital Media are unconfigured C4 apps → hidden.
+- Physical survey: Den cabinet = VSSL A.1x (sauna audio, healthy) + Yamaha
+  RX-V4A; Lounge cabinet = VSSL A.3x (outdoor zones; powered but NO
+  ethernet — its streaming has been dead since install) + Core 3 + Yamaha
+  RX-V6A. 5th-floor KNX "Controlled Socket" tested (5 min on, restored
+  off): not the amps' feed.
+- Den & Lounge Yamahas were on the LAN, never in HA — integrated
+  2026-07-23, in-app as "Receiver" cards with Spotify/AirPlay/Bluetooth/TV
+  chips (PR #60). Den's C4 audio routes through the RX-V4A (HDMI2).
+- **Discovery that reshaped the plan: the Core 3 has native per-zone
+  Spotify Connect ("Spotify C4 <Room>" in the Spotify picker) — indoor +
+  outdoor Spotify with zero new hardware.** Verified live: Kitchen zone
+  reported the playing track's title in `media_title`.

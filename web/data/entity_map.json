@@ -105,12 +105,13 @@
     "entity_id": "light.knx_dimmer_daniel_study_lights",
     "domain": "light",
     "original_name": "KNX Dimmer Daniel Study lights",
-    "display_name": "Daniel Study lights",
+    "display_name": "Study Spots",
     "room": "Daniel's Study",
     "floor": 5,
     "category": "light_dimmer",
     "group": "Lighting",
-    "visible": true
+    "visible": true,
+    "pinned": true
   },
   {
     "entity_id": "light.knx_switch_daniel_study_closet_led",
@@ -1124,17 +1125,6 @@
     "visible": true
   },
   {
-    "entity_id": "media_player.55_qled",
-    "domain": "media_player",
-    "original_name": "55\" QLED",
-    "display_name": "55\" QLED",
-    "room": "Master Bedroom",
-    "floor": 6,
-    "category": "media",
-    "group": "Media",
-    "visible": false
-  },
-  {
     "entity_id": "media_player.lounge",
     "domain": "media_player",
     "original_name": "Lounge",
@@ -1389,6 +1379,17 @@
     "category": "light_switch",
     "group": "Lighting",
     "visible": true
+  },
+  {
+    "entity_id": "media_player.55_qled",
+    "domain": "media_player",
+    "original_name": "55\" QLED",
+    "display_name": "55\" QLED",
+    "room": "Master Bedroom",
+    "floor": 6,
+    "category": "media",
+    "group": "Media",
+    "visible": false
   },
   {
     "entity_id": "media_player.master_bedroom",

@@ -82,4 +82,10 @@ describe("buildDevices", () => {
     expect(zone.coolmasterUnits).toEqual(["L1.111", "L1.114"]);
     expect(devices[1].coolmasterUnits).toBeUndefined();
   });
+
+  it("carries the pinned flag through to the device", () => {
+    const [spots] = buildDevices([{ ...rows[0], pinned: true }]);
+    expect(spots.pinned).toBe(true);
+    expect(devices[0].pinned).toBeUndefined();
+  });
 });

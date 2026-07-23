@@ -104,6 +104,11 @@ VISIBILITY_OVERRIDES = {
     "light.knx_switch_boiler_6th_floor": False,
     "light.knx_switch_boiler_roof": False,
     "light.knx_switch_contrroled_sockets_near_boiler": False,
+    # Dead Master Bedroom media cards (zone rejects turn_on — every tap
+    # red-frames); real playback there is the Yamaha / Control4-managed
+    # sources. Hidden 2026-07-22.
+    "media_player.55_qled": False,
+    "media_player.master_bedroom": False,
 }
 
 GROUPS = {
@@ -142,10 +147,31 @@ HEBREW_NAMES = {
 }
 
 
+# Owner-facing name fixes, keyed by entity_id. The study's ceiling spots were
+# exported as the generic "Daniel Study lights" — every comparable room names
+# this dimmer circuit "Spots" (Daniella's Study, Den, Lounge, guest rooms) and
+# the study's other fixtures (strips, desk, closet, hidden) are all accounted
+# for by name. NOTE: app device ids derive from the display name, so renaming
+# retires the old id — re-pick the device in any scene/automation/favorite
+# that referenced it.
+NAME_OVERRIDES = {
+    "light.knx_dimmer_daniel_study_lights": "Study Spots",
+}
+
+# Lights that keep their own card in the app's room view instead of collapsing
+# into the "Room lights / All lights…" block. Reading lights get this by name;
+# anything else must be pinned here explicitly.
+PINNED = {
+    "light.knx_dimmer_daniel_study_lights",
+}
+
 ROOM_OVERRIDES = {
     # shades onto the MBR balcony are inside the master bedroom
     "cover.master_bedroom_master_bedroom_balcony_left": "Master Bedroom",
     "cover.master_bedroom_master_bedroom_balcony_right": "Master Bedroom",
+    # the 55" QLED physically lives in the master bedroom (ROOMS would
+    # otherwise file it under Lounge)
+    "media_player.55_qled": "Master Bedroom",
     "light.knx_switch_5th_controlled_socket": "Utility Room",
     "light.knx_switch_ac_heat_5th": "Whole House",
     "light.knx_switch_ac_heat_6th": "Whole House",
@@ -239,7 +265,9 @@ def main():
         elif category == "floor_heating":
             display = "Floor Heating"
         else:
-            display = HEBREW_NAMES.get(e["entity_id"]) or clean_name(e["name"], room)
+            display = (NAME_OVERRIDES.get(e["entity_id"])
+                       or HEBREW_NAMES.get(e["entity_id"])
+                       or clean_name(e["name"], room))
         row = {
             "entity_id": e["entity_id"],
             "domain": e["domain"],
@@ -254,6 +282,8 @@ def main():
         }
         if e["entity_id"] in COOLMASTER_UNITS:
             row["coolmaster_units"] = COOLMASTER_UNITS[e["entity_id"]]
+        if e["entity_id"] in PINNED:
+            row["pinned"] = True
         out.append(row)
         categories.setdefault(category, []).append(row)
 

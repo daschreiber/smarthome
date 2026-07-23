@@ -137,6 +137,7 @@ export async function GET(req: NextRequest) {
                 : null,
           lastUpdated: s?.last_updated ?? null,
           note: null as string | null,
+          ...(d.pinned ? { pinned: true } : {}),
         };
       });
     // White noise is hidden from the registry (and thus the command,

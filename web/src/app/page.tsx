@@ -1275,6 +1275,14 @@ function VacuumCard({
  *   amps instead (docs plan, phase M3).
  */
 const HIDDEN_SOURCES = /^(Unknown Device\b|TuneIn$|My Music$|Digital Media$)/i;
+/**
+ * MusicCast receivers (Den/Lounge/MBR Yamahas) list ~25 inputs, nearly all
+ * noise for this house: unused music services (Napster/TIDAL/…), bare HDMI
+ * and AUDIO jacks, tuner. Daniel's ask: streaming chips only — Spotify and
+ * AirPlay (plus Bluetooth and TV audio, which cost nothing and get used).
+ * Receivers are recognized by advertising Spotify in their source list.
+ */
+const RECEIVER_SOURCES = ["Spotify", "AirPlay", "Bluetooth", "TV"];
 function MediaCard({
   d, flash, busy, send, star,
 }: {
@@ -1288,7 +1296,10 @@ function MediaCard({
   const active = ["playing", "paused", "buffering", "on"].includes(d.state);
   const playing = d.state === "playing";
   const label = d.label === d.room ? "Speakers" : d.label;
-  const sources = (d.sourceList ?? []).filter((s) => !HIDDEN_SOURCES.test(s));
+  const isReceiver = (d.sourceList ?? []).includes("Spotify");
+  const sources = (d.sourceList ?? []).filter((s) =>
+    isReceiver ? RECEIVER_SOURCES.includes(s) : !HIDDEN_SOURCES.test(s),
+  );
   const volume = drag ?? d.volumePct ?? 0;
   return (
     <div className={`dev-block hero ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>

@@ -42,6 +42,7 @@ interface UiDevice {
    * source selection). */
   source?: string | null;
   sourceList?: string[] | null;
+  mediaTitle?: string | null;
   canTurnOn?: boolean;
   /** Vacuums only. */
   batteryPct?: number | null;
@@ -1313,8 +1314,10 @@ function MediaCard({
                 ? "…"
                 : !d.available
                   ? "unavailable"
-                  : active && d.source
-                    ? `${d.state} · ${d.source}`
+                  : active && (d.mediaTitle || d.source)
+                    ? // What's actually playing beats the input name: C4 zones
+                      // report the Spotify track (or session name) as media_title.
+                      `${d.state} · ${d.mediaTitle ?? d.source}`
                     : d.state}
             </div>
           </div>

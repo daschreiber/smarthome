@@ -95,7 +95,8 @@ Alexa drives the same stream and the same speakers, so the sleep watcher
 needs no knowledge of it:
 
 - Alexa-on during bedtime conditions → the watcher **adopts** the session;
-  the 08:00 auto-off still applies.
+  the wake-up stop (a light coming on / a shade opening — there is no
+  morning timer) still applies.
 - "Alexa, turn off white noise" mid-night → the watcher sees the listeners
   drop with the room still dark, reads a deliberate off, and **latches for
   the night** instead of restarting it 30s later.

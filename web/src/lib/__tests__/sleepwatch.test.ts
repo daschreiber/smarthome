@@ -1,34 +1,40 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_RETRIES, READING_LIGHTS, RETRY_WINDOW_MS, TV_LIFT_ENTITY,
-  evaluateSleepwatch, inWindow, watchedLightEntities, type SleepwatchState,
+  coverEntities, evaluateSleepwatch, inWindow, watchedLightEntities,
+  type SleepwatchState,
 } from "../sleepwatch";
 
 /**
  * The sleep watcher's contract: between 22:00 and 08:00 a dark, TV-stowed
- * Master Bedroom starts the noise; 08:00 / a light stops it; reading lights
+ * Master Bedroom starts the noise. There is NO morning clock — the noise
+ * stops when the room wakes: a watched light comes on, or a shade's report
+ * MOVES toward open (an edge, never the absolute state — the C4 covers
+ * report "open" forever, position feedback stuck ~1%, which is what kept
+ * the watcher from ever arming on the first real night). Reading lights
  * and the TV lift never stop it; manual off latches for the night, but a
  * stream that dies right after our own start is retried (the C4 goodnight
- * sweep). Shades are deliberately no condition — the C4 covers report
- * "open" forever (position feedback stuck ~1%), which is what kept the
- * watcher from ever arming on the first real night.
+ * sweep).
  */
 
 const IDLE: SleepwatchState = { enabled: true, active: false, latched: false };
 const NOW = 1_700_000_000_000;
 
-/** All conditions met: watched lights off, lift stowed. Shades are absent
- *  on purpose — the watcher must not care what covers report. */
-function bedtimeStates(overrides: Record<string, string> = {}): Map<string, { state: string }> {
-  const m = new Map<string, { state: string }>();
+type Reading = { state: string; position?: number | null };
+
+/** All conditions met: watched lights off, lift stowed. Covers default to
+ *  the C4 stuck-open reality so every test exercises it. */
+function bedtimeStates(
+  overrides: Record<string, string | Reading> = {},
+): Map<string, Reading> {
+  const m = new Map<string, Reading>();
   for (const id of watchedLightEntities()) m.set(id, { state: "off" });
   for (const id of READING_LIGHTS) m.set(id, { state: "off" });
-  // The C4 covers' stuck-open reality, in every test by default:
-  m.set("cover.master_bedroom_master_bedroom_balcony_left", { state: "open" });
-  m.set("cover.master_bedroom_master_bedroom_balcony_right", { state: "open" });
-  m.set("cover.master_bedroom_master_bedroom_window", { state: "open" });
+  for (const id of coverEntities()) m.set(id, { state: "open", position: 1 });
   m.set(TV_LIFT_ENTITY, { state: "off" });
-  for (const [id, state] of Object.entries(overrides)) m.set(id, { state });
+  for (const [id, v] of Object.entries(overrides)) {
+    m.set(id, typeof v === "string" ? { state: v } : v);
+  }
   return m;
 }
 
@@ -41,9 +47,17 @@ describe("entity derivation", () => {
     // The TV lift rides the light domain but is Utilities, not Lighting.
     expect(watched).not.toContain(TV_LIFT_ENTITY);
   });
+
+  it("finds the three MBR shades for movement watching", () => {
+    expect(coverEntities().sort()).toEqual([
+      "cover.master_bedroom_master_bedroom_balcony_left",
+      "cover.master_bedroom_master_bedroom_balcony_right",
+      "cover.master_bedroom_master_bedroom_window",
+    ]);
+  });
 });
 
-describe("window", () => {
+describe("window (arming only)", () => {
   it("crosses midnight: 22:00–08:00", () => {
     expect(inWindow("22:00")).toBe(true);
     expect(inWindow("23:59")).toBe(true);
@@ -98,21 +112,36 @@ describe("arming", () => {
   });
 });
 
-describe("stopping", () => {
+describe("stopping — the room waking, never the clock", () => {
   const ACTIVE: SleepwatchState = { enabled: true, active: true, latched: false, startedAtMs: NOW - 3_600_000 };
 
-  it("stops at 08:00", () => {
+  it("does NOT stop at 08:00 — plays on until the room wakes", () => {
     const d = evaluateSleepwatch({ hhmm: "08:00", nowMs: NOW, states: bedtimeStates(), playing: true, st: ACTIVE });
-    expect(d.action).toBe("stop");
-    expect(d.next.active).toBe(false);
+    expect(d.action).toBeNull();
+    expect(d.next.active).toBe(true);
   });
 
-  it("stops when a watched light comes on", () => {
+  it("keeps playing mid-morning if nothing in the room changed", () => {
+    const d = evaluateSleepwatch({ hhmm: "10:30", nowMs: NOW, states: bedtimeStates(), playing: true, st: ACTIVE });
+    expect(d.action).toBeNull();
+    expect(d.next.active).toBe(true);
+  });
+
+  it("stops when a watched light comes on — at night", () => {
     const [light] = watchedLightEntities();
     const d = evaluateSleepwatch({
       hhmm: "03:00", nowMs: NOW, states: bedtimeStates({ [light]: "on" }), playing: true, st: ACTIVE,
     });
     expect(d.action).toBe("stop");
+  });
+
+  it("stops when a watched light comes on — after the window too", () => {
+    const [light] = watchedLightEntities();
+    const d = evaluateSleepwatch({
+      hhmm: "09:15", nowMs: NOW, states: bedtimeStates({ [light]: "on" }), playing: true, st: ACTIVE,
+    });
+    expect(d.action).toBe("stop");
+    expect(d.next).toMatchObject({ active: false, latched: false });
   });
 
   it("a reading light at 3am does NOT stop the noise", () => {
@@ -141,13 +170,97 @@ describe("stopping", () => {
   });
 
   it("never sends stop for noise it didn't start or adopt", () => {
-    const d = evaluateSleepwatch({ hhmm: "09:00", nowMs: NOW, states: bedtimeStates(), playing: true, st: IDLE });
+    const [light] = watchedLightEntities();
+    const d = evaluateSleepwatch({
+      hhmm: "09:00", nowMs: NOW, states: bedtimeStates({ [light]: "on" }), playing: true, st: IDLE,
+    });
     expect(d.action).toBeNull();
   });
 
-  it("an unreadable status does NOT skip the morning stop (turn_off is idempotent)", () => {
-    const d = evaluateSleepwatch({ hhmm: "08:05", nowMs: NOW, states: bedtimeStates(), playing: null, st: ACTIVE });
+  it("an unreadable status does NOT skip the wake-up stop (turn_off is idempotent)", () => {
+    const [light] = watchedLightEntities();
+    const d = evaluateSleepwatch({
+      hhmm: "08:05", nowMs: NOW, states: bedtimeStates({ [light]: "on" }), playing: null, st: ACTIVE,
+    });
     expect(d.action).toBe("stop");
+  });
+});
+
+describe("stopping — shade movement is an edge, not a level", () => {
+  const ACTIVE: SleepwatchState = { enabled: true, active: true, latched: false, startedAtMs: NOW - 3_600_000 };
+  const [shade] = coverEntities();
+
+  /** Run one tick to record the baseline snapshot, return the carried state. */
+  function withBaseline(st: SleepwatchState, states: Map<string, Reading>): SleepwatchState {
+    const d = evaluateSleepwatch({ hhmm: "05:00", nowMs: NOW, states, playing: true, st });
+    expect(d.action).toBeNull();
+    return d.next;
+  }
+
+  it("the stuck-open covers never stop the noise (level is no signal)", () => {
+    const st1 = withBaseline(ACTIVE, bedtimeStates());
+    const d = evaluateSleepwatch({ hhmm: "09:00", nowMs: NOW, states: bedtimeStates(), playing: true, st: st1 });
+    expect(d.action).toBeNull();
+    expect(d.next.active).toBe(true);
+  });
+
+  it("closed→open stops the noise, even long after the window", () => {
+    const st1 = withBaseline(ACTIVE, bedtimeStates({ [shade]: { state: "closed", position: 1 } }));
+    const d = evaluateSleepwatch({
+      hhmm: "09:40", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "opening", position: 1 } }),
+      playing: true, st: st1,
+    });
+    expect(d.action).toBe("stop");
+    expect(d.reason).toContain("shade opening");
+  });
+
+  it("a real position rise stops the noise", () => {
+    const st1 = withBaseline(ACTIVE, bedtimeStates({ [shade]: { state: "open", position: 1 } }));
+    const d = evaluateSleepwatch({
+      hhmm: "07:20", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "open", position: 40 } }),
+      playing: true, st: st1,
+    });
+    expect(d.action).toBe("stop");
+  });
+
+  it("position jitter below the delta does not", () => {
+    const st1 = withBaseline(ACTIVE, bedtimeStates({ [shade]: { state: "open", position: 1 } }));
+    const d = evaluateSleepwatch({
+      hhmm: "03:10", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "open", position: 2 } }),
+      playing: true, st: st1,
+    });
+    expect(d.action).toBeNull();
+  });
+
+  it("closing is not a wake-up", () => {
+    const st1 = withBaseline(ACTIVE, bedtimeStates({ [shade]: { state: "open", position: 40 } }));
+    const d = evaluateSleepwatch({
+      hhmm: "23:10", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "closing", position: 10 } }),
+      playing: true, st: st1,
+    });
+    expect(d.action).toBeNull();
+  });
+
+  it("unavailable→open flapping (integration restart) is not movement", () => {
+    const st1 = withBaseline(ACTIVE, bedtimeStates({ [shade]: { state: "unavailable", position: null } }));
+    const d = evaluateSleepwatch({
+      hhmm: "04:00", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "open", position: 1 } }),
+      playing: true, st: st1,
+    });
+    expect(d.action).toBeNull();
+  });
+
+  it("a shade opening clears the latch like any other wake-up", () => {
+    const latched: SleepwatchState = { enabled: true, active: false, latched: true };
+    const st1Decision = evaluateSleepwatch({
+      hhmm: "23:00", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "closed", position: 1 } }),
+      playing: false, st: latched,
+    });
+    const d = evaluateSleepwatch({
+      hhmm: "23:05", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "open", position: 30 } }),
+      playing: false, st: st1Decision.next,
+    });
+    expect(d.next.latched).toBe(false);
   });
 });
 
@@ -156,7 +269,7 @@ describe("unknown status holds state", () => {
     const active: SleepwatchState = { enabled: true, active: true, latched: false, startedAtMs: NOW - 3_600_000 };
     const d = evaluateSleepwatch({ hhmm: "03:00", nowMs: NOW, states: bedtimeStates(), playing: null, st: active });
     expect(d.action).toBeNull();
-    expect(d.next).toEqual(active);
+    expect(d.next).toMatchObject({ active: true, latched: false, startedAtMs: active.startedAtMs });
   });
 
   it("never adopts on an unreadable status", () => {
@@ -208,11 +321,14 @@ describe("latch and adoption", () => {
     expect(d2.action).toBe("start");
   });
 
-  it("adopts noise already playing at a met bedtime, so 08:00 still stops it", () => {
+  it("adopts noise already playing at a met bedtime, so the wake-up stop applies", () => {
     const d1 = evaluateSleepwatch({ hhmm: "22:10", nowMs: NOW, states: bedtimeStates(), playing: true, st: IDLE });
     expect(d1.action).toBeNull();
     expect(d1.next.active).toBe(true);
-    const d2 = evaluateSleepwatch({ hhmm: "08:00", nowMs: NOW, states: bedtimeStates(), playing: true, st: d1.next });
+    const [light] = watchedLightEntities();
+    const d2 = evaluateSleepwatch({
+      hhmm: "08:30", nowMs: NOW, states: bedtimeStates({ [light]: "on" }), playing: true, st: d1.next,
+    });
     expect(d2.action).toBe("stop");
   });
 });

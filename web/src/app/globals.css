@@ -201,6 +201,9 @@ body {
 }
 .mini-btn:active { background: var(--accent); color: var(--accent-ink); }
 .mini-btn:disabled { opacity: 0.5; cursor: default; }
+/* A pressed mini-btn states a fact ("this is how it is now"), in the same
+   accent the toggles and climate chips use. */
+.mini-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 .slider-row { padding: 0 15px 12px; margin-top: -4px; }
 .dev-block { background: var(--card); border: 1px solid var(--card-line); border-radius: var(--radius); margin-bottom: 8px; }

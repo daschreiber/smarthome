@@ -45,6 +45,8 @@ export default function SystemPage() {
   const [busy, setBusy] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // Server-vouched cover state (COVER_STATE_TRUSTED=1 once C4 feedback works).
+  const [coverTrust, setCoverTrust] = useState(false);
   const keyRef = useRef("");
 
   useEffect(() => {
@@ -60,7 +62,9 @@ export default function SystemPage() {
       const res = await fetch("/api/home", { headers: headers() });
       if (res.status === 401) { location.href = "/"; return; }
       if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
-      setDevices(((await res.json()) as { devices: UiDevice[] }).devices);
+      const out = (await res.json()) as { devices: UiDevice[]; coverStateTrusted?: boolean };
+      setDevices(out.devices);
+      setCoverTrust(out.coverStateTrusted === true);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "failed to load");
@@ -182,9 +186,9 @@ export default function SystemPage() {
   const meta = SYSTEMS[system];
 
   const onCount = members.filter((d) =>
-    // Shades never count as "active": their reported state is fiction
-    // (C4 position feedback stuck ~1% -> "open" forever).
-    system === "shades" ? false : d.state !== "off" && d.state !== "unavailable" && d.available,
+    // Shades count as "open" only when the server vouches for cover state;
+    // C4's stuck feedback (~1% -> "open" forever) is otherwise fiction.
+    system === "shades" ? coverTrust && d.state === "open" : d.state !== "off" && d.state !== "unavailable" && d.available,
   ).length;
 
   return (
@@ -192,8 +196,8 @@ export default function SystemPage() {
       <a className="h-back" href="/systems">‹ Systems</a>
       <h1 className="h-title" style={{ display: "flex", alignItems: "center", gap: 9 }}><meta.icon size={24} /> {meta.title}</h1>
       <p className="h-sub">
-        {meta.sub} — {members.length} device{members.length === 1 ? "" : "s"},{" "}
-        {system === "shades" ? `${onCount} open` : `${onCount} on`}
+        {meta.sub} — {members.length} device{members.length === 1 ? "" : "s"}
+        {system === "shades" && !coverTrust ? "" : `, ${onCount} ${system === "shades" ? "open" : "on"}`}
       </p>
       {error && <div className="error-banner">{error}</div>}
 
@@ -223,9 +227,11 @@ export default function SystemPage() {
                 <div key={room} className="dev">
                   <div>
                     <div className="nm">{room}</div>
-                    <div className={`st ${ds.some((x) => system !== "shades" && x.state === "on") ? "on" : ""}`}>
+                    <div className={`st ${ds.some((x) => (system === "shades" ? coverTrust && x.state === "open" : x.state === "on")) ? "on" : ""}`}>
                       {system === "shades"
-                        ? `${ds.length} shade${ds.length === 1 ? "" : "s"}`
+                        ? coverTrust
+                          ? `${ds.filter((x) => x.state === "open").length} of ${ds.length} open`
+                          : `${ds.length} shade${ds.length === 1 ? "" : "s"}`
                         : `${ds.filter((x) => x.state === "on").length} of ${ds.length} on`}
                     </div>
                   </div>

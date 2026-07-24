@@ -91,11 +91,11 @@ export function buildSceneStates(
         out.push({ deviceId: d.id, command: { command: "turn_off" } });
       }
     } else if (d.kind === "cover") {
-      if (s.state === "open" || s.state === "opening") {
-        out.push({ deviceId: d.id, command: { command: "open" } });
-      } else if (s.state === "closed" || s.state === "closing") {
-        out.push({ deviceId: d.id, command: { command: "close" } });
-      }
+      // Covers are NOT captured from state: C4 position feedback is stuck
+      // (~1%, every cover reads "open" forever), so a blinds-down capture
+      // would store "open" and replay by raising them. Shades enter a scene
+      // only by explicit choice at capture time (the route appends them).
+      continue;
     } else if (d.kind === "climate") {
       // Capture the power state too: a scene that only sets 16° on a unit
       // that happens to be off cools nothing. Apply runs a device's

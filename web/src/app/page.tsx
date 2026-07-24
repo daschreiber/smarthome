@@ -111,6 +111,9 @@ export default function Page() {
   const [role, setRole] = useState<"admin" | "member" | "guest">("member");
   const [floorHeating, setFloorHeating] = useState<string[]>([]);
   const [musicNow, setMusicNow] = useState<MusicNow | null>(null);
+  // True only when the server vouches for cover state (COVER_STATE_TRUSTED=1
+  // after the C4 position-feedback fix). Until then shades show no state.
+  const [coverTrust, setCoverTrust] = useState(false);
   const keyRef = useRef("");
   const canProgram = role !== "guest";
 
@@ -173,10 +176,12 @@ export default function Page() {
         devices: UiDevice[];
         role?: "admin" | "member" | "guest";
         floorHeatingRooms?: string[];
+        coverStateTrusted?: boolean;
       };
       setDevices(out.devices);
       if (out.role) setRole(out.role);
       setFloorHeating(out.floorHeatingRooms ?? []);
+      setCoverTrust(out.coverStateTrusted === true);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed to load");
@@ -334,12 +339,16 @@ export default function Page() {
     [devices],
   );
 
-  // Deliberately NOT "how many are open": the Control4 covers' position
-  // feedback is stuck near 1%, so every cover reports "open" forever — the
-  // same broken signal that once kept Sleep sense from ever arming. Count
-  // only; never claim a state the hardware can't report.
+  // Count by default: the Control4 covers' position feedback is stuck near
+  // 1%, so every cover reports "open" forever — the same broken signal that
+  // once kept Sleep sense from ever arming. Only when the server vouches
+  // for cover state (coverTrust) do we claim an open count.
   const shadesTotal = useMemo(
     () => devices.filter((d) => d.kind === "cover").length,
+    [devices],
+  );
+  const shadesOpen = useMemo(
+    () => devices.filter((d) => d.kind === "cover" && d.state === "open").length,
     [devices],
   );
 
@@ -480,8 +489,10 @@ export default function Page() {
             </a>
             <a className="room-card" href="/systems/shades" style={{ textDecoration: "none", display: "block" }}>
               <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><BlindsIcon size={18} /> Shades</div>
-              <div className="rs">
-                {`${shadesTotal} shade${shadesTotal === 1 ? "" : "s"}`}
+              <div className={`rs ${coverTrust && shadesOpen > 0 ? "on" : ""}`}>
+                {coverTrust
+                  ? shadesOpen > 0 ? `${shadesOpen} open` : "all closed"
+                  : `${shadesTotal} shade${shadesTotal === 1 ? "" : "s"}`}
               </div>
             </a>
           </div>
@@ -554,14 +565,14 @@ export default function Page() {
           onFav={toggleFav}
           onCapture={
             canProgram
-              ? (room) => {
-                  const name = window.prompt(
-                    `Save ${room} as a scene — name it:\n(use an existing scene's name to add this room to it)`,
-                  );
-                  if (name?.trim()) sceneOp({ action: "capture", name: name.trim(), room });
-                }
+              ? (room, name, shades) =>
+                  sceneOp({
+                    action: "capture", name, room,
+                    ...(shades !== "skip" ? { shades } : {}),
+                  })
               : null
           }
+          coverTrust={coverTrust}
           back={goHome}
         />
       )}
@@ -721,7 +732,7 @@ const COLLAPSE_LIGHTS_AT = 4;
 const keepsOwnRow = (d: UiDevice) => /\bread/i.test(d.label) || !!d.pinned;
 
 function RoomView({
-  room, groups, flash, busy, music, send, sendSystem, favs, onFav, onCapture, back,
+  room, groups, flash, busy, music, send, sendSystem, favs, onFav, onCapture, coverTrust, back,
 }: {
   room: string;
   groups: [string, UiDevice[]][];
@@ -732,9 +743,17 @@ function RoomView({
   sendSystem: (system: string, command: string, room: string, extra?: Record<string, unknown>) => Promise<SendResult>;
   favs: string[];
   onFav: (id: string) => void;
-  onCapture: ((room: string) => void) | null;
+  onCapture: ((room: string, name: string, shades: "skip" | "open" | "close") => void) | null;
+  coverTrust: boolean;
   back: () => void;
 }) {
+  const [capOpen, setCapOpen] = useState(false);
+  const [capName, setCapName] = useState("");
+  // What the scene should DO with this room's shades. Their live state can't
+  // be read (stuck C4 feedback), so the capturer declares it; default: leave
+  // them out of the scene entirely.
+  const [capShades, setCapShades] = useState<"skip" | "open" | "close">("skip");
+  const hasShades = groups.some(([g]) => g === "Shades");
   const rows = (ds: UiDevice[]) =>
     ds.map((d) => (
       <Device
@@ -746,21 +765,68 @@ function RoomView({
         fav={favs.includes(d.id)}
         onFav={onFav}
         music={music}
+        coverTrust={coverTrust}
       />
     ));
+  const saveCapture = () => {
+    if (!capName.trim() || !onCapture) return;
+    onCapture(room, capName.trim(), capShades);
+    setCapOpen(false);
+    setCapName("");
+    setCapShades("skip");
+  };
   return (
     <>
       <button className="h-back" onClick={back}>‹ Home</button>
       <h1 className="h-title">{room}</h1>
-      {onCapture && (
+      {onCapture && !capOpen && (
         <p className="h-sub">
           <button
-            onClick={() => onCapture(room)}
+            onClick={() => setCapOpen(true)}
             style={{ background: "none", border: "none", color: "var(--dim)", font: "inherit", padding: 0, cursor: "pointer", textDecoration: "underline" }}
           >
             save current look as a scene
           </button>
         </p>
+      )}
+      {onCapture && capOpen && (
+        <div className="dev-block" style={{ padding: 12, marginBottom: 10 }}>
+          <input
+            placeholder="scene name (an existing name adds this room to it)"
+            value={capName}
+            autoFocus
+            onChange={(e) => setCapName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") saveCapture(); }}
+            style={{
+              width: "100%", padding: 9, borderRadius: 10, border: "1px solid var(--card-line)",
+              background: "var(--card)", color: "var(--ink)", fontFamily: "inherit", marginBottom: 8,
+            }}
+          />
+          {hasShades && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+              <span className="st">Shades in this scene:</span>
+              {([["skip", "Leave out"], ["open", "Open"], ["close", "Closed"]] as const).map(([v, lbl]) => (
+                <button
+                  key={v}
+                  className="mini-btn"
+                  aria-pressed={capShades === v}
+                  onClick={() => setCapShades(v)}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          )}
+          {hasShades && capShades === "skip" && (
+            <p className="st" style={{ margin: "0 0 8px" }}>
+              Shades can&apos;t report their position, so tell the scene what they should do — or leave them out.
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 6 }}>
+            <button className="mini-btn" disabled={!capName.trim()} onClick={saveCapture}>Save scene</button>
+            <button className="mini-btn" onClick={() => { setCapOpen(false); setCapName(""); setCapShades("skip"); }}>Cancel</button>
+          </div>
+        </div>
       )}
       {groups.map(([group, ds]) => (
         <section key={group}>
@@ -768,7 +834,7 @@ function RoomView({
           {group === "Lighting" && ds.length >= COLLAPSE_LIGHTS_AT ? (
             <RoomLightsBlock room={room} lights={ds} flash={flash} busy={busy} sendSystem={sendSystem} rows={rows} />
           ) : group === "Shades" && ds.length > 1 ? (
-            <RoomShadesBlock room={room} shades={ds} flash={flash} busy={busy} sendSystem={sendSystem} rows={rows} />
+            <RoomShadesBlock room={room} shades={ds} flash={flash} busy={busy} sendSystem={sendSystem} rows={rows} coverTrust={coverTrust} />
           ) : (
             <div className="dev-list">{rows(ds)}</div>
           )}
@@ -858,7 +924,7 @@ function RoomLightsBlock({
 
 /** Rooms with several shades: one card moves them all; each stays reachable. */
 function RoomShadesBlock({
-  room, shades, flash, busy, sendSystem, rows,
+  room, shades, flash, busy, sendSystem, rows, coverTrust,
 }: {
   room: string;
   shades: UiDevice[];
@@ -866,22 +932,32 @@ function RoomShadesBlock({
   busy: Record<string, boolean>;
   sendSystem: (system: string, command: string, room: string, extra?: Record<string, unknown>) => Promise<SendResult>;
   rows: (ds: UiDevice[]) => React.ReactNode;
+  coverTrust: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
   const key = `sys:shades:${room}`;
   const isBusy = !!busy[key];
-  // No open/closed summary: C4 cover state is fiction (stuck-open feedback).
+  // Open/closed summary and button highlights appear only when the server
+  // vouches for cover state (C4 feedback fixed); until then, count only.
+  const open = shades.filter((d) => d.state === "open").length;
+  const allOpen = coverTrust && open === shades.length;
+  const allClosed = coverTrust && open === 0;
+  const summary = !coverTrust
+    ? `${shades.length} shades`
+    : allOpen ? `${shades.length} shades · open`
+    : allClosed ? `${shades.length} shades · closed`
+    : `${open} of ${shades.length} open`;
   return (
     <div className="dev-list">
       <div className={`dev hero ${flashClass(flash[key])}`}>
         <div>
           <div className="nm">Shades</div>
-          <div className="st">{isBusy ? "…" : `${shades.length} shades`}</div>
+          <div className="st">{isBusy ? "…" : summary}</div>
         </div>
         <div className="btn-row">
-          <button className="mini-btn" disabled={isBusy} onClick={() => sendSystem("shades", "open", room)}>Open</button>
+          <button className="mini-btn" aria-pressed={allOpen} disabled={isBusy} onClick={() => sendSystem("shades", "open", room)}>Open</button>
           <button className="mini-btn" disabled={isBusy} onClick={() => sendSystem("shades", "stop", room)}>Stop</button>
-          <button className="mini-btn" disabled={isBusy} onClick={() => sendSystem("shades", "close", room)}>Close</button>
+          <button className="mini-btn" aria-pressed={allClosed} disabled={isBusy} onClick={() => sendSystem("shades", "close", room)}>Close</button>
         </div>
       </div>
       {shades.length > 1 && (
@@ -911,7 +987,7 @@ function flashClass(f?: Flash) {
 }
 
 function Device({
-  d, flash, busy, send, fav, onFav, music,
+  d, flash, busy, send, fav, onFav, music, coverTrust,
 }: {
   d: UiDevice;
   flash?: Flash;
@@ -920,6 +996,7 @@ function Device({
   fav?: boolean;
   onFav?: (id: string) => void;
   music?: MusicNow | null;
+  coverTrust?: boolean;
 }) {
   const star = onFav ? <Star on={!!fav} onClick={() => onFav(d.id)} label={d.label} /> : null;
   if (d.kind === "sauna") return <SaunaCard d={d} busy={busy} send={send} />;
@@ -932,21 +1009,26 @@ function Device({
     return <MediaCard d={d} flash={flash} busy={busy} send={send} star={star} music={music ?? null} />;
   }
   if (d.kind === "cover") {
+    // State text + button highlight only when the server vouches for cover
+    // state (coverTrust); C4's stuck feedback otherwise shows fiction.
+    // Commands work either way.
+    const isOpen = coverTrust && d.state === "open";
+    const isClosed = coverTrust && d.state === "closed";
     return (
       <div className={`dev ${d.available ? "" : "unavailable"} ${flashClass(flash)}`}>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {star}
           <div>
             <div className="nm">{d.label}</div>
-            {/* C4 covers report "open" forever (position feedback stuck ~1%);
-                show nothing rather than fiction. Commands work fine. */}
-            <div className="st">{busy ? "…" : d.available ? "" : "unavailable"}</div>
+            <div className="st">
+              {busy ? "…" : !d.available ? "unavailable" : coverTrust ? d.state : ""}
+            </div>
           </div>
         </div>
         <div className="btn-row">
-          <button className="mini-btn" disabled={busy} onClick={() => send(d.id, { command: "open" })}>Open</button>
+          <button className="mini-btn" aria-pressed={isOpen} disabled={busy} onClick={() => send(d.id, { command: "open" })}>Open</button>
           <button className="mini-btn" disabled={busy} onClick={() => send(d.id, { command: "stop" })}>Stop</button>
-          <button className="mini-btn" disabled={busy} onClick={() => send(d.id, { command: "close" })}>Close</button>
+          <button className="mini-btn" aria-pressed={isClosed} disabled={busy} onClick={() => send(d.id, { command: "close" })}>Close</button>
         </div>
       </div>
     );

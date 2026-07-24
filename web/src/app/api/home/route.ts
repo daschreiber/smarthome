@@ -237,7 +237,14 @@ export async function GET(req: NextRequest) {
 
     // The role rides along so the UI can hide programming affordances for
     // guests; enforcement lives in the API routes, never in the browser.
-    return NextResponse.json({ devices, role: auth.role, floorHeatingRooms });
+    // coverStateTrusted: C4 shade position feedback is currently fiction
+    // (stuck ~1%), so cover state is hidden everywhere. Set
+    // COVER_STATE_TRUSTED=1 once the Control4 feedback is fixed and the
+    // open/closed indicators light back up without a code change.
+    return NextResponse.json({
+      devices, role: auth.role, floorHeatingRooms,
+      coverStateTrusted: process.env.COVER_STATE_TRUSTED === "1",
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "upstream failure" },

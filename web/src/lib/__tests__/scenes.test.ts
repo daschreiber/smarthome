@@ -21,7 +21,7 @@ const st = (entityId: string, state: string, attributes: Record<string, unknown>
   [entityId, { entity_id: entityId, state, attributes, last_updated: "", last_changed: "" }];
 
 describe("buildSceneStates", () => {
-  it("captures dimmer brightness, off lights, covers, and climate targets", () => {
+  it("captures dimmer brightness, off lights, and climate targets — but never covers", () => {
     const devices = [
       dev({ id: "den__spots", entityId: "light.spots" }),
       dev({ id: "den__plain", entityId: "light.plain", category: "light_switch", capabilities: ["on_off"] }),
@@ -31,13 +31,15 @@ describe("buildSceneStates", () => {
     const states = new Map([
       st("light.spots", "on", { brightness: 128 }),
       st("light.plain", "off"),
+      // Even a "closed" report is not captured: C4 position feedback is
+      // stuck, so cover state is never trusted — shades join a scene only
+      // via the capturer's explicit choice (route-level).
       st("cover.blinds", "closed"),
       st("climate.den", "cool", { temperature: 23 }),
     ]);
     expect(buildSceneStates(devices, states)).toEqual([
       { deviceId: "den__spots", command: { command: "set_brightness", brightnessPct: 50 } },
       { deviceId: "den__plain", command: { command: "turn_off" } },
-      { deviceId: "den__blinds", command: { command: "close" } },
       // Power state AND setpoint: 16° on a sleeping unit cools nothing.
       { deviceId: "den__ac", command: { command: "turn_on" } },
       { deviceId: "den__ac", command: { command: "set_temperature", temperature: 23 } },

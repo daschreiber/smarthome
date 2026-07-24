@@ -27,7 +27,10 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as
-    | { action?: "capture" | "apply" | "delete"; name?: string; room?: string; id?: string; confirmSauna?: boolean }
+    | {
+        action?: "capture" | "apply" | "delete"; name?: string; room?: string; id?: string;
+        confirmSauna?: boolean; shades?: "open" | "close";
+      }
     | null;
   if (!body?.action) return NextResponse.json({ error: "action required" }, { status: 400 });
   // Guests can apply scenes but not create or delete them.
@@ -44,6 +47,15 @@ export async function POST(req: NextRequest) {
       const states = new Map((await getStates()).map((s) => [s.entity_id, s]));
       const devices = registry().devices.filter((d) => d.room === body.room);
       const sceneStates: SceneState[] = buildSceneStates(devices, states);
+      // Shades can't be read (stuck C4 feedback), so they join a scene only
+      // when the capturer says what they should do. Omitted = left out.
+      if (body.shades === "open" || body.shades === "close") {
+        for (const d of devices) {
+          if (d.kind === "cover" && d.visible) {
+            sceneStates.push({ deviceId: d.id, command: { command: body.shades } });
+          }
+        }
+      }
       // The sauna's truth lives at KLAFS, not in HA — capture it here, and
       // only as it looks now: a running heater at capture time means the
       // scene includes "sauna on" (replayed strictly behind a confirm).
@@ -57,7 +69,7 @@ export async function POST(req: NextRequest) {
       const scene = createScene(body.name, body.room, auth.user, sceneStates);
       audit({
         ts: new Date().toISOString(), user: auth.user, deviceId: "scenes", entityId: `scene.${scene.id}`,
-        command: "capture_scene", args: { room: body.room, devices: scene.states.length },
+        command: "capture_scene", args: { room: body.room, devices: scene.states.length, shades: body.shades ?? "skip" },
         ok: true, durationMs: Date.now() - started,
       });
       return NextResponse.json({ ok: true, scene: { ...scene, deviceCount: scene.states.length } });

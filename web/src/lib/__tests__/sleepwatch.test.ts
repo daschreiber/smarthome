@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  MAX_RETRIES, READING_LIGHTS, RETRY_WINDOW_MS, TV_LIFT_ENTITY,
+  CLOSET_LIGHTS, MAX_RETRIES, READING_LIGHTS, RETRY_WINDOW_MS, TV_LIFT_ENTITY,
   coverEntities, evaluateSleepwatch, inWindow, watchedLightEntities,
   type SleepwatchState,
 } from "../sleepwatch";
@@ -30,6 +30,7 @@ function bedtimeStates(
   const m = new Map<string, Reading>();
   for (const id of watchedLightEntities()) m.set(id, { state: "off" });
   for (const id of READING_LIGHTS) m.set(id, { state: "off" });
+  for (const id of CLOSET_LIGHTS) m.set(id, { state: "off" });
   for (const id of coverEntities()) m.set(id, { state: "open", position: 1 });
   m.set(TV_LIFT_ENTITY, { state: "off" });
   for (const [id, v] of Object.entries(overrides)) {
@@ -39,10 +40,11 @@ function bedtimeStates(
 }
 
 describe("entity derivation", () => {
-  it("watches every real MBR light except the two reading lights", () => {
+  it("watches every real MBR light except the reading and closet pairs", () => {
     const watched = watchedLightEntities();
-    expect(watched.length).toBeGreaterThanOrEqual(5);
+    expect(watched.length).toBeGreaterThanOrEqual(4);
     for (const id of READING_LIGHTS) expect(watched).not.toContain(id);
+    for (const id of CLOSET_LIGHTS) expect(watched).not.toContain(id);
     expect(watched).toContain("light.knx_dimmer_master_bedroom_lights");
     // The TV lift rides the light domain but is Utilities, not Lighting.
     expect(watched).not.toContain(TV_LIFT_ENTITY);
@@ -80,6 +82,14 @@ describe("arming", () => {
     const [reading] = [...READING_LIGHTS];
     const d = evaluateSleepwatch({
       hhmm: "23:00", nowMs: NOW, states: bedtimeStates({ [reading]: "on" }), playing: false, st: IDLE,
+    });
+    expect(d.action).toBe("start");
+  });
+
+  it("a closet light on does not block arming", () => {
+    const [closet] = [...CLOSET_LIGHTS];
+    const d = evaluateSleepwatch({
+      hhmm: "23:00", nowMs: NOW, states: bedtimeStates({ [closet]: "on" }), playing: false, st: IDLE,
     });
     expect(d.action).toBe("start");
   });
@@ -148,6 +158,15 @@ describe("stopping — the room waking, never the clock", () => {
     const [reading] = [...READING_LIGHTS];
     const d = evaluateSleepwatch({
       hhmm: "03:00", nowMs: NOW, states: bedtimeStates({ [reading]: "on" }), playing: true, st: ACTIVE,
+    });
+    expect(d.action).toBeNull();
+    expect(d.next.active).toBe(true);
+  });
+
+  it("a closet light at 3am does NOT stop the noise", () => {
+    const [closet] = [...CLOSET_LIGHTS];
+    const d = evaluateSleepwatch({
+      hhmm: "03:00", nowMs: NOW, states: bedtimeStates({ [closet]: "on" }), playing: true, st: ACTIVE,
     });
     expect(d.action).toBeNull();
     expect(d.next.active).toBe(true);

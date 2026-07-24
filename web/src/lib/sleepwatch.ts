@@ -11,8 +11,8 @@ import { noiseConfigured, noiseStatusFresh, noiseTurnOff, noiseTurnOn } from "./
  *
  * The rooms's state IS the trigger — no button pressed, no time picked.
  * Between 22:00 and 08:00, when the room "looks like bedtime" — every light
- * off (the two bedside reading lights are allowed on) and the TV lift
- * stowed — the noise starts. There is NO morning clock: the noise stops
+ * off (the two bedside reading lights and the two closet lights are allowed
+ * on) and the TV lift stowed — the noise starts. There is NO morning clock: the noise stops
  * when the room wakes — a watched light comes on, or a shade visibly moves
  * toward open — however late (or early) that is. Evaluated by the
  * in-process scheduler on its 30s tick; a small JSON file carries state
@@ -58,6 +58,13 @@ export const WINDOW_END = "08:00"; // exclusive
 export const READING_LIGHTS = new Set([
   "light.knx_switch_master_bedroom_read_left",
   "light.knx_switch_master_bedroom_read_right",
+]);
+
+/** Closet lights: same symmetric exemption as the reading pair (owner,
+ *  2026-07-24) — being on never blocks arming, coming on never wakes. */
+export const CLOSET_LIGHTS = new Set([
+  "light.knx_switch_master_bedroom_closets_lightstrip",
+  "light.knx_switch_master_bedroom_closets_strip",
 ]);
 
 export const TV_LIFT_ENTITY = "light.knx_switch_mbr_tv_lift";
@@ -119,8 +126,8 @@ export function inWindow(hhmm: string): boolean {
 }
 
 /** The lights whose being ON means "not asleep": every visible real light in
- *  the room except the bedside reading pair. Derived from the registry so a
- *  future light joins the watch automatically. */
+ *  the room except the bedside reading pair and the closet pair. Derived
+ *  from the registry so a future light joins the watch automatically. */
 export function watchedLightEntities(): string[] {
   return registry()
     .devices.filter(
@@ -130,7 +137,8 @@ export function watchedLightEntities(): string[] {
         d.visible &&
         d.group === "Lighting" &&
         d.category !== "scene_switch" &&
-        !READING_LIGHTS.has(d.entityId),
+        !READING_LIGHTS.has(d.entityId) &&
+        !CLOSET_LIGHTS.has(d.entityId),
     )
     .map((d) => d.entityId);
 }

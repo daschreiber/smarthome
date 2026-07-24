@@ -39,6 +39,16 @@ export const StepSchema = z
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // one-shot
     actions: z.array(ActionSchema).min(1),
     lastFired: z.string().optional(),
+    /**
+     * Keep the step's lights ON until this house-clock time (may cross
+     * midnight). While the hold is active, any of those lights found off is
+     * switched back on and the re-assert is audited — so an outside system
+     * (a KNX staircase timer, Control4 programming, a wall switch) that
+     * fights the automation both loses and leaves a timestamped trail.
+     */
+    holdUntil: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "holdUntil must be HH:MM").optional(),
+    /** Re-asserts spent this firing; reset by markFired. Internal state. */
+    holdReasserts: z.number().int().min(0).optional(),
   })
   .refine((s) => (s.time !== undefined) !== (s.sun !== undefined), {
     message: "step needs exactly one of time or sun",
@@ -197,7 +207,39 @@ export function markFired(id: string, stepIndex: number, now: ReturnType<typeof 
   const a = items.find((x) => x.id === id);
   if (!a || !a.steps[stepIndex]) return;
   a.steps[stepIndex].lastFired = `${now.date}T${now.hhmm}`;
+  a.steps[stepIndex].holdReasserts = 0; // each firing gets a fresh hold budget
   const allOneShot = a.steps.every((s) => s.date);
   if (allOneShot && a.steps.every((s) => s.lastFired)) a.enabled = false;
+  save(items);
+}
+
+function nextDate(date: string): string {
+  // Date-only strings parse as UTC midnight, so +24h is exact.
+  return new Date(Date.parse(date) + 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Is this step's holdUntil window open right now? The window runs from the
+ * minute AFTER the step fired (the firing minute already ran the actions)
+ * until holdUntil, rolling past midnight when holdUntil is earlier on the
+ * clock than the firing time. `YYYY-MM-DDTHH:MM` keys compare lexically.
+ */
+export function stepHoldActive(step: Step, now: ReturnType<typeof nowParts>): boolean {
+  if (!step.holdUntil || !step.lastFired) return false;
+  const [firedDate, firedHhmm] = step.lastFired.split("T");
+  if (!firedDate || !firedHhmm) return false;
+  const end = step.holdUntil > firedHhmm
+    ? `${firedDate}T${step.holdUntil}`
+    : `${nextDate(firedDate)}T${step.holdUntil}`;
+  const key = `${now.date}T${now.hhmm}`;
+  return key > step.lastFired && key < end;
+}
+
+/** Persist the hold's re-assert count (see scheduler.tickHolds). */
+export function recordHoldReasserts(id: string, stepIndex: number, count: number): void {
+  const items = load();
+  const s = items.find((x) => x.id === id)?.steps[stepIndex];
+  if (!s) return;
+  s.holdReasserts = count;
   save(items);
 }

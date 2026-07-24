@@ -29,6 +29,8 @@ interface Step {
     | { type: "device"; deviceId: string; command: Record<string, unknown> }
   >;
   lastFired?: string;
+  /** Keep this step's lights on until HH:MM — see lib/automations. */
+  holdUntil?: string;
 }
 
 interface Automation {
@@ -156,7 +158,8 @@ function describeStep(s: Step, deviceLabel: (id: string) => string): string {
     const verb = String(a.command.command).replace("turn_", "").replace("_", " ");
     parts.push(`${deviceLabel(a.deviceId)} ${verb}`);
   }
-  return `${when} → ${parts.join(", ")}`;
+  const hold = s.holdUntil ? ` — held on until ${s.holdUntil}` : "";
+  return `${when} → ${parts.join(", ")}${hold}`;
 }
 
 const field: React.CSSProperties = {
@@ -190,6 +193,7 @@ export default function Automations() {
   const [sunMode, setSunMode] = useState(false);
   const [sunEvent, setSunEvent] = useState<"sunset" | "sunrise">("sunset");
   const [sunOffset, setSunOffset] = useState(0);
+  const [holdUntil, setHoldUntil] = useState(""); // "" = no hold
   const [sunTimes, setSunTimes] = useState<NextSunIso | null>(null);
   const [target, setTarget] = useState(""); // "" | SCENE_TARGET | room name
   const [action, setAction] = useState<ChipKey | "">("lights_on");
@@ -415,6 +419,7 @@ export default function Automations() {
       : { time };
     if (once && date) base.date = date;
     else if (days.length > 0 && days.length < 7) base.days = [...days].sort();
+    if (holdUntil) base.holdUntil = holdUntil;
     return base;
   };
 
@@ -453,6 +458,7 @@ export default function Automations() {
     setSunMode(false);
     setOnce(false);
     setDays([]);
+    setHoldUntil("");
     setEditingId(null);
   };
 
@@ -487,6 +493,7 @@ export default function Automations() {
     }
     if (s.date) { setOnce(true); setDate(s.date); }
     else if (s.days && s.days.length) setDays([...s.days]);
+    setHoldUntil(s.holdUntil ?? "");
     const actionsLabel = describeStep(s, label).split("→").slice(1).join("→").trim() || "current actions";
     setDraft([{ label: actionsLabel, actions: s.actions }]);
     setAction(""); // start with no new selection; the loaded actions are queued
@@ -737,6 +744,27 @@ export default function Automations() {
                     ? `Fires around ${t} right now — tracks the real ${sunEvent} through the year.`
                     : `Fires at ${sunEvent} — exact time comes from Home Assistant.`;
                 })()}
+              </p>
+            )}
+
+            {/* Hold: guard the lights this step turns on against outside interference. */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
+              <button
+                className="mini-btn"
+                aria-pressed={!!holdUntil}
+                style={holdUntil ? chipOn : undefined}
+                onClick={() => setHoldUntil(holdUntil ? "" : "02:00")}
+              >
+                Hold…
+              </button>
+              {holdUntil && (
+                <input type="time" value={holdUntil} onChange={(e) => setHoldUntil(e.target.value)} style={field} />
+              )}
+            </div>
+            {holdUntil && (
+              <p className="st" style={{ margin: "4px 0 0" }}>
+                Lights this turns on are kept on until {holdUntil} — anything switching them
+                off earlier gets switched back on, and every save shows up in Activity.
               </p>
             )}
 

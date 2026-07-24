@@ -36,6 +36,25 @@ export function spotifyConfigured(): boolean {
   return !!(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET);
 }
 
+/**
+ * The redirect URI must byte-match the Spotify dashboard entry. Never derive
+ * it from the request: behind Railway's proxy, nextUrl.origin resolves to
+ * the internal host — Spotify answered "redirect_uri: Not matching
+ * configuration" to the owner's very first link attempt. APP_BASE_URL is
+ * the public origin; RAILWAY_PUBLIC_DOMAIN backs it up.
+ */
+export function appBaseUrl(): string {
+  const base =
+    process.env.APP_BASE_URL ??
+    (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null);
+  if (!base) throw new Error("APP_BASE_URL is not set — required for the Spotify redirect URI");
+  return base.replace(/\/$/, "");
+}
+
+export function spotifyRedirectUri(): string {
+  return `${appBaseUrl()}/api/spotify/callback`;
+}
+
 function tokenPath(): string {
   return process.env.SPOTIFY_TOKEN_PATH || path.join(process.cwd(), "spotify_token.json");
 }

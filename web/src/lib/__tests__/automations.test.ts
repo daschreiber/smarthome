@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   AutomationSpecSchema, createAutomation, dueSteps, listAutomations, markFired,
-  nowParts, stepIsDue, updateAutomation,
+  nowParts, recordHoldReasserts, stepHoldActive, stepIsDue, updateAutomation,
 } from "../automations";
 
 beforeEach(() => {
@@ -147,5 +147,50 @@ describe("updateAutomation", () => {
   });
   it("throws for an unknown id", () => {
     expect(() => updateAutomation("nope", { name: "x", steps: [{ time: "10:00", actions: [{ type: "scene", sceneId: "s" }] }] })).toThrow();
+  });
+});
+
+describe("holdUntil", () => {
+  const actions = [{ type: "device" as const, deviceId: "balcony_6th__balcony_plants", command: { command: "turn_on" } }];
+  it("schema accepts a valid hold time and rejects garbage", () => {
+    const ok = (extra: object) =>
+      AutomationSpecSchema.safeParse({ name: "x", steps: [{ sun: "sunset", sunOffsetMinutes: -15, actions, ...extra }] }).success;
+    expect(ok({ holdUntil: "02:00" })).toBe(true);
+    expect(ok({})).toBe(true);
+    expect(ok({ holdUntil: "26:00" })).toBe(false);
+    expect(ok({ holdUntil: "2am" })).toBe(false);
+  });
+  it("hold window opens after the firing minute and closes at holdUntil, crossing midnight", () => {
+    // Fired at 19:29 with hold until 02:00 — the balcony case.
+    const step = { sun: "sunset" as const, sunOffsetMinutes: -15, actions, holdUntil: "02:00", lastFired: "2026-07-23T19:29" };
+    const at = (date: string, hhmm: string) => stepHoldActive(step, { hhmm, day: 4, date });
+    expect(at("2026-07-23", "19:29")).toBe(false); // firing minute itself: actions just ran
+    expect(at("2026-07-23", "19:30")).toBe(true);
+    expect(at("2026-07-23", "23:59")).toBe(true);
+    expect(at("2026-07-24", "00:00")).toBe(true);
+    expect(at("2026-07-24", "01:59")).toBe(true);
+    expect(at("2026-07-24", "02:00")).toBe(false); // hand-off to the 02:00 off-automation
+    expect(at("2026-07-24", "12:00")).toBe(false);
+  });
+  it("same-day hold when holdUntil is later on the clock than the firing time", () => {
+    const step = { time: "08:00", actions, holdUntil: "17:00", lastFired: "2026-07-23T08:00" };
+    expect(stepHoldActive(step, { hhmm: "12:00", day: 4, date: "2026-07-23" })).toBe(true);
+    expect(stepHoldActive(step, { hhmm: "17:00", day: 4, date: "2026-07-23" })).toBe(false);
+    expect(stepHoldActive(step, { hhmm: "12:00", day: 5, date: "2026-07-24" })).toBe(false); // stale firing
+  });
+  it("no hold without holdUntil or before the step has ever fired", () => {
+    const now = { hhmm: "20:00", day: 4, date: "2026-07-23" };
+    expect(stepHoldActive({ time: "19:00", actions, lastFired: "2026-07-23T19:00" }, now)).toBe(false);
+    expect(stepHoldActive({ time: "19:00", actions, holdUntil: "02:00" }, now)).toBe(false);
+  });
+  it("markFired resets the re-assert budget; recordHoldReasserts persists it", () => {
+    const a = createAutomation(
+      { name: "Balcony lights", steps: [{ time: "19:29", actions, holdUntil: "02:00" }] },
+      "daniel@x.com",
+    );
+    recordHoldReasserts(a.id, 0, 3);
+    expect(listAutomations()[0].steps[0].holdReasserts).toBe(3);
+    markFired(a.id, 0, { hhmm: "19:29", day: 4, date: "2026-07-23" });
+    expect(listAutomations()[0].steps[0].holdReasserts).toBe(0);
   });
 });

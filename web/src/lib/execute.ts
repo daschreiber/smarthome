@@ -4,7 +4,7 @@ import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
 import { noiseTurnOff, noiseTurnOn, setNoiseVolume } from "./whitenoise";
 import { getScene } from "./scenes";
-import type { Action } from "./automations";
+import type { Action, Step } from "./automations";
 
 /**
  * Shared command execution used by the API routes, scene application, and
@@ -139,6 +139,24 @@ export async function executeSystemCommand(
   }
   if (targets.length === 0) return { total: 0, failed: [{ target: system, error: "no matching devices" }] };
   return runBatch(targets.map((d) => ({ target: d.id, run: () => executeOnDevice(d, cmd) })));
+}
+
+/**
+ * The lights a step switches ON — the set a holdUntil watches over. Room
+ * fan-outs and direct device turn-ons count; scenes are not expanded (a
+ * hold guards the lights the step names, not everything a scene touches).
+ */
+export function stepHoldLights(step: Step): Device[] {
+  const out = new Map<string, Device>();
+  for (const a of step.actions) {
+    if (a.type === "room" && a.command === "lights_on") {
+      for (const d of roomLights(a.room)) out.set(d.id, d);
+    } else if (a.type === "device" && a.command.command === "turn_on") {
+      const d = getDevice(a.deviceId);
+      if (d && d.kind === "light") out.set(d.id, d);
+    }
+  }
+  return [...out.values()];
 }
 
 export async function executeAction(action: Action): Promise<BatchResult> {

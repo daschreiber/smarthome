@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SYSTEM_COMMANDS, executeOnDevice, executeSystemCommand, roomLights, systemDevices } from "../execute";
+import { SYSTEM_COMMANDS, executeOnDevice, executeSystemCommand, roomLights, stepHoldLights, systemDevices } from "../execute";
 import { registry } from "../registry";
 
 describe("systemDevices", () => {
@@ -137,5 +137,32 @@ describe("executeOnDevice noise routing", () => {
       delete process.env.WHITENOISE_BASE_URL;
       delete process.env.WHITENOISE_TOKEN;
     }
+  });
+});
+
+describe("stepHoldLights", () => {
+  it("collects direct light turn-ons and room lights_on fan-outs, nothing else", () => {
+    const step = {
+      sun: "sunset" as const,
+      actions: [
+        { type: "device" as const, deviceId: "balcony_6th__balcony_plants", command: { command: "turn_on" } },
+        { type: "device" as const, deviceId: "balcony_6th__balcony_wall", command: { command: "turn_off" } }, // off: not held
+        { type: "device" as const, deviceId: "balcony_6th__balcony", command: { command: "turn_on" } }, // media, not a light
+        { type: "scene" as const, sceneId: "cozy" }, // scenes are not expanded
+      ],
+    };
+    expect(stepHoldLights(step).map((d) => d.id)).toEqual(["balcony_6th__balcony_plants"]);
+  });
+  it("room fan-out matches roomLights and dedups against direct actions", () => {
+    const step = {
+      time: "19:00",
+      actions: [
+        { type: "device" as const, deviceId: "balcony_6th__balcony_plants", command: { command: "turn_on" } },
+        { type: "room" as const, room: "Balcony (6th)", command: "lights_on" as const },
+      ],
+    };
+    const held = stepHoldLights(step).map((d) => d.id).sort();
+    expect(held).toEqual(roomLights("Balcony (6th)").map((d) => d.id).sort());
+    expect(held).toContain("balcony_6th__balcony_wall");
   });
 });

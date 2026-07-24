@@ -332,8 +332,12 @@ export default function Page() {
     [devices],
   );
 
-  const shadesOpenTotal = useMemo(
-    () => devices.filter((d) => d.kind === "cover" && d.state === "open").length,
+  // Deliberately NOT "how many are open": the Control4 covers' position
+  // feedback is stuck near 1%, so every cover reports "open" forever — the
+  // same broken signal that once kept Sleep sense from ever arming. Count
+  // only; never claim a state the hardware can't report.
+  const shadesTotal = useMemo(
+    () => devices.filter((d) => d.kind === "cover").length,
     [devices],
   );
 
@@ -474,8 +478,8 @@ export default function Page() {
             </a>
             <a className="room-card" href="/systems/shades" style={{ textDecoration: "none", display: "block" }}>
               <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><BlindsIcon size={18} /> Shades</div>
-              <div className={`rs ${shadesOpenTotal > 0 ? "on" : ""}`}>
-                {shadesOpenTotal > 0 ? `${shadesOpenTotal} open` : "all closed"}
+              <div className="rs">
+                {`${shadesTotal} shade${shadesTotal === 1 ? "" : "s"}`}
               </div>
             </a>
           </div>
@@ -855,14 +859,13 @@ function RoomShadesBlock({
   const [showAll, setShowAll] = useState(false);
   const key = `sys:shades:${room}`;
   const isBusy = !!busy[key];
-  const states = new Set(shades.map((d) => d.state));
-  const summary = states.size === 1 ? shades[0].state : "mixed";
+  // No open/closed summary: C4 cover state is fiction (stuck-open feedback).
   return (
     <div className="dev-list">
       <div className={`dev hero ${flashClass(flash[key])}`}>
         <div>
           <div className="nm">Shades</div>
-          <div className="st">{isBusy ? "…" : `${summary} · ${shades.length} shades`}</div>
+          <div className="st">{isBusy ? "…" : `${shades.length} shades`}</div>
         </div>
         <div className="btn-row">
           <button className="mini-btn" disabled={isBusy} onClick={() => sendSystem("shades", "open", room)}>Open</button>
@@ -924,7 +927,9 @@ function Device({
           {star}
           <div>
             <div className="nm">{d.label}</div>
-            <div className="st">{busy ? "…" : d.available ? d.state : "unavailable"}</div>
+            {/* C4 covers report "open" forever (position feedback stuck ~1%);
+                show nothing rather than fiction. Commands work fine. */}
+            <div className="st">{busy ? "…" : d.available ? "" : "unavailable"}</div>
           </div>
         </div>
         <div className="btn-row">

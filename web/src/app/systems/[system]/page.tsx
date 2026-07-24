@@ -182,7 +182,9 @@ export default function SystemPage() {
   const meta = SYSTEMS[system];
 
   const onCount = members.filter((d) =>
-    system === "shades" ? d.state === "open" : d.state !== "off" && d.state !== "unavailable" && d.available,
+    // Shades never count as "active": their reported state is fiction
+    // (C4 position feedback stuck ~1% -> "open" forever).
+    system === "shades" ? false : d.state !== "off" && d.state !== "unavailable" && d.available,
   ).length;
 
   return (
@@ -221,9 +223,9 @@ export default function SystemPage() {
                 <div key={room} className="dev">
                   <div>
                     <div className="nm">{room}</div>
-                    <div className={`st ${ds.some((x) => (system === "shades" ? x.state === "open" : x.state === "on")) ? "on" : ""}`}>
+                    <div className={`st ${ds.some((x) => system !== "shades" && x.state === "on") ? "on" : ""}`}>
                       {system === "shades"
-                        ? `${ds.length} shade${ds.length === 1 ? "" : "s"} · ${ds.filter((x) => x.state === "open").length} open`
+                        ? `${ds.length} shade${ds.length === 1 ? "" : "s"}`
                         : `${ds.filter((x) => x.state === "on").length} of ${ds.length} on`}
                     </div>
                   </div>

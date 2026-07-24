@@ -42,14 +42,15 @@ export default function Systems() {
   const zonesOn = devices.filter(
     (d) => d.kind === "climate" && d.available && d.state !== "off" && d.state !== "unavailable",
   ).length;
-  const shadesOpen = devices.filter((d) => d.kind === "cover" && d.state === "open").length;
+  // Count only — C4 cover state is permanently "open" (broken feedback).
+  const shadesTotal = devices.filter((d) => d.kind === "cover").length;
   const heatingOn = devices.filter((d) => d.kind === "heating" && d.state === "on").length;
 
   const cards = [
     { href: "/systems/lighting", icon: BulbIcon, title: "Lighting", sub: lightsOn > 0 ? `${lightsOn} on` : "all off", on: lightsOn > 0 },
     { href: "/systems/climate", icon: SnowIcon, title: "Climate", sub: zonesOn > 0 ? `${zonesOn} zone${zonesOn === 1 ? "" : "s"} active` : "all off", on: zonesOn > 0 },
     { href: "/systems/heating", icon: FlameIcon, title: "Underfloor heating", sub: heatingOn > 0 ? `${heatingOn} room${heatingOn === 1 ? "" : "s"} heating` : "all off", on: heatingOn > 0 },
-    { href: "/systems/shades", icon: BlindsIcon, title: "Shades", sub: shadesOpen > 0 ? `${shadesOpen} open` : "all closed", on: shadesOpen > 0 },
+    { href: "/systems/shades", icon: BlindsIcon, title: "Shades", sub: `${shadesTotal} shade${shadesTotal === 1 ? "" : "s"}`, on: false },
   ];
 
   return (

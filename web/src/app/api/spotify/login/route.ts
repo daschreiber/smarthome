@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
-import { authUrl, spotifyConfigured } from "@/lib/spotify";
+import { authUrl, spotifyConfigured, spotifyRedirectUri } from "@/lib/spotify";
 
 /** Start the one-time Spotify account link. Admin-only: the linked account
  *  becomes the whole household's music source. */
@@ -15,6 +15,5 @@ export async function GET(req: NextRequest) {
       { status: 501 },
     );
   }
-  const redirectUri = `${req.nextUrl.origin}/api/spotify/callback`;
-  return NextResponse.redirect(authUrl(redirectUri));
+  return NextResponse.redirect(authUrl(spotifyRedirectUri()));
 }

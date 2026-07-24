@@ -38,7 +38,17 @@ describe("buildSceneStates", () => {
       { deviceId: "den__spots", command: { command: "set_brightness", brightnessPct: 50 } },
       { deviceId: "den__plain", command: { command: "turn_off" } },
       { deviceId: "den__blinds", command: { command: "close" } },
+      // Power state AND setpoint: 16° on a sleeping unit cools nothing.
+      { deviceId: "den__ac", command: { command: "turn_on" } },
       { deviceId: "den__ac", command: { command: "set_temperature", temperature: 23 } },
+    ]);
+  });
+
+  it("captures an off AC as turn_off, without a setpoint", () => {
+    const devices = [dev({ id: "den__ac", entityId: "climate.den", kind: "climate", category: "climate_zone", capabilities: ["set_temperature", "hvac_mode"] })];
+    const states = new Map([st("climate.den", "off", { temperature: 23 })]);
+    expect(buildSceneStates(devices, states)).toEqual([
+      { deviceId: "den__ac", command: { command: "turn_off" } },
     ]);
   });
 
@@ -62,14 +72,32 @@ describe("buildSceneStates", () => {
 });
 
 describe("scene store", () => {
-  it("creates, lists, fetches, and deletes with unique ids", () => {
+  it("creates, lists, fetches, and deletes; distinct names get distinct ids", () => {
     const s1 = createScene("Cozy Den", "Den", "daniel@x.com", [{ deviceId: "a", command: { command: "turn_on" } }]);
-    const s2 = createScene("Cozy Den", "Den", "daniel@x.com", [{ deviceId: "b", command: { command: "turn_off" } }]);
+    const s2 = createScene("Movie Den", "Den", "daniel@x.com", [{ deviceId: "b", command: { command: "turn_off" } }]);
     expect(s1.id).not.toBe(s2.id);
     expect(listScenes()).toHaveLength(2);
     expect(getScene(s1.id)?.states[0].deviceId).toBe("a");
     deleteScene(s1.id);
     expect(listScenes()).toHaveLength(1);
+  });
+
+  it("re-capturing the same name in another room composes ONE multi-room scene", () => {
+    const s1 = createScene("Pre-workout", "Gym", "daniel@x.com", [{ deviceId: "gym__lights", command: { command: "turn_on" } }]);
+    const s2 = createScene("pre-workout", "Sauna", "daniel@x.com", [{ deviceId: "sauna__lights", command: { command: "turn_on" } }]);
+    expect(s2.id).toBe(s1.id);
+    expect(listScenes()).toHaveLength(1);
+    expect(getScene(s1.id)?.states.map((st) => st.deviceId).sort()).toEqual(["gym__lights", "sauna__lights"]);
+    expect(getScene(s1.id)?.room).toBeNull(); // spans rooms now
+  });
+
+  it("re-capturing the same room replaces that room's states, keeping the other room's", () => {
+    createScene("Pre-workout", "Gym", "d@x.com", [{ deviceId: "gym__lights", command: { command: "turn_on" } }]);
+    createScene("Pre-workout", "Sauna", "d@x.com", [{ deviceId: "sauna__lights", command: { command: "turn_on" } }]);
+    const s3 = createScene("Pre-workout", "Gym", "d@x.com", [{ deviceId: "gym__lights", command: { command: "set_brightness", brightnessPct: 60 } }]);
+    const cmds = Object.fromEntries(s3.states.map((st) => [st.deviceId, st.command]));
+    expect(cmds["gym__lights"]).toEqual({ command: "set_brightness", brightnessPct: 60 });
+    expect(cmds["sauna__lights"]).toEqual({ command: "turn_on" });
   });
 
   it("refuses empty captures and empty names", () => {

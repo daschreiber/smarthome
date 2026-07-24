@@ -67,6 +67,8 @@ interface CustomScene {
   name: string;
   room: string | null;
   deviceCount: number;
+  /** Contains the sauna heater — applying asks for confirmation first. */
+  hasSauna?: boolean;
   /** Server-decided: admins delete anything, others only their own scenes. */
   canDelete: boolean;
 }
@@ -519,6 +521,13 @@ export default function Page() {
                         if (s.canDelete && window.confirm(`Delete scene "${s.name}"?`)) {
                           sceneOp({ action: "delete", id: s.id });
                         }
+                      } else if (s.hasSauna) {
+                        // The one safety rule scenes don't bypass: a heater
+                        // start stays an explicit human decision, per apply.
+                        const heat = window.confirm(
+                          `"${s.name}" includes the sauna heater. Start it too?\nOK = everything incl. sauna · Cancel = everything except the sauna`,
+                        );
+                        sceneOp({ action: "apply", id: s.id, confirmSauna: heat });
                       } else {
                         sceneOp({ action: "apply", id: s.id });
                       }
@@ -546,7 +555,9 @@ export default function Page() {
           onCapture={
             canProgram
               ? (room) => {
-                  const name = window.prompt(`Save ${room} as a scene — name it:`);
+                  const name = window.prompt(
+                    `Save ${room} as a scene — name it:\n(use an existing scene's name to add this room to it)`,
+                  );
                   if (name?.trim()) sceneOp({ action: "capture", name: name.trim(), room });
                 }
               : null

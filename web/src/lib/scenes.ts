@@ -97,12 +97,22 @@ export function buildSceneStates(
         out.push({ deviceId: d.id, command: { command: "close" } });
       }
     } else if (d.kind === "climate") {
-      const target = s.attributes.temperature;
-      if (typeof target === "number" && target >= 10 && target <= 32) {
-        out.push({ deviceId: d.id, command: { command: "set_temperature", temperature: target } });
+      // Capture the power state too: a scene that only sets 16° on a unit
+      // that happens to be off cools nothing. Apply runs a device's
+      // commands in order (turn_on, then the setpoint).
+      if (s.state === "off") {
+        out.push({ deviceId: d.id, command: { command: "turn_off" } });
+      } else {
+        out.push({ deviceId: d.id, command: { command: "turn_on" } });
+        const target = s.attributes.temperature;
+        if (typeof target === "number" && target >= 10 && target <= 32) {
+          out.push({ deviceId: d.id, command: { command: "set_temperature", temperature: target } });
+        }
       }
     }
-    // media + sauna deliberately not captured
+    // media deliberately not captured (transient sources); the sauna is
+    // captured by the route (its state lives at KLAFS, not in HA) and only
+    // ever replays behind an explicit per-apply confirmation
   }
   return out;
 }
@@ -117,6 +127,20 @@ export function createScene(
   if (!clean) throw new Error("scene needs a name");
   if (states.length === 0) throw new Error("nothing capturable in this room right now");
   const scenes = load();
+
+  // Same name = same scene: capturing "Pre-workout" in the Gym and then
+  // again in the Sauna composes ONE multi-room scene (new capture replaces
+  // that room's devices, other rooms' states survive). room goes null once
+  // it spans rooms.
+  const existing = scenes.find((s) => s.name.toLowerCase() === clean.toLowerCase());
+  if (existing) {
+    const captured = new Set(states.map((st) => st.deviceId));
+    existing.states = [...existing.states.filter((st) => !captured.has(st.deviceId)), ...states];
+    if (existing.room !== room) existing.room = null;
+    save(scenes);
+    return existing;
+  }
+
   let id = slug(clean) || "scene";
   let n = 2;
   while (scenes.some((s) => s.id === id)) id = `${slug(clean)}_${n++}`;

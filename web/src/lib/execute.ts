@@ -55,18 +55,34 @@ async function runBatch(
   return { total: jobs.length, failed };
 }
 
-export async function applySceneById(sceneId: string): Promise<BatchResult> {
+export async function applySceneById(
+  sceneId: string,
+  opts: { includeSauna?: boolean } = {},
+): Promise<BatchResult> {
   const scene = getScene(sceneId);
   if (!scene) throw new Error(`no such scene: ${sceneId}`);
+  // The sauna heater replays ONLY behind an explicit per-apply confirmation
+  // (the scenes route asks; automations and the assistant never pass it) —
+  // the Phase F safety rule survives scenes.
+  const states = scene.states.filter(
+    (st) => opts.includeSauna || getDevice(st.deviceId)?.kind !== "sauna",
+  );
+  // Group by device, run each device's commands IN ORDER: climate scenes
+  // are (turn_on, set_temperature) pairs, and a parallel batch would race
+  // the setpoint against the wake-up.
+  const byDevice = new Map<string, typeof states>();
+  for (const st of states) byDevice.set(st.deviceId, [...(byDevice.get(st.deviceId) ?? []), st]);
   return runBatch(
-    scene.states.map((st) => ({
-      target: st.deviceId,
+    [...byDevice.entries()].map(([deviceId, sts]) => ({
+      target: deviceId,
       run: async () => {
-        const device = getDevice(st.deviceId);
+        const device = getDevice(deviceId);
         if (!device) throw new Error("no longer in the registry");
-        const parsed = CommandSchema.safeParse(st.command);
-        if (!parsed.success) throw new Error("stored command invalid");
-        await executeOnDevice(device, parsed.data);
+        for (const st of sts) {
+          const parsed = CommandSchema.safeParse(st.command);
+          if (!parsed.success) throw new Error("stored command invalid");
+          await executeOnDevice(device, parsed.data);
+        }
       },
     })),
   );

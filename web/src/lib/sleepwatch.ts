@@ -132,7 +132,10 @@ export function evaluateSleepwatch(opts: {
   hhmm: string;
   nowMs: number;
   states: Map<string, { state: string }>;
-  playing: boolean;
+  /** Listener-count truth; null = the status read FAILED. Unknown is not
+   *  "stopped": treating a hiccup as silence once made the watcher drop an
+   *  active session and let the noise play into mid-morning. */
+  playing: boolean | null;
   st: SleepwatchState;
 }): SleepwatchDecision {
   const { hhmm, nowMs, states, playing, st } = opts;
@@ -146,10 +149,14 @@ export function evaluateSleepwatch(opts: {
 
   if (cancel) {
     const why = !inWindow(hhmm) ? `window ended (${hhmm})` : `light on: ${lightsOn[0]}`;
+    // Stop unless affirmatively silent already: turn_off is idempotent, so
+    // an unreadable status must not skip the morning stop. The next state
+    // only clears active once the stop SUCCEEDS (the tick keeps the old
+    // state on action failure), so a failed stop retries every tick.
     // A cancel condition resets the night: clear the latch so the next
     // fully-met bedtime (tonight or tomorrow) arms fresh.
     return {
-      action: st.active && playing ? "stop" : null,
+      action: st.active && playing !== false ? "stop" : null,
       next: { ...st, active: false, latched: false, startedAtMs: null, retries: 0 },
       reason: why,
     };
@@ -161,6 +168,12 @@ export function evaluateSleepwatch(opts: {
     inWindow(hhmm) &&
     watchedLightEntities().every((id) => get(id) === "off") &&
     get(TV_LIFT_ENTITY) === liftSleepState();
+
+  if (playing === null) {
+    // Status unreadable: change nothing. Never adopt, latch, or clear
+    // active on a blind tick — the next readable status decides.
+    return { action: null, next: st, reason: "noise status unreadable — holding state" };
+  }
 
   if (playing) {
     // Adopt whatever is playing during a met-conditions bedtime so the
@@ -223,7 +236,8 @@ export async function tickSleepwatch(): Promise<void> {
       getStates().then((all) => new Map(all.map((s) => [s.entity_id, { state: s.state }]))),
       noiseStatusFresh().catch(() => null),
     ]);
-    const playing = (noise?.listeners ?? 0) > 0;
+    // null = status read failed; evaluate treats that as unknown, not "off".
+    const playing = noise ? noise.listeners > 0 : null;
     const { action, next, reason } = evaluateSleepwatch({ hhmm, nowMs: Date.now(), states, playing, st });
 
     if (action) {
@@ -252,7 +266,13 @@ export async function tickSleepwatch(): Promise<void> {
         return;
       }
     }
-    if (JSON.stringify(next) !== JSON.stringify(st)) saveSleepwatch(next);
+    if (JSON.stringify(next) !== JSON.stringify(st)) {
+      saveSleepwatch(next);
+      // Every state transition leaves a trace — the silent night of
+      // 2026-07-23/24 (noise ran to mid-morning, nothing in the logs) must
+      // stay diagnosable from `railway logs` alone.
+      console.log(`[sleepwatch] state: ${reason}`, next);
+    }
   } catch (err) {
     console.error("[sleepwatch] tick failed:", err);
   }

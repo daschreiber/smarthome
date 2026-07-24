@@ -1,7 +1,7 @@
 import { dueSteps, listAutomations, markFired, nowParts, type SunEvents } from "./automations";
 import { executeAction, executeOnDevice } from "./execute";
 import { dueTimers, listTimers } from "./timers";
-import { tickSleepwatch } from "./sleepwatch";
+import { loadSleepwatch, tickSleepwatch } from "./sleepwatch";
 import { getStates } from "./ha";
 import { sunEvents } from "./sun";
 import { audit } from "./audit";
@@ -21,11 +21,19 @@ export function startScheduler(): void {
   if (g[GUARD]) return;
   g[GUARD] = true;
   console.log(`[scheduler] started (tz=${process.env.APP_TZ ?? "system"})`);
+  // The sleep watcher's state survives restarts on the volume — say what we
+  // woke up with, so a mid-night restart is reconstructable from logs.
+  try {
+    console.log("[sleepwatch] state at boot:", loadSleepwatch());
+  } catch { /* logging only */ }
   setInterval(tick, 30_000).unref?.();
 }
 
 export async function tick(): Promise<void> {
-  let due: ReturnType<typeof dueSteps>;
+  // The automations block must not take the timers or the sleep watcher
+  // down with it — a failed sun lookup at 08:00 once meant no tickSleepwatch
+  // at all. Each section fails alone.
+  let due: ReturnType<typeof dueSteps> = [];
   const now = nowParts();
   try {
     const items = listAutomations();
@@ -36,8 +44,7 @@ export async function tick(): Promise<void> {
     }
     due = dueSteps(items, now, sun);
   } catch (err) {
-    console.error("[scheduler] tick failed:", err);
-    return;
+    console.error("[scheduler] automations tick failed:", err);
   }
   for (const { automation, stepIndex } of due) {
     // Mark first so a slow action can't double-fire on the next tick.

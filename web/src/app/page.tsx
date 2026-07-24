@@ -1401,7 +1401,9 @@ const HIDDEN_SOURCES =
  * card = the shared Spotify stream, not the Terrace's speakers.) */
 function prettyNowPlaying(t: string): string {
   if (/^Spotify C4 /.test(t)) return "Spotify";
-  if (/^Smart TV /.test(t)) return "TV";
+  // "TV" alone read as a destination ("music playing on the TV") — say
+  // what's true: the room speakers are carrying the TV's sound.
+  if (/^Smart TV /.test(t)) return "TV sound";
   return t;
 }
 /**

@@ -71,6 +71,16 @@ interface CustomScene {
   canDelete: boolean;
 }
 
+/** The household Spotify session (from /api/music/now). */
+interface MusicNow {
+  playing: boolean;
+  track: string | null;
+  artist: string | null;
+  artUrl: string | null;
+  deviceName: string | null;
+  room: string | null;
+}
+
 const GROUP_ORDER = ["Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
 /** Display names for groups whose entity-map name reads wrong in the UI.
  * "Media" is owner-renamed to "Music" — the section is the room's sound,
@@ -98,6 +108,7 @@ export default function Page() {
   const [layout, setLayout] = useState<"grid" | "plan">("grid");
   const [role, setRole] = useState<"admin" | "member" | "guest">("member");
   const [floorHeating, setFloorHeating] = useState<string[]>([]);
+  const [musicNow, setMusicNow] = useState<MusicNow | null>(null);
   const keyRef = useRef("");
   const canProgram = role !== "guest";
 
@@ -184,6 +195,20 @@ export default function Page() {
     const t = setInterval(refresh, 3000);
     return () => clearInterval(t);
   }, [refresh, loadFavs, loadScenes]);
+
+  // The household Spotify session, polled gently (the server caches it too):
+  // Music cards show track/artist/art and "playing in <room>" from this.
+  useEffect(() => {
+    let stop = false;
+    const load = () =>
+      fetch("/api/music/now", { headers: headers() })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((v: MusicNow | null) => { if (!stop && v) setMusicNow(v); })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 10_000);
+    return () => { stop = true; clearInterval(t); };
+  }, [headers]);
 
   const sceneOp = useCallback(
     async (body: Record<string, unknown>) => {
@@ -358,7 +383,7 @@ export default function Page() {
               <div className="section-label">Favorites</div>
               <div className="dev-list">
                 {favDevices.map((d) => (
-                  <Device key={d.id} d={d} flash={flash[d.id]} busy={!!busy[d.id]} send={send} fav={true} onFav={toggleFav} />
+                  <Device key={d.id} d={d} flash={flash[d.id]} busy={!!busy[d.id]} send={send} fav={true} onFav={toggleFav} music={musicNow} />
                 ))}
               </div>
             </>
@@ -509,6 +534,7 @@ export default function Page() {
           groups={groups}
           flash={flash}
           busy={busy}
+          music={musicNow}
           send={send}
           sendSystem={sendSystem}
           favs={favs}
@@ -680,12 +706,13 @@ const COLLAPSE_LIGHTS_AT = 4;
 const keepsOwnRow = (d: UiDevice) => /\bread/i.test(d.label) || !!d.pinned;
 
 function RoomView({
-  room, groups, flash, busy, send, sendSystem, favs, onFav, onCapture, back,
+  room, groups, flash, busy, music, send, sendSystem, favs, onFav, onCapture, back,
 }: {
   room: string;
   groups: [string, UiDevice[]][];
   flash: Record<string, Flash>;
   busy: Record<string, boolean>;
+  music: MusicNow | null;
   send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   sendSystem: (system: string, command: string, room: string, extra?: Record<string, unknown>) => Promise<SendResult>;
   favs: string[];
@@ -703,6 +730,7 @@ function RoomView({
         send={send}
         fav={favs.includes(d.id)}
         onFav={onFav}
+        music={music}
       />
     ));
   return (
@@ -869,7 +897,7 @@ function flashClass(f?: Flash) {
 }
 
 function Device({
-  d, flash, busy, send, fav, onFav,
+  d, flash, busy, send, fav, onFav, music,
 }: {
   d: UiDevice;
   flash?: Flash;
@@ -877,6 +905,7 @@ function Device({
   send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   fav?: boolean;
   onFav?: (id: string) => void;
+  music?: MusicNow | null;
 }) {
   const star = onFav ? <Star on={!!fav} onClick={() => onFav(d.id)} label={d.label} /> : null;
   if (d.kind === "sauna") return <SaunaCard d={d} busy={busy} send={send} />;
@@ -886,7 +915,7 @@ function Device({
   // Media zones with selectable inputs (the Control4 matrix rooms) get the
   // full source/transport card; plain streamers keep the toggle row below.
   if (d.kind === "media_player" && (d.sourceList?.length ?? 0) > 0) {
-    return <MediaCard d={d} flash={flash} busy={busy} send={send} star={star} />;
+    return <MediaCard d={d} flash={flash} busy={busy} send={send} star={star} music={music ?? null} />;
   }
   if (d.kind === "cover") {
     return (
@@ -1379,13 +1408,14 @@ function prettyNowPlaying(t: string): string {
  */
 const RECEIVER_SOURCES = ["Spotify", "AirPlay", "Bluetooth", "TV"];
 function MediaCard({
-  d, flash, busy, send, star,
+  d, flash, busy, send, star, music,
 }: {
   d: UiDevice;
   flash?: Flash;
   busy: boolean;
   send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   star?: React.ReactNode;
+  music: MusicNow | null;
 }) {
   const [drag, setDrag] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -1397,6 +1427,18 @@ function MediaCard({
     isReceiver ? RECEIVER_SOURCES.includes(s) : !HIDDEN_SOURCES.test(s),
   );
   const volume = drag ?? d.volumePct ?? 0;
+  // The Spotify session lives HERE when its Connect device maps to this
+  // room: the card upgrades to track/artist/art + skip (via the Spotify
+  // API — the C4 zones themselves can't skip through HA).
+  const sessionHere = !!music?.room && music.room === d.room && active;
+  const playingElsewhere = !!music?.playing && !!music.room && music.room !== d.room && !active;
+  const doSkip = (direction: "next" | "previous") => {
+    fetch("/api/music/skip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction }),
+    }).catch(() => {});
+  };
   // Idle Play = "continue my Spotify here": the backend resumes the
   // household account on this room's Connect endpoint (/api/music/play).
   const playHere = () => {
@@ -1418,9 +1460,14 @@ function MediaCard({
   return (
     <div className={`dev-block hero ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
       <div className={`dev ${active ? "on" : ""}`}>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
           {star}
-          <div>
+          {sessionHere && music?.artUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={music.artUrl} alt="" width={40} height={40}
+              style={{ borderRadius: 8, marginRight: 6, flexShrink: 0 }} />
+          )}
+          <div style={{ minWidth: 0 }}>
             <div className="nm">{label}</div>
             <div className="st">
               {note ??
@@ -1428,16 +1475,25 @@ function MediaCard({
                   ? "…"
                   : !d.available
                     ? "unavailable"
-                    : active && (d.mediaTitle || d.source)
-                      ? // What's actually playing beats the input name; both
-                        // pass through prettyNowPlaying (session names →
-                        // "Spotify", C4 TV inputs → "TV").
-                        `${d.state} · ${prettyNowPlaying(d.mediaTitle ?? d.source ?? "")}`
-                      : d.state)}
+                    : sessionHere && music?.track
+                      ? `${music.track}${music.artist ? ` — ${music.artist}` : ""}`
+                      : active && (d.mediaTitle || d.source)
+                        ? // What's actually playing beats the input name; both
+                          // pass through prettyNowPlaying (session names →
+                          // "Spotify", C4 TV inputs → "TV").
+                          `${d.state} · ${prettyNowPlaying(d.mediaTitle ?? d.source ?? "")}`
+                        : playingElsewhere
+                          ? `${d.state} · Spotify is in the ${music!.room}`
+                          : d.state)}
             </div>
           </div>
         </div>
         <div className="btn-row">
+          {sessionHere && (
+            <button className="mini-btn" aria-label="Previous track" disabled={busy} onClick={() => doSkip("previous")}>
+              ⏮
+            </button>
+          )}
           <button
             className="mini-btn"
             disabled={busy || !d.available}
@@ -1445,6 +1501,11 @@ function MediaCard({
           >
             {playing ? "Pause" : "Play"}
           </button>
+          {sessionHere && (
+            <button className="mini-btn" aria-label="Next track" disabled={busy} onClick={() => doSkip("next")}>
+              ⏭
+            </button>
+          )}
           {(active || d.canTurnOn) && (
             <button
               className="mini-btn"

@@ -204,6 +204,67 @@ async function findDevice(name: string): Promise<ConnectDevice> {
   return dev;
 }
 
+/** Reverse of ROOM_DEVICE: which app room a Connect device name belongs to. */
+export function deviceRoom(deviceName: string): string | null {
+  const hit = Object.entries(ROOM_DEVICE).find(
+    ([, name]) => name.toLowerCase() === deviceName.toLowerCase(),
+  );
+  return hit ? hit[0] : null;
+}
+
+export interface NowPlaying {
+  playing: boolean;
+  track: string | null;
+  artist: string | null;
+  artUrl: string | null;
+  deviceName: string | null;
+  /** App room of the playing device, when it maps to one of ours. */
+  room: string | null;
+}
+
+/** The account's current session, cached briefly — every open room page
+ *  polls this and Spotify's API doesn't owe us that traffic. */
+let nowCache: { at: number; value: NowPlaying } | null = null;
+
+export async function nowPlaying(): Promise<NowPlaying> {
+  if (nowCache && Date.now() - nowCache.at < 5000) return nowCache.value;
+  const idle: NowPlaying = { playing: false, track: null, artist: null, artUrl: null, deviceName: null, room: null };
+  const { status, json } = await api("GET", "/me/player");
+  let value = idle;
+  if (status === 200 && json) {
+    const p = json as {
+      is_playing?: boolean;
+      item?: { name?: string; artists?: { name?: string }[]; album?: { images?: { url?: string; width?: number }[] } };
+      device?: { name?: string };
+    };
+    const images = p.item?.album?.images ?? [];
+    // Smallest image ≥64px — the card thumbnail is tiny.
+    const art = [...images].sort((a, b) => (a.width ?? 0) - (b.width ?? 0)).find((i) => (i.width ?? 0) >= 64) ?? images[0];
+    const deviceName = p.device?.name ?? null;
+    value = {
+      playing: !!p.is_playing,
+      track: p.item?.name ?? null,
+      artist: p.item?.artists?.map((a) => a.name).filter(Boolean).join(", ") || null,
+      artUrl: art?.url ?? null,
+      deviceName,
+      room: deviceName ? deviceRoom(deviceName) : null,
+    };
+  }
+  nowCache = { at: Date.now(), value };
+  return value;
+}
+
+/** Skip within the account's active session (device-independent — the C4
+ *  zones can't skip through HA, but Spotify's API can always). */
+export async function skip(direction: "next" | "previous"): Promise<void> {
+  const { status, json } = await api("POST", `/me/player/${direction}`);
+  if (status !== 200 && status !== 204) {
+    const reason = (json as { error?: { message?: string } })?.error?.message;
+    throw new Error(reason ?? `skip failed (HTTP ${status})`);
+  }
+  nowCache = null; // the track just changed; don't serve the stale one
+}
+
 /**
  * Make the owner's Spotify play in a room. Resume-first: targeting the
  * device with a bare play resumes the account's last context there; if

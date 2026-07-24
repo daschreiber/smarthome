@@ -144,6 +144,26 @@ describe("stopping", () => {
     const d = evaluateSleepwatch({ hhmm: "09:00", nowMs: NOW, states: bedtimeStates(), playing: true, st: IDLE });
     expect(d.action).toBeNull();
   });
+
+  it("an unreadable status does NOT skip the morning stop (turn_off is idempotent)", () => {
+    const d = evaluateSleepwatch({ hhmm: "08:05", nowMs: NOW, states: bedtimeStates(), playing: null, st: ACTIVE });
+    expect(d.action).toBe("stop");
+  });
+});
+
+describe("unknown status holds state", () => {
+  it("mid-night unreadable status neither latches nor clears active", () => {
+    const active: SleepwatchState = { enabled: true, active: true, latched: false, startedAtMs: NOW - 3_600_000 };
+    const d = evaluateSleepwatch({ hhmm: "03:00", nowMs: NOW, states: bedtimeStates(), playing: null, st: active });
+    expect(d.action).toBeNull();
+    expect(d.next).toEqual(active);
+  });
+
+  it("never adopts on an unreadable status", () => {
+    const d = evaluateSleepwatch({ hhmm: "23:00", nowMs: NOW, states: bedtimeStates(), playing: null, st: IDLE });
+    expect(d.action).toBeNull();
+    expect(d.next.active).toBe(false);
+  });
 });
 
 describe("early-death retry (the goodnight-sweep fight)", () => {

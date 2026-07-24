@@ -68,6 +68,44 @@ describe("roomDeviceName", () => {
   });
 });
 
+describe("deviceRoom (reverse mapping)", () => {
+  it("maps Connect device names back to app rooms, case-insensitively", async () => {
+    const s = await loadSpotify();
+    expect(s.deviceRoom("Spotify C4 Kitchen")).toBe("Kitchen");
+    expect(s.deviceRoom("spotify c4 mbr")).toBe("Master Bedroom");
+    expect(s.deviceRoom("Gym")).toBeNull();
+  });
+});
+
+describe("nowPlaying", () => {
+  it("parses the session and resolves the room", async () => {
+    handlers["https://api.spotify.com/v1/me/player"] = {
+      status: 200,
+      json: {
+        is_playing: true,
+        item: {
+          name: "Hey Jude",
+          artists: [{ name: "The Beatles" }],
+          album: { images: [{ url: "big.jpg", width: 640 }, { url: "small.jpg", width: 64 }] },
+        },
+        device: { name: "Spotify C4 Kitchen" },
+      },
+    };
+    const s = await loadSpotify();
+    const now = await s.nowPlaying();
+    expect(now).toMatchObject({
+      playing: true, track: "Hey Jude", artist: "The Beatles",
+      artUrl: "small.jpg", room: "Kitchen",
+    });
+  });
+
+  it("reports idle on 204 (no active session)", async () => {
+    handlers["https://api.spotify.com/v1/me/player"] = { status: 204, json: null };
+    const s = await loadSpotify();
+    expect((await s.nowPlaying()).playing).toBe(false);
+  });
+});
+
 describe("playInRoom", () => {
   it("resumes playback on the room's device", async () => {
     handlers["https://api.spotify.com/v1/me/player/play"] = { status: 204 };

@@ -63,6 +63,9 @@ LIGHT_RULES = [
     (r"tv lift", "motorized_furniture"),
     (r"\bvent\b|defog", "ventilation"),
     (r"towel rail", "towel_rail"),
+    # The terrace patio heater rides the light domain; it must never be swept
+    # up by "lights on/off" (group Lighting is that boundary, see lib/execute).
+    (r"\bheating\b|\bheater\b", "heater"),
     (r"\bfan\b", "fan"),
     (r"טוחן|מדיח|תנור|ברז", "kitchen_appliance"),
 ]
@@ -116,6 +119,7 @@ GROUPS = {
     "shade": "Shades",
     "climate_zone": "Climate & Comfort", "floor_heating": "Climate & Comfort",
     "ventilation": "Climate & Comfort", "towel_rail": "Climate & Comfort",
+    "heater": "Climate & Comfort",
     "fan": "Climate & Comfort", "hvac_master_switch": "Climate & Comfort",
     "infrastructure_climate": "Utilities",
     "media": "Media", "scene_switch": "Scenes",

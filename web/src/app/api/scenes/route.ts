@@ -3,9 +3,10 @@ import { authenticate } from "@/lib/auth";
 import { canDeleteRecord, canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import { getStates } from "@/lib/ha";
-import { registry } from "@/lib/registry";
+import { registry, getDevice } from "@/lib/registry";
 import { applySceneById } from "@/lib/execute";
-import { buildSceneStates, createScene, deleteScene, getScene, listScenes } from "@/lib/scenes";
+import { buildSceneStates, createScene, deleteScene, getScene, listScenes, type SceneState } from "@/lib/scenes";
+import { saunaConfigured, saunaStatus } from "@/lib/sauna";
 
 export async function GET(req: NextRequest) {
   const auth = authenticate(req);
@@ -14,6 +15,8 @@ export async function GET(req: NextRequest) {
     scenes: listScenes().map(({ states, ...meta }) => ({
       ...meta,
       deviceCount: states.length,
+      // The pill asks before replaying a heater: the UI needs to know.
+      hasSauna: states.some((st) => getDevice(st.deviceId)?.kind === "sauna"),
       canDelete: canDeleteRecord(auth.role, auth.user, meta.createdBy),
     })),
   });
@@ -24,7 +27,7 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as
-    | { action?: "capture" | "apply" | "delete"; name?: string; room?: string; id?: string }
+    | { action?: "capture" | "apply" | "delete"; name?: string; room?: string; id?: string; confirmSauna?: boolean }
     | null;
   if (!body?.action) return NextResponse.json({ error: "action required" }, { status: 400 });
   // Guests can apply scenes but not create or delete them.
@@ -40,7 +43,18 @@ export async function POST(req: NextRequest) {
       }
       const states = new Map((await getStates()).map((s) => [s.entity_id, s]));
       const devices = registry().devices.filter((d) => d.room === body.room);
-      const scene = createScene(body.name, body.room, auth.user, buildSceneStates(devices, states));
+      const sceneStates: SceneState[] = buildSceneStates(devices, states);
+      // The sauna's truth lives at KLAFS, not in HA — capture it here, and
+      // only as it looks now: a running heater at capture time means the
+      // scene includes "sauna on" (replayed strictly behind a confirm).
+      const saunaDevice = devices.find((d) => d.kind === "sauna");
+      if (saunaDevice && saunaConfigured()) {
+        const sauna = await saunaStatus().catch(() => null);
+        if (sauna?.connected && sauna.poweredOn) {
+          sceneStates.push({ deviceId: saunaDevice.id, command: { command: "turn_on" } });
+        }
+      }
+      const scene = createScene(body.name, body.room, auth.user, sceneStates);
       audit({
         ts: new Date().toISOString(), user: auth.user, deviceId: "scenes", entityId: `scene.${scene.id}`,
         command: "capture_scene", args: { room: body.room, devices: scene.states.length },
@@ -66,9 +80,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // apply
+    // apply — the sauna heater fires only with this request's explicit
+    // confirmSauna (the pill asks); everything else applies regardless.
     if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    const result = await applySceneById(body.id);
+    const result = await applySceneById(body.id, { includeSauna: body.confirmSauna === true });
     audit({
       ts: new Date().toISOString(), user: auth.user, deviceId: "scenes", entityId: `scene.${body.id}`,
       command: "apply_scene", args: { devices: result.total, failed: result.failed.length },

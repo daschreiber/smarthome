@@ -1497,7 +1497,17 @@ function MediaCard({
           <button
             className="mini-btn"
             disabled={busy || !d.available}
-            onClick={() => (active ? send(d.id, { command: playing ? "pause" : "play" }) : playHere())}
+            // Play means MUSIC: pause/resume only govern a Spotify session
+            // that's actually here. A zone carrying TV audio (or anything
+            // else) treats Play as "bring my Spotify to this room" — a
+            // media_play at the TV feed did nothing, verifiably confusingly.
+            onClick={() =>
+              playing
+                ? send(d.id, { command: "pause" })
+                : sessionHere
+                  ? send(d.id, { command: "play" })
+                  : playHere()
+            }
           >
             {playing ? "Pause" : "Play"}
           </button>

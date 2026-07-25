@@ -2,7 +2,7 @@ import {
   dueSteps, listAutomations, markFired, nowParts, recordHoldReasserts, stepHoldActive,
   type Step, type SunEvents,
 } from "./automations";
-import { isAway, runsWhileAway } from "./away";
+import { automationActiveNow, isAway } from "./away";
 import { executeAction, executeOnDevice, stepHoldLights } from "./execute";
 import { dueTimers, listTimers } from "./timers";
 import { loadSleepwatch, tickSleepwatch } from "./sleepwatch";
@@ -39,10 +39,11 @@ export async function tick(): Promise<void> {
   // at all. Each section fails alone.
   let due: ReturnType<typeof dueSteps> = [];
   const now = nowParts();
-  // Away mode gates what runs BY ITSELF this tick: scheduled automations
-  // (and their holds) pause unless marked "run"; auto-off timers and the
-  // sleep watcher decide for themselves (timers keep working, the watcher
-  // stands down — see lib/away.ts). Read once so one tick sees one answer.
+  // The away flag gates automations by their activeWhen mode ("always" by
+  // default, "home"-only, or "away"-only — see lib/away.ts); auto-off
+  // timers and the sleep watcher decide for themselves (timers keep
+  // working, the watcher stands down). Read once so one tick sees one
+  // answer.
   let away = false;
   try {
     away = isAway();
@@ -50,7 +51,7 @@ export async function tick(): Promise<void> {
     console.error("[scheduler] away state read failed (treating as home):", err);
   }
   try {
-    const items = listAutomations().filter((a) => !away || runsWhileAway(a));
+    const items = listAutomations().filter((a) => automationActiveNow(a, away));
     // Only consult HA's sun entity when a sun-triggered step could fire.
     let sun: SunEvents | undefined;
     if (items.some((a) => a.enabled && a.steps.some((s) => s.sun))) {
@@ -117,9 +118,9 @@ async function tickHolds(now: ReturnType<typeof nowParts>, away: boolean): Promi
     holds = [];
     for (const a of listAutomations()) {
       if (!a.enabled) continue;
-      // An automation paused by Away mode must not keep re-lighting its
-      // hold either — the hold is part of the automation, not above it.
-      if (away && !runsWhileAway(a)) continue;
+      // An automation inactive in the current home/away state must not
+      // keep re-lighting its hold — the hold is part of the automation.
+      if (!automationActiveNow(a, away)) continue;
       a.steps.forEach((step, stepIndex) => {
         if (stepHoldActive(step, now)) holds.push({ id: a.id, name: a.name, stepIndex, step });
       });

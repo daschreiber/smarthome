@@ -41,8 +41,9 @@ interface Automation {
   createdBy: string;
   /** Server-decided: admins delete anything, others only their own. */
   canDelete: boolean;
-  /** Away mode: absent/"pause" = pauses while away, "run" = keeps firing. */
-  awayBehavior?: "pause" | "run";
+  /** When it's active: absent/"always" = regardless of Away mode,
+   * "home" = paused while away, "away" = runs only while away. */
+  activeWhen?: "always" | "home" | "away";
 }
 
 interface SceneMeta { id: string; name: string; }
@@ -643,9 +644,11 @@ export default function Automations() {
           {grouped.length > 1 && <div className="section-label">{g.name}</div>}
           {g.rows.map(({ a, nf, sunFallback }) => {
         const open = expandedId === a.id;
-        const awayPaused = away && a.enabled && a.awayBehavior !== "run";
+        const mode = a.activeWhen ?? "always";
+        // Enabled but out of season: home-only while away, away-only while home.
+        const suppressed = a.enabled && (away ? mode === "home" : mode === "away");
         return (
-          <div key={a.id} className={`dev${a.enabled && !awayPaused ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
+          <div key={a.id} className={`dev${a.enabled && !suppressed ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
             <button
               aria-expanded={open}
               onClick={() => setExpandedId(open ? null : a.id)}
@@ -657,8 +660,8 @@ export default function Automations() {
               <div className="nm">{a.name}</div>
               <div className="st">
                 {!a.enabled ? "paused"
-                  : awayPaused ? "paused while away"
-                  : nf ? `next ${nextFireLabel(nf, now)}${away ? " (runs while away)" : ""}`
+                  : suppressed ? (away ? "paused while away" : "waits for Away mode")
+                  : nf ? `next ${nextFireLabel(nf, now)}${away && mode === "away" ? " (away only)" : ""}`
                   : sunFallback ? `next at ${sunFallback}`
                   : "nothing upcoming"}
               </div>
@@ -680,16 +683,21 @@ export default function Automations() {
               />
               {open && (
                 <>
-                  <button
-                    className="mini-btn"
-                    aria-pressed={a.awayBehavior === "run"}
-                    style={a.awayBehavior === "run" ? chipOn : undefined}
-                    disabled={busy}
-                    title="Whether this automation keeps firing while Away mode is on"
-                    onClick={() => post({ action: "away_behavior", id: a.id, runsWhileAway: a.awayBehavior !== "run" })}
-                  >
-                    {a.awayBehavior === "run" ? "Runs while away" : "Pauses while away"}
-                  </button>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {([["always", "Always"], ["home", "When home"], ["away", "When away"]] as const).map(([v, chipLabel]) => (
+                      <button
+                        key={v}
+                        className="mini-btn"
+                        aria-pressed={mode === v}
+                        style={mode === v ? chipOn : undefined}
+                        disabled={busy}
+                        title="When this automation is active: always, only while someone's home, or only while Away mode is on"
+                        onClick={() => { if (mode !== v) post({ action: "active_when", id: a.id, activeWhen: v }); }}
+                      >
+                        {chipLabel}
+                      </button>
+                    ))}
+                  </div>
                   {a.steps.length === 1 && (
                     <button className="mini-btn" disabled={busy} onClick={() => startEdit(a)}>
                       Edit
@@ -1055,7 +1063,7 @@ export default function Automations() {
  */
 function AwayMode({ away, onChange }: { away: boolean; onChange: () => Promise<void> | void }) {
   const [st, setSt] = useState<{
-    away: boolean; since: string | null; pausedCount: number; runningCount: number;
+    away: boolean; since: string | null; homeOnlyCount: number; awayOnlyCount: number;
     canToggle: boolean;
   } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1102,10 +1110,10 @@ function AwayMode({ away, onChange }: { away: boolean; onChange: () => Promise<v
         <div className="nm">Away mode</div>
         <div className="st">
           {away
-            ? `on${since ? ` since ${since}` : ""} — ${st.pausedCount} automation${st.pausedCount === 1 ? "" : "s"} paused` +
-              `${st.runningCount > 0 ? `, ${st.runningCount} marked to keep running` : ""}` +
-              " · sleep sense is standing down · auto-off timers still work · everything stays controllable by hand"
-            : "one switch for nights or weeks out: pauses the schedules and sleep sense, keeps auto-off timers working, changes nothing for anyone still coming and going"}
+            ? `on${since ? ` since ${since}` : ""} — ${st.homeOnlyCount} when-home automation${st.homeOnlyCount === 1 ? "" : "s"} paused` +
+              `${st.awayOnlyCount > 0 ? `, ${st.awayOnlyCount} away-only running` : ""}` +
+              " · everything marked Always runs as normal · sleep sense is standing down · auto-off timers still work"
+            : "the I'm-away switch (also on the Home screen). Automations run by their setting — Always (the default, unaffected), When home (pause while away), When away (presence lighting and such) · sleep sense stands down while away · timers keep working"}
           {bedNote && <span style={{ color: "var(--danger)" }}> · {bedNote}</span>}
         </div>
       </div>

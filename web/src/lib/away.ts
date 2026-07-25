@@ -5,20 +5,25 @@ import path from "node:path";
  * Away mode: one house-wide switch for "we're not living here right now" —
  * a couple of nights, or a few weeks. It is deliberately NOT a lockdown:
  * children and cleaners keep coming and going, every switch and app control
- * still works, nothing is deleted or individually disabled. The mode only
- * changes what runs BY ITSELF:
+ * still works, nothing is deleted or individually disabled.
  *
- * - Scheduled automations PAUSE (their enabled flags untouched), except the
- *   ones explicitly marked to keep running while away (awayBehavior: "run")
- *   — that's how evening presence lighting stays on the schedule.
- * - Auto-off timers KEEP WORKING — with people passing through, a light
- *   left on is more likely, not less.
- * - Sleep sense won't arm (nobody is sleeping in the Master Bedroom), and
- *   a session it is running gets stopped when the mode turns on.
+ * What it changes (owner-revised 2026-07-25 — away no longer stops
+ * everything): each automation carries an activeWhen mode —
  *
- * Switching back off simply lifts the gate: automations resume at their
- * next scheduled minute — missed firings are not replayed, same as after a
- * restart.
+ * - "always" (the DEFAULT): runs at home and away alike. Flipping Away
+ *   changes nothing for it.
+ * - "home":   runs only while someone's living here — the "no point when
+ *   we're gone" schedules. Paused while away.
+ * - "away":   runs only while the house is empty — presence lighting,
+ *   security-ish routines. Paused while home.
+ *
+ * Auto-off timers KEEP WORKING regardless (with people passing through, a
+ * light left on is more likely, not less), and Sleep sense stands down
+ * while away (nobody is sleeping in the Master Bedroom).
+ *
+ * Flipping back simply moves the gate: automations resume at their next
+ * scheduled minute — missed firings are not replayed, same as after a
+ * restart. The switch lives on the Home screen and the Automations screen.
  */
 
 export interface AwayState {
@@ -53,11 +58,21 @@ export function setAway(away: boolean, user: string): AwayState {
   return st;
 }
 
+/** When an automation is active: always (default), home-only, or away-only. */
+export type ActiveWhen = "always" | "home" | "away";
+
+export const ACTIVE_WHEN_VALUES: ActiveWhen[] = ["always", "home", "away"];
+
 /**
- * Does this automation still run while the house is away? Absent means NO —
- * pausing is the default the mode exists for; running through it is the
- * marked exception (presence lighting, plant irrigation, …).
+ * Should this automation run right now, given the house's away state?
+ * Absent means "always" — an automation nobody has thought about must keep
+ * working exactly as it always has, whatever the switch says.
  */
-export function runsWhileAway(a: { awayBehavior?: "pause" | "run" }): boolean {
-  return a.awayBehavior === "run";
+export function automationActiveNow(
+  a: { activeWhen?: ActiveWhen },
+  away: boolean,
+): boolean {
+  const mode = a.activeWhen ?? "always";
+  if (mode === "always") return true;
+  return away ? mode === "away" : mode === "home";
 }

@@ -72,11 +72,11 @@ export interface Automation extends AutomationSpec {
   createdBy: string;
   createdAt: string;
   /**
-   * What Away mode does to this automation. Absent = "pause" (the default
-   * the mode exists for); "run" marks the exceptions that should keep firing
-   * in an empty house, like evening presence lighting. See lib/away.ts.
+   * When this automation is active: "always" (absent = always — the
+   * default), "home" (paused while Away mode is on), or "away" (runs only
+   * while the house is empty — presence lighting). See lib/away.ts.
    */
-  awayBehavior?: "pause" | "run";
+  activeWhen?: "always" | "home" | "away";
 }
 
 function storePath(): string {
@@ -85,7 +85,18 @@ function storePath(): string {
 
 function load(): Automation[] {
   try {
-    return JSON.parse(fs.readFileSync(storePath(), "utf8")) as Automation[];
+    const items = JSON.parse(fs.readFileSync(storePath(), "utf8")) as Array<
+      Automation & { awayBehavior?: "pause" | "run" }
+    >;
+    // Legacy Away-mode field (lived one day, 2026-07-25): an explicit
+    // "pause" was a choice to stop while away → "home"; anything else
+    // takes the new default ("always", by absence). Normalized in memory;
+    // the next save persists it.
+    for (const a of items) {
+      if (!a.activeWhen && a.awayBehavior === "pause") a.activeWhen = "home";
+      delete a.awayBehavior;
+    }
+    return items;
   } catch {
     return [];
   }
@@ -125,12 +136,12 @@ export function setEnabled(id: string, enabled: boolean): void {
   save(items);
 }
 
-/** Mark whether this automation keeps firing while Away mode is on. */
-export function setAwayBehavior(id: string, behavior: "pause" | "run"): void {
+/** Set when this automation is active: always, home-only, or away-only. */
+export function setActiveWhen(id: string, mode: "always" | "home" | "away"): void {
   const items = load();
   const a = items.find((x) => x.id === id);
   if (!a) throw new Error("no such automation");
-  a.awayBehavior = behavior;
+  a.activeWhen = mode;
   save(items);
 }
 

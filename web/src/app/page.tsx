@@ -388,12 +388,17 @@ export default function Page() {
     <main className="shell">
       {view.t === "home" ? (
         <>
-          <h1 className="h-title">Home</h1>
-          <p className="h-sub">
-            {devices.length === 0 && !error
-              ? "Connecting…"
-              : `${lightsOnTotal} light${lightsOnTotal === 1 ? "" : "s"} on`}
-          </p>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+            <div>
+              <h1 className="h-title">Home</h1>
+              <p className="h-sub">
+                {devices.length === 0 && !error
+                  ? "Connecting…"
+                  : `${lightsOnTotal} light${lightsOnTotal === 1 ? "" : "s"} on`}
+              </p>
+            </div>
+            <AwaySwitch headers={headers} />
+          </div>
 
           {error && <div className="error-banner">{error}</div>}
 
@@ -1672,6 +1677,54 @@ function MediaCard({
  * belongs to the Control4 bedside button, so the card reports playing/idle
  * honestly from the server's listener count instead of pretending.
  */
+/**
+ * The I'm-home / Away switch, on the Home screen where it gets flipped on
+ * the way out the door. What it changes lives server-side (lib/away):
+ * automations run by their Always / When home / When away setting, sleep
+ * sense stands down while away, timers keep working, and the Eight Sleep
+ * sides follow. The Automations screen's Away card explains the details.
+ */
+function AwaySwitch({ headers }: { headers: () => HeadersInit }) {
+  const [st, setSt] = useState<{ away: boolean; canToggle: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/away", { headers: headers() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setSt)
+      .catch(() => setSt(null));
+  }, [headers]);
+
+  if (!st) return null;
+
+  const set = (away: boolean) => {
+    if (busy || away === st.away) return;
+    setBusy(true);
+    fetch("/api/away", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers() },
+      body: JSON.stringify({ away }),
+    })
+      .then((r) => r.json())
+      .then((out: { ok?: boolean; away?: boolean }) => {
+        if (out.ok) setSt({ ...st, away: out.away === true });
+      })
+      .catch(() => {})
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="view-toggle" role="group" aria-label="Home or away" style={{ marginTop: 4 }}>
+      <button aria-pressed={!st.away} disabled={busy || !st.canToggle} onClick={() => set(false)}>
+        I&rsquo;m home
+      </button>
+      <button aria-pressed={st.away} disabled={busy || !st.canToggle} onClick={() => set(true)}>
+        Away
+      </button>
+    </div>
+  );
+}
+
 /**
  * An Eight Sleep bed side: presence + warmth on the Pod's own -100…+100
  * scale (not °C — Eight Sleep's unit). The Pod's entities can't echo a

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
-import { loadAway, runsWhileAway, setAway } from "@/lib/away";
+import { loadAway, setAway } from "@/lib/away";
 import { listAutomations } from "@/lib/automations";
 import { bedConfigured, bedSetAwayAll } from "@/lib/eightsleep";
 
@@ -20,9 +20,10 @@ export async function GET(req: NextRequest) {
     away: st.away,
     since: st.since ?? null,
     setBy: st.setBy ?? null,
-    // So the card can say what the switch will actually do right now.
-    pausedCount: enabled.filter((a) => !runsWhileAway(a)).length,
-    runningCount: enabled.filter(runsWhileAway).length,
+    // So the cards can say what the switch actually does right now:
+    // "home"-only automations pause while away; "away"-only ones take over.
+    homeOnlyCount: enabled.filter((a) => a.activeWhen === "home").length,
+    awayOnlyCount: enabled.filter((a) => a.activeWhen === "away").length,
     canToggle: canProgram(auth.role),
   });
 }

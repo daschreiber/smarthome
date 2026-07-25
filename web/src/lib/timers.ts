@@ -46,6 +46,9 @@ export function createTimer(deviceId: string, afterMinutes: number, user: string
   const device = getDevice(deviceId);
   if (!device || !device.visible) throw new Error("unknown device");
   if (device.kind === "sauna") throw new Error("the sauna manages its own runtime");
+  // A bed side's entity is a temperature reading — it's never "on", so an
+  // auto-off rule would silently do nothing. Refuse instead of pretending.
+  if (device.kind === "bed") throw new Error("the bed manages its own schedule");
   if (!device.capabilities.includes("on_off")) throw new Error("device has no on/off to time out");
   if (!Number.isFinite(afterMinutes) || afterMinutes < 1 || afterMinutes > 720) {
     throw new Error("afterMinutes must be between 1 and 720");

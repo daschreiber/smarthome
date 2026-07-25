@@ -4,6 +4,7 @@ import { canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import { loadAway, runsWhileAway, setAway } from "@/lib/away";
 import { listAutomations } from "@/lib/automations";
+import { bedConfigured, bedSetAwayAll } from "@/lib/eightsleep";
 
 /**
  * Away mode switchboard: read status for the Automations card, flip the
@@ -43,5 +44,21 @@ export async function POST(req: NextRequest) {
     entityId: "away_mode", command: body.away ? "away_on" : "away_off",
     args: { was }, ok: true, durationMs: 0,
   });
-  return NextResponse.json({ ok: true, away: st.away });
+  // Eight Sleep rides along: the Pod has its own away mode (stops its
+  // schedules and Autopilot), so the house switch flips it on every
+  // configured side. Best-effort — a cloud hiccup never blocks the house
+  // flag — but the outcome is audited and returned so the card can say so.
+  let bed: { synced: boolean; detail?: string } | null = null;
+  if (bedConfigured()) {
+    const started = Date.now();
+    const { failures } = await bedSetAwayAll(body.away);
+    bed = failures.length ? { synced: false, detail: failures.join("; ") } : { synced: true };
+    audit({
+      ts: new Date().toISOString(), user: auth.user, deviceId: "automations",
+      entityId: "away_mode", command: body.away ? "bed_away_on" : "bed_away_off",
+      args: {}, ok: failures.length === 0, durationMs: Date.now() - started,
+      error: failures.length ? failures.join("; ") : undefined,
+    });
+  }
+  return NextResponse.json({ ok: true, away: st.away, bed });
 }

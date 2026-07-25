@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { bedDeviceId, bedSides } from "./eightsleep";
 import { noiseConfigured } from "./whitenoise";
 
 /**
@@ -20,7 +21,8 @@ export type Capability =
   | "volume"
   | "select_source"
   | "transport"
-  | "vacuum_control";
+  | "vacuum_control"
+  | "bed_level";
 
 export interface MapRow {
   entity_id: string;
@@ -41,7 +43,7 @@ export interface MapRow {
 export interface Device {
   id: string;
   entityId: string;
-  kind: MapRow["domain"] | "sauna" | "heating" | "noise";
+  kind: MapRow["domain"] | "sauna" | "heating" | "noise" | "bed";
   label: string;
   room: string;
   floor: 5 | 6 | null;
@@ -188,6 +190,24 @@ function virtualDevices(): Device[] {
       // on_off drives the room's Control4 zone (play/stop the stream) via HA;
       // volume is the stream's own level via the noise server.
       capabilities: ["on_off", "volume"],
+    });
+  }
+  // Eight Sleep bed sides: the entities are REAL HA entities (unlike the
+  // sauna), but their command surface is the eight_sleep integration's own
+  // services, so kind "bed" is executed by lib/eightsleep, never by
+  // buildServiceCall. One device per configured side.
+  for (const s of bedSides()) {
+    devices.push({
+      id: bedDeviceId(s.side),
+      entityId: s.targetEntity,
+      kind: "bed",
+      label: s.label,
+      room: "Master Bedroom",
+      floor: 6,
+      group: "Climate & Comfort",
+      category: "bed_side",
+      visible: true,
+      capabilities: ["on_off", "bed_level"],
     });
   }
   return devices;

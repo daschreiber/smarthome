@@ -5,6 +5,7 @@ import { authenticate } from "@/lib/auth";
 import { coolmasterEntityId } from "@/lib/coolmaster";
 import { saunaConfigured, saunaScheduleStatus, saunaStatus } from "@/lib/sauna";
 import { noiseConfigured, noiseStatus } from "@/lib/whitenoise";
+import { bedConfigured, bedSideForDeviceId } from "@/lib/eightsleep";
 
 /**
  * Full visible-device snapshot joined with live HA state.
@@ -86,6 +87,34 @@ export async function GET(req: NextRequest) {
             note: noiseNote,
             noiseType: noise?.noiseType ?? null,
             volumePct: noise?.volume ?? null,
+          };
+        }
+        if (d.kind === "bed") {
+          const s = states.get(d.entityId);
+          const side = bedSideForDeviceId(d.id);
+          const pres = side?.presenceEntity ? states.get(side.presenceEntity) : undefined;
+          const reading = s ? Number(s.state) : NaN;
+          return {
+            id: d.id,
+            label: d.label,
+            room: d.room,
+            floor: d.floor,
+            group: d.group,
+            kind: d.kind,
+            category: d.category,
+            capabilities: d.capabilities,
+            requiresConfirmation: false,
+            state: s?.state ?? "unknown",
+            available: !!s && s.state !== "unavailable" && s.state !== "unknown",
+            // The side's temp entity reading (Eight Sleep reports bed temp
+            // here); shown as context, never claimed as the setpoint.
+            currentTemperature: Number.isFinite(reading) ? reading : null,
+            targetTemperature: null,
+            hvacMode: null,
+            brightnessPct: null,
+            lastUpdated: s?.last_updated ?? null,
+            note: null as string | null,
+            bedPresence: pres ? (pres.state === "on" ? true : pres.state === "off" ? false : null) : null,
           };
         }
         const s = states.get(d.entityId);
@@ -181,6 +210,32 @@ export async function GET(req: NextRequest) {
         note: "not configured — set WHITENOISE_VIA_HA=1 (HA add-on) or WHITENOISE_BASE_URL + WHITENOISE_TOKEN",
         noiseType: null,
         volumePct: null,
+      });
+    }
+
+    // Same pattern for the Eight Sleep bed: a display-only card in the
+    // Master Bedroom until the integration lands on the Green and the
+    // EIGHTSLEEP_* envs are set (docs/EIGHT_SLEEP_SETUP.md).
+    if (!bedConfigured()) {
+      devices.push({
+        id: "master_bedroom__bed",
+        label: "Eight Sleep bed",
+        room: "Master Bedroom",
+        floor: 6,
+        group: "Climate & Comfort",
+        kind: "bed",
+        category: "bed_side",
+        capabilities: [],
+        requiresConfirmation: false,
+        state: "unknown",
+        available: false,
+        brightnessPct: null,
+        currentTemperature: null,
+        targetTemperature: null,
+        hvacMode: null,
+        lastUpdated: null,
+        note: "waiting for the Eight Sleep integration in Home Assistant",
+        bedPresence: null,
       });
     }
 

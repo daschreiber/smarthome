@@ -1,4 +1,5 @@
 import { CommandSchema, assertCommandAllowed, buildServiceCall, type Command } from "./commands";
+import { bedSetLevel, bedSideForDeviceId, bedSideOff, bedSideOn } from "./eightsleep";
 import { callService } from "./ha";
 import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
@@ -30,6 +31,18 @@ export async function executeOnDevice(device: Device, cmd: Command): Promise<voi
     else if (cmd.command === "turn_off") await noiseTurnOff();
     else if (cmd.command === "set_volume") await setNoiseVolume(cmd.volumePct);
     else throw new Error(`white noise does not support ${cmd.command}`);
+    return;
+  }
+  // Bed sides are real HA entities but command through the eight_sleep
+  // integration's own services — lib/eightsleep is their adapter.
+  if (device.kind === "bed") {
+    assertCommandAllowed(device, cmd);
+    const side = bedSideForDeviceId(device.id);
+    if (!side) throw new Error("bed side no longer configured");
+    if (cmd.command === "turn_on") await bedSideOn(side);
+    else if (cmd.command === "turn_off") await bedSideOff(side);
+    else if (cmd.command === "set_bed_level") await bedSetLevel(side, cmd.level);
+    else throw new Error(`bed does not support ${cmd.command}`);
     return;
   }
   const call = buildServiceCall(device, cmd);

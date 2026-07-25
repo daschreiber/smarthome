@@ -44,6 +44,8 @@ interface UiDevice {
   sourceList?: string[] | null;
   mediaTitle?: string | null;
   canTurnOn?: boolean;
+  /** Eight Sleep bed sides only: occupancy from the presence sensor. */
+  bedPresence?: boolean | null;
   /** Vacuums only. */
   batteryPct?: number | null;
   fanSpeed?: string | null;
@@ -1001,6 +1003,7 @@ function Device({
   const star = onFav ? <Star on={!!fav} onClick={() => onFav(d.id)} label={d.label} /> : null;
   if (d.kind === "sauna") return <SaunaCard d={d} busy={busy} send={send} />;
   if (d.kind === "noise") return <NoiseCard d={d} busy={busy} send={send} />;
+  if (d.kind === "bed") return <BedCard d={d} busy={busy} send={send} star={star} />;
   if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} star={star} />;
   if (d.kind === "vacuum") return <VacuumCard d={d} flash={flash} busy={busy} send={send} star={star} />;
   // Media zones with selectable inputs (the Control4 matrix rooms) get the
@@ -1667,6 +1670,96 @@ function MediaCard({
  * belongs to the Control4 bedside button, so the card reports playing/idle
  * honestly from the server's listener count instead of pretending.
  */
+/**
+ * An Eight Sleep bed side: presence + warmth on the Pod's own -100…+100
+ * scale (not °C — Eight Sleep's unit). The Pod's entities can't echo a
+ * side's on/off or its level back, so the card offers actions and shows a
+ * transient "sent" note instead of pretending to know the resulting state.
+ */
+function BedCard({
+  d, busy, send, star,
+}: {
+  d: UiDevice;
+  busy: boolean;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
+  star?: React.ReactNode;
+}) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const level = drag ?? 0;
+
+  const flashNote = (msg: string) => {
+    setNote(msg);
+    setTimeout(() => setNote(null), 5000);
+  };
+
+  // Setting a warmth level wakes the side first (like "AC on at °C") —
+  // heat_set on a sleeping side shouldn't silently do nothing.
+  const commitLevel = async (v: number) => {
+    setDrag(null);
+    const on = await send(d.id, { command: "turn_on" });
+    if (!on.ok) return flashNote(on.error ?? "failed");
+    const r = await send(d.id, { command: "set_bed_level", level: v });
+    flashNote(r.ok ? `sent — warmth ${v > 0 ? "+" : ""}${v}` : r.error ?? "failed");
+  };
+
+  const presence =
+    d.bedPresence === true ? "someone's in bed" : d.bedPresence === false ? "bed empty" : null;
+  return (
+    <div className={`dev-block hero ${d.available ? "" : "unavailable"}`}>
+      <div className="dev">
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {star}
+          <div>
+            <div className="nm">{d.label}</div>
+            <div className="st">
+              {note ??
+                (d.available
+                  ? [presence, d.currentTemperature != null ? `reads ${d.currentTemperature}°` : null]
+                      .filter(Boolean).join(" · ") || "ready"
+                  : `unavailable${d.note ? ` — ${d.note}` : ""}`)}
+            </div>
+          </div>
+        </div>
+        <button
+          className="mini-btn"
+          disabled={busy || !d.available}
+          onClick={() =>
+            send(d.id, { command: "turn_off" }).then((r) =>
+              flashNote(r.ok ? "sent — side off" : r.error ?? "failed"),
+            )
+          }
+        >
+          Off
+        </button>
+      </div>
+      <div className="slider-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", paddingBottom: 6 }}>
+        <button className="mini-btn" disabled={busy || !d.available} onClick={() => commitLevel(-30)}>
+          Cool
+        </button>
+        <button className="mini-btn" disabled={busy || !d.available} onClick={() => commitLevel(30)}>
+          Warm
+        </button>
+        <input
+          type="range"
+          min={-100}
+          max={100}
+          step={5}
+          value={level}
+          aria-label={`${d.label} warmth`}
+          disabled={busy || !d.available}
+          style={{ flex: "1 1 120px" }}
+          onChange={(e) => setDrag(Number(e.target.value))}
+          onPointerUp={(e) => commitLevel(Number((e.target as HTMLInputElement).value))}
+          onKeyUp={(e) => {
+            if (e.key === "Enter") commitLevel(Number((e.target as HTMLInputElement).value));
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function NoiseCard({
   d, busy, send,
 }: {

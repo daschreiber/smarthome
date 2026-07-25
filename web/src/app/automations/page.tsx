@@ -104,6 +104,12 @@ function tempBoundsFor(kind: string | undefined) {
 
 function commandOptions(t: TargetDevice | undefined): Array<{ value: string; label: string }> {
   if (t?.kind === "cover") return [{ value: "open", label: "Open" }, { value: "close", label: "Close" }];
+  if (t?.kind === "bed")
+    return [
+      { value: "on_at_level", label: "On at warmth…" },
+      { value: "turn_on", label: "On" },
+      { value: "turn_off", label: "Off" },
+    ];
   if (t?.kind === "climate")
     return [
       { value: "on_at", label: "On at °C…" },
@@ -155,7 +161,23 @@ function describeStep(s: Step, deviceLabel: (id: string) => string): string {
       i++;
       continue;
     }
+    // Same for a bed side's wake + warmth pair.
+    if (
+      a.command.command === "turn_on" &&
+      next?.type === "device" && next.deviceId === a.deviceId &&
+      next.command.command === "set_bed_level"
+    ) {
+      const lvl = Number(next.command.level);
+      parts.push(`${deviceLabel(a.deviceId)} on at warmth ${lvl > 0 ? "+" : ""}${lvl}`);
+      i++;
+      continue;
+    }
     if (a.command.command === "set_temperature") { parts.push(`${deviceLabel(a.deviceId)} to ${a.command.temperature}°`); continue; }
+    if (a.command.command === "set_bed_level") {
+      const lvl = Number(a.command.level);
+      parts.push(`${deviceLabel(a.deviceId)} warmth ${lvl > 0 ? "+" : ""}${lvl}`);
+      continue;
+    }
     if (a.command.command === "set_brightness") { parts.push(`${deviceLabel(a.deviceId)} on at ${a.command.brightnessPct}%`); continue; }
     const verb = String(a.command.command).replace("turn_", "").replace("_", " ");
     parts.push(`${deviceLabel(a.deviceId)} ${verb}`);
@@ -205,6 +227,8 @@ export default function Automations() {
   const [actCommand, setActCommand] = useState("turn_on");
   const [actTemp, setActTemp] = useState(24);
   const [actBright, setActBright] = useState(60);
+  // Eight Sleep warmth, the Pod's own -100 (cool) … +100 (warm) scale.
+  const [actLevel, setActLevel] = useState(30);
   const [targets, setTargets] = useState<TargetDevice[]>([]);
   // Per-light editor ("Set each light…"): what to do with each light in the room.
   // Missing / "leave" = don't touch it. Keyed by device id.
@@ -395,7 +419,15 @@ export default function Automations() {
       label = `${target} ${noun} ${action.endsWith("_on") ? "on" : "off"}`;
     } else if (actDevice) {
       const dname = selectedDevice?.label ?? actDevice;
-      if (actCommand === "on_at") {
+      if (actCommand === "on_at_level") {
+        // Wake the side, then set its warmth — same shape as "AC on at °C".
+        const lvl = Math.min(100, Math.max(-100, Math.round(actLevel)));
+        actions = [
+          cmd(actDevice, { command: "turn_on" }),
+          cmd(actDevice, { command: "set_bed_level", level: lvl }),
+        ];
+        label = `${dname} on at warmth ${lvl > 0 ? "+" : ""}${lvl}`;
+      } else if (actCommand === "on_at") {
         actions = [
           cmd(actDevice, { command: "turn_on" }),
           cmd(actDevice, { command: "set_temperature", temperature: clampTemp(selectedDevice?.kind) }),
@@ -870,6 +902,17 @@ export default function Automations() {
                       </select>
                     )}
                     {(actCommand === "on_at" || actCommand === "set_temp") && tempInput(selectedDevice?.kind)}
+                    {actCommand === "on_at_level" && (
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
+                        warmth
+                        <input
+                          type="number" min={-100} max={100} step={5} value={actLevel}
+                          onChange={(e) => setActLevel(Number(e.target.value))}
+                          style={{ ...field, width: 70 }}
+                        />
+                        (−100 cool … +100 warm)
+                      </label>
+                    )}
                     {actCommand === "on_at_pct" && (
                       <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
                         <input
@@ -1078,6 +1121,7 @@ function SleepSense({ away }: { away: boolean }) {
   const [st, setSt] = useState<{
     enabled: boolean; active: boolean; configured: boolean; canToggle: boolean;
     window: { start: string; end: string };
+    bedPresenceSides?: number;
   } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1115,7 +1159,7 @@ function SleepSense({ away }: { away: boolean }) {
                 ? "standing down while Away mode is on — arms again the night you're back"
                 : st.active
                 ? "noise is on — stops when a light comes on or a shade opens (no morning timer)"
-                : `arms ${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count) and the TV is stowed · stops when a light comes on or a shade opens — no morning timer · plays the sound and volume the Sleep sound card is set to`}
+                : `arms ${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count)${(st.bedPresenceSides ?? 0) > 0 ? ", someone's in bed," : ""} and the TV is stowed · stops when a light comes on${(st.bedPresenceSides ?? 0) > 0 ? ", everyone leaves the bed," : ""} or a shade opens — no morning timer · plays the sound and volume the Sleep sound card is set to`}
         </div>
       </div>
       <button

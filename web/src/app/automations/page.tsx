@@ -41,6 +41,8 @@ interface Automation {
   createdBy: string;
   /** Server-decided: admins delete anything, others only their own. */
   canDelete: boolean;
+  /** Away mode: absent/"pause" = pauses while away, "run" = keeps firing. */
+  awayBehavior?: "pause" | "run";
 }
 
 interface SceneMeta { id: string; name: string; }
@@ -174,6 +176,7 @@ export default function Automations() {
   const [items, setItems] = useState<Automation[]>([]);
   const [scenes, setScenes] = useState<SceneMeta[]>([]);
   const [tz, setTz] = useState("");
+  const [away, setAway] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -224,6 +227,7 @@ export default function Automations() {
     const body = await res.json();
     setItems(body.automations);
     setTz(body.tz);
+    setAway(body.away === true);
     setSunTimes(body.sun ?? null);
     const [sc, home, tm] = await Promise.all([fetch("/api/scenes"), fetch("/api/home"), fetch("/api/timers")]);
     if (sc.ok) setScenes(((await sc.json()) as { scenes: SceneMeta[] }).scenes);
@@ -599,15 +603,17 @@ export default function Automations() {
       <p className="h-sub">Times are {tz ? `${tz.split("/").pop()!.replace(/_/g, " ")} time` : "house time"}. One-shot automations disable themselves after firing.</p>
       {error && <div className="error-banner">{error}</div>}
 
-      <SleepSense />
+      <AwayMode away={away} onChange={load} />
+      <SleepSense away={away} />
 
       {grouped.map((g) => (
         <Fragment key={g.name}>
           {grouped.length > 1 && <div className="section-label">{g.name}</div>}
           {g.rows.map(({ a, nf, sunFallback }) => {
         const open = expandedId === a.id;
+        const awayPaused = away && a.enabled && a.awayBehavior !== "run";
         return (
-          <div key={a.id} className={`dev${a.enabled ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
+          <div key={a.id} className={`dev${a.enabled && !awayPaused ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
             <button
               aria-expanded={open}
               onClick={() => setExpandedId(open ? null : a.id)}
@@ -619,7 +625,8 @@ export default function Automations() {
               <div className="nm">{a.name}</div>
               <div className="st">
                 {!a.enabled ? "paused"
-                  : nf ? `next ${nextFireLabel(nf, now)}`
+                  : awayPaused ? "paused while away"
+                  : nf ? `next ${nextFireLabel(nf, now)}${away ? " (runs while away)" : ""}`
                   : sunFallback ? `next at ${sunFallback}`
                   : "nothing upcoming"}
               </div>
@@ -641,6 +648,16 @@ export default function Automations() {
               />
               {open && (
                 <>
+                  <button
+                    className="mini-btn"
+                    aria-pressed={a.awayBehavior === "run"}
+                    style={a.awayBehavior === "run" ? chipOn : undefined}
+                    disabled={busy}
+                    title="Whether this automation keeps firing while Away mode is on"
+                    onClick={() => post({ action: "away_behavior", id: a.id, runsWhileAway: a.awayBehavior !== "run" })}
+                  >
+                    {a.awayBehavior === "run" ? "Runs while away" : "Pauses while away"}
+                  </button>
                   {a.steps.length === 1 && (
                     <button className="mini-btn" disabled={busy} onClick={() => startEdit(a)}>
                       Edit
@@ -908,7 +925,7 @@ export default function Automations() {
       <div className="section-label">Auto-off timers</div>
       <p className="h-sub" style={{ marginTop: -2 }}>
         Whenever the device turns on — from any switch, scene, or app — it turns itself off after
-        the set time.
+        the set time. Timers keep working in Away mode — a light someone leaves on still goes off.
       </p>
       {timers.map((t) => {
         const dev = lightById(t.deviceId);
@@ -987,12 +1004,77 @@ export default function Automations() {
 }
 
 /**
+ * Away mode's card: one switch for "we're out for a few nights/weeks".
+ * Scheduled automations pause (unless marked "Runs while away"), Sleep
+ * sense stands down, auto-off timers keep working — kids and cleaners
+ * still come and go, so nothing else changes. Logic lives in lib/away and
+ * the scheduler; this card reads status and flips the flag.
+ */
+function AwayMode({ away, onChange }: { away: boolean; onChange: () => Promise<void> | void }) {
+  const [st, setSt] = useState<{
+    away: boolean; since: string | null; pausedCount: number; runningCount: number;
+    canToggle: boolean;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = () =>
+    fetch("/api/away")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setSt)
+      .catch(() => setSt(null));
+
+  useEffect(() => { refresh(); }, []);
+
+  if (!st) return null;
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/away", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ away: !away }),
+      });
+      if ((await res.json()).ok) {
+        await refresh();
+        await onChange(); // re-fetch the list so the row labels follow
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const since = st.since ? new Date(st.since).toLocaleDateString() : null;
+  return (
+    <div className="dev" style={{ alignItems: "flex-start" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="nm">Away mode</div>
+        <div className="st">
+          {away
+            ? `on${since ? ` since ${since}` : ""} — ${st.pausedCount} automation${st.pausedCount === 1 ? "" : "s"} paused` +
+              `${st.runningCount > 0 ? `, ${st.runningCount} marked to keep running` : ""}` +
+              " · sleep sense is standing down · auto-off timers still work · everything stays controllable by hand"
+            : "one switch for nights or weeks out: pauses the schedules and sleep sense, keeps auto-off timers working, changes nothing for anyone still coming and going"}
+        </div>
+      </div>
+      <button
+        className="toggle"
+        aria-pressed={away}
+        aria-label={`Away mode ${away ? "on" : "off"}`}
+        disabled={busy || !st.canToggle}
+        onClick={toggle}
+      />
+    </div>
+  );
+}
+
+/**
  * The sleep watcher's card: a standing house rule, not a user-authored
  * automation — it triggers on the room's STATE (dark, closed, TV stowed
  * after 22:00), which the step builder can't express. Server logic lives in
  * lib/sleepwatch; this card only reads status and flips enabled.
  */
-function SleepSense() {
+function SleepSense({ away }: { away: boolean }) {
   const [st, setSt] = useState<{
     enabled: boolean; active: boolean; configured: boolean; canToggle: boolean;
     window: { start: string; end: string };
@@ -1021,7 +1103,7 @@ function SleepSense() {
   };
 
   return (
-    <div className={`dev${st.enabled ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
+    <div className={`dev${st.enabled && !away ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="nm">Sleep sense — white noise</div>
         <div className="st">
@@ -1029,7 +1111,9 @@ function SleepSense() {
             ? "white noise isn't configured yet"
             : !st.enabled
               ? "paused"
-              : st.active
+              : away
+                ? "standing down while Away mode is on — arms again the night you're back"
+                : st.active
                 ? "noise is on — stops when a light comes on or a shade opens (no morning timer)"
                 : `arms ${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count) and the TV is stowed · stops when a light comes on or a shade opens — no morning timer · plays the sound and volume the Sleep sound card is set to`}
         </div>

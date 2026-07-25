@@ -2,6 +2,7 @@ import {
   dueSteps, listAutomations, markFired, nowParts, recordHoldReasserts, stepHoldActive,
   type Step, type SunEvents,
 } from "./automations";
+import { isAway, runsWhileAway } from "./away";
 import { executeAction, executeOnDevice, stepHoldLights } from "./execute";
 import { dueTimers, listTimers } from "./timers";
 import { loadSleepwatch, tickSleepwatch } from "./sleepwatch";
@@ -38,8 +39,18 @@ export async function tick(): Promise<void> {
   // at all. Each section fails alone.
   let due: ReturnType<typeof dueSteps> = [];
   const now = nowParts();
+  // Away mode gates what runs BY ITSELF this tick: scheduled automations
+  // (and their holds) pause unless marked "run"; auto-off timers and the
+  // sleep watcher decide for themselves (timers keep working, the watcher
+  // stands down — see lib/away.ts). Read once so one tick sees one answer.
+  let away = false;
   try {
-    const items = listAutomations();
+    away = isAway();
+  } catch (err) {
+    console.error("[scheduler] away state read failed (treating as home):", err);
+  }
+  try {
+    const items = listAutomations().filter((a) => !away || runsWhileAway(a));
     // Only consult HA's sun entity when a sun-triggered step could fire.
     let sun: SunEvents | undefined;
     if (items.some((a) => a.enabled && a.steps.some((s) => s.sun))) {
@@ -82,7 +93,7 @@ export async function tick(): Promise<void> {
     );
   }
 
-  await tickHolds(now);
+  await tickHolds(now, away);
   await tickTimers();
   await tickSleepwatch();
 }
@@ -100,12 +111,15 @@ export const HOLD_MAX_REASSERTS = 8;
  * its lights reporting "off" gets switched back on. Only positive evidence
  * counts — an entity going unavailable is not a reason to re-command.
  */
-async function tickHolds(now: ReturnType<typeof nowParts>): Promise<void> {
+async function tickHolds(now: ReturnType<typeof nowParts>, away: boolean): Promise<void> {
   let holds: Array<{ id: string; name: string; stepIndex: number; step: Step }>;
   try {
     holds = [];
     for (const a of listAutomations()) {
       if (!a.enabled) continue;
+      // An automation paused by Away mode must not keep re-lighting its
+      // hold either — the hold is part of the automation, not above it.
+      if (away && !runsWhileAway(a)) continue;
       a.steps.forEach((step, stepIndex) => {
         if (stepHoldActive(step, now)) holds.push({ id: a.id, name: a.name, stepIndex, step });
       });

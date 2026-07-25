@@ -7,6 +7,7 @@ import {
   loadSleepwatch, saveSleepwatch, watchedLightEntities,
 } from "@/lib/sleepwatch";
 import { noiseConfigured } from "@/lib/whitenoise";
+import { isAway } from "@/lib/away";
 
 /** The sleep watcher's switchboard: read status for the Automations card,
  *  flip enabled. The watcher itself runs in the scheduler (lib/sleepwatch). */
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     enabled: st.enabled,
     active: st.active,
+    away: isAway(),
     configured: noiseConfigured(),
     room: SLEEP_ROOM,
     window: { start: WINDOW_START, end: WINDOW_END },

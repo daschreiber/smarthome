@@ -44,8 +44,10 @@ interface UiDevice {
   sourceList?: string[] | null;
   mediaTitle?: string | null;
   canTurnOn?: boolean;
-  /** Eight Sleep bed sides only: occupancy from the presence sensor. */
+  /** Eight Sleep bed sides only: occupancy from the presence sensor, and
+   * when that reading last changed (it's cloud-derived and often stale). */
   bedPresence?: boolean | null;
+  bedPresenceSince?: string | null;
   /** Vacuums only. */
   batteryPct?: number | null;
   fanSpeed?: string | null;
@@ -1703,8 +1705,21 @@ function BedCard({
     flashNote(r.ok ? `sent — warmth ${v > 0 ? "+" : ""}${v}` : r.error ?? "failed");
   };
 
-  const presence =
-    d.bedPresence === true ? "someone's in bed" : d.bedPresence === false ? "bed empty" : null;
+  // Presence is cloud-derived from processed heart-rate data and lags by
+  // minutes to hours (field-tested). A fresh reading stands alone; a stale
+  // one carries its timestamp so nobody mistakes last night for now.
+  const presence = (() => {
+    if (d.bedPresence == null) return null;
+    const text = d.bedPresence ? "someone's in bed" : "bed empty";
+    const changed = d.bedPresenceSince ? Date.parse(d.bedPresenceSince) : NaN;
+    if (!Number.isFinite(changed) || Date.now() - changed < 10 * 60_000) return text;
+    const t = new Date(changed);
+    const stamp =
+      Date.now() - changed < 86_400_000
+        ? t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : t.toLocaleDateString([], { month: "short", day: "numeric" });
+    return `${text} (as of ${stamp})`;
+  })();
   return (
     <div className={`dev-block hero ${d.available ? "" : "unavailable"}`}>
       <div className="dev">

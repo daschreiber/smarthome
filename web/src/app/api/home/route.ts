@@ -115,6 +115,12 @@ export async function GET(req: NextRequest) {
             lastUpdated: s?.last_updated ?? null,
             note: null as string | null,
             bedPresence: pres ? (pres.state === "on" ? true : pres.state === "off" ? false : null) : null,
+            // When the presence sensor last CHANGED. Eight Sleep derives
+            // presence from cloud-processed heart-rate trends (field-tested
+            // 2026-07-25: read "off" for 5+ min with someone in the bed), so
+            // the card must show how old the reading is, not present it as
+            // live truth.
+            bedPresenceSince: pres?.last_changed ?? null,
           };
         }
         const s = states.get(d.entityId);
@@ -236,6 +242,7 @@ export async function GET(req: NextRequest) {
         lastUpdated: null,
         note: "waiting for the Eight Sleep integration in Home Assistant",
         bedPresence: null,
+        bedPresenceSince: null,
       });
     }
 

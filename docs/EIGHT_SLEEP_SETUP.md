@@ -114,10 +114,17 @@ display on the card).
 
 ## Watch-outs
 
-- **Cloud lag**: presence and temperature updates arrive on the
-  integration's polling cadence — the 2026-07-25 field test saw presence
-  lag past 4½ minutes. Treat the card's presence as an indication, not
-  truth.
+- **Presence is not an occupancy sensor.** Confirmed in the integration's
+  source (2026-07-25): `bed_presence` derives from Eight Sleep's
+  cloud-processed heart-rate trend data — "on" only while the cloud has an
+  HR sample under 10 minutes old, with a narrow fallback to the
+  `bed_state_type` sensor. HA polls every 30–60 s, but the cloud only
+  produces HR points well into a sleep session, so presence means "a
+  sleep session is being processed", not "a body is on the mattress".
+  Field tests: read "off" for 5+ minutes with someone lying on an active
+  Pod, `last_changed` hours stale. The card therefore shows stale
+  readings with an "as of" timestamp. `bed_state_type` flipping to
+  `smart:*` is the more live signal if one is ever needed.
 - **duration is advisory**: the same test sent duration 600 and HA then
   reported Heating Time Remaining 10800 — Eight Sleep appears to apply
   its own session length. Side off works reliably; don't count on the

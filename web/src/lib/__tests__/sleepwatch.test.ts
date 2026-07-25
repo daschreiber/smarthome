@@ -153,11 +153,21 @@ describe("Eight Sleep presence — arming needs a body, leaving the bed wakes", 
     expect(d.action).toBe("start");
   });
 
-  it("unknown presence blocks arming — never start on missing data", () => {
+  it("every sensor unreadable (cloud outage) → falls back to lights+lift, still arms", () => {
+    // Eight Sleep is cloud-only; an outage must not silently kill the
+    // nightly noise. Entities absent from states = unknown = unreadable.
     const d = evaluateSleepwatch({
       hhmm: "23:00", nowMs: NOW, states: bedtimeStates(), playing: false, st: IDLE,
     });
-    expect(d.action).toBeNull(); // presence entities absent from states = unknown
+    expect(d.action).toBe("start");
+  });
+
+  it("one readable empty side with the other unreadable still blocks — an empty bed is evidence", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "23:00", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "off", [RIGHT]: "unavailable" }), playing: false, st: IDLE,
+    });
+    expect(d.action).toBeNull();
   });
 
   it("everyone leaving the bed stops the noise — an edge, like the shades", () => {

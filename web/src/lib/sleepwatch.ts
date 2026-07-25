@@ -274,11 +274,19 @@ export function evaluateSleepwatch(opts: {
   // block a start (never wake anyone on missing data). When Eight Sleep
   // presence is configured it joins the conditions: a dark room with an
   // EMPTY bed is "still up", not bedtime — no noise until someone lies down.
+  //
+  // EXCEPTION to the affirmative rule, deliberate: presence gates arming
+  // only while it's READABLE. Eight Sleep is cloud-only, so an outage takes
+  // every sensor to unavailable at once — and that must degrade to the
+  // pre-Eight-Sleep conditions (lights + lift), not silently kill the
+  // nightly noise. A readable "off" with no "on" still blocks: an empty
+  // bed is evidence, a dead cloud isn't.
+  const presReadable = presEntities.filter((id) => get(id) === "on" || get(id) === "off");
   const armed =
     inWindow(hhmm) &&
     watchedLightEntities().every((id) => get(id) === "off") &&
     get(TV_LIFT_ENTITY) === liftSleepState() &&
-    (presEntities.length === 0 || presEntities.some((id) => get(id) === "on"));
+    (presReadable.length === 0 || presReadable.some((id) => get(id) === "on"));
 
   if (playing === null) {
     // Status unreadable: change nothing about the noise. Never adopt,

@@ -26,6 +26,7 @@ const DEVICE_COMMANDS = [
   "turn_on", "turn_off", "set_brightness", "open", "close", "stop",
   "set_position", "set_temperature", "set_volume",
   "start_cleaning", "pause_cleaning", "return_to_dock",
+  "set_bed_level",
 ] as const;
 
 // Structured-outputs-safe schema (no records, no optionals — nullable instead).
@@ -137,6 +138,10 @@ export function toCommand(action: Extract<LlmAction, { type: "device" }>): Comma
     case "set_volume":
       if (v == null) throw new Error("set_volume needs a value");
       return { command: "set_volume", volumePct: Math.round(v) };
+    case "set_bed_level":
+      // Eight Sleep's own -100 (cool) … +100 (warm) scale, not a percent.
+      if (v == null) throw new Error("set_bed_level needs a value");
+      return { command: "set_bed_level", level: Math.min(100, Math.max(-100, Math.round(v))) };
     default:
       return { command: action.command };
   }
@@ -231,6 +236,7 @@ ${aliases}
 - Use ONLY deviceId/sceneId values listed above. Never invent identifiers. If nothing matches, use "clarify".
 - "the lights in X" or "X lights" → prefer a room action (lights_on/lights_off) over listing devices.
 - Device values: brightness/position/volume are percent 0-100; temperature is °C (rooms 10-32, sauna 40-100).
+- Eight Sleep bed sides (kind "bed"): warmth uses set_bed_level with value -100 (coolest) to +100 (warmest) — NOT degrees, NOT percent. "Warm the bed" → turn_on then set_bed_level around +30; "cool the bed" → around -30; "pre-warm at 21:30" is an automation with those two actions. Bed sides never join room light actions or scene captures.
 - The sauna is safety-sensitive: propose it only when explicitly asked, never include it in room actions or scene captures, and say clearly in the message that confirming will start/stop the heater.
 - The robot vacuums are per-floor: the Lounge vacuum cleans floor 6, the Den vacuum cleans floor 5. "vacuum/clean the lounge", "clean floor 6", "clean upstairs" → start_cleaning on that floor's vacuum; "send it home/back" → return_to_dock. Vacuums never join room light actions or scene captures.
 - Relative dates ("tomorrow", "Saturday"): resolve using the current house time given in the user message; one-shot automations must carry the resolved date.

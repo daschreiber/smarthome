@@ -1814,8 +1814,8 @@
     "display_name": "Terrace Heating",
     "room": "Terrace",
     "floor": 6,
-    "category": "light_switch",
-    "group": "Lighting",
+    "category": "heater",
+    "group": "Climate & Comfort",
     "visible": true
   },
   {

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { nowParts } from "./automations";
+import { isAway } from "./away";
 import { audit } from "./audit";
 import { getStates } from "./ha";
 import { registry } from "./registry";
@@ -188,6 +189,8 @@ export function evaluateSleepwatch(opts: {
    *  active session and let the noise play into mid-morning. */
   playing: boolean | null;
   st: SleepwatchState;
+  /** House-wide Away mode (lib/away.ts): nobody is sleeping here tonight. */
+  away?: boolean;
 }): SleepwatchDecision {
   const { hhmm, nowMs, states, playing, st } = opts;
   const get = (id: string) => states.get(id)?.state ?? "unknown";
@@ -208,6 +211,19 @@ export function evaluateSleepwatch(opts: {
     if (movedOpen(st.coverSnap?.[id], cur)) opened.push(id);
   }
   const base = { ...st, coverSnap: snap };
+
+  // Away mode: never arm, and stop a session WE own (set going before
+  // leaving, or the mode flipped on mid-stream). Same stop semantics as a
+  // wake-up: only affirmative silence skips it, and active clears only when
+  // the stop succeeds. A stream someone else started stays untouched — a
+  // cleaner's or child's choice is theirs, and away is not a wake-up for it.
+  if (opts.away) {
+    return {
+      action: st.active && playing !== false ? "stop" : null,
+      next: { ...base, active: false, latched: false, startedAtMs: null, retries: 0 },
+      reason: "away mode",
+    };
+  }
 
   // Cancel needs positive evidence: a light truly on, or a shade actually
   // MOVING toward open. Never the clock (mornings end by opening the
@@ -323,7 +339,9 @@ export async function tickSleepwatch(): Promise<void> {
     ]);
     // null = status read failed; evaluate treats that as unknown, not "off".
     const playing = noise ? noise.listeners > 0 : null;
-    const { action, next, reason } = evaluateSleepwatch({ hhmm, nowMs: Date.now(), states, playing, st });
+    const { action, next, reason } = evaluateSleepwatch({
+      hhmm, nowMs: Date.now(), states, playing, st, away: isAway(),
+    });
 
     if (action) {
       const started = Date.now();

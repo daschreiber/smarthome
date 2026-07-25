@@ -71,6 +71,12 @@ export interface Automation extends AutomationSpec {
   enabled: boolean;
   createdBy: string;
   createdAt: string;
+  /**
+   * What Away mode does to this automation. Absent = "pause" (the default
+   * the mode exists for); "run" marks the exceptions that should keep firing
+   * in an empty house, like evening presence lighting. See lib/away.ts.
+   */
+  awayBehavior?: "pause" | "run";
 }
 
 function storePath(): string {
@@ -116,6 +122,15 @@ export function setEnabled(id: string, enabled: boolean): void {
   const a = items.find((x) => x.id === id);
   if (!a) throw new Error("no such automation");
   a.enabled = enabled;
+  save(items);
+}
+
+/** Mark whether this automation keeps firing while Away mode is on. */
+export function setAwayBehavior(id: string, behavior: "pause" | "run"): void {
+  const items = load();
+  const a = items.find((x) => x.id === id);
+  if (!a) throw new Error("no such automation");
+  a.awayBehavior = behavior;
   save(items);
 }
 

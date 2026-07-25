@@ -122,6 +122,50 @@ describe("arming", () => {
   });
 });
 
+describe("away mode — nobody is sleeping here", () => {
+  const ACTIVE: SleepwatchState = { enabled: true, active: true, latched: false, startedAtMs: NOW - 3_600_000 };
+
+  it("never arms while away, however asleep the room looks", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "23:00", nowMs: NOW, states: bedtimeStates(), playing: false, st: IDLE, away: true,
+    });
+    expect(d.action).toBeNull();
+    expect(d.next.active).toBe(false);
+  });
+
+  it("stops a session the watcher owns when away flips on mid-stream", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "23:30", nowMs: NOW, states: bedtimeStates(), playing: true, st: ACTIVE, away: true,
+    });
+    expect(d.action).toBe("stop");
+    expect(d.next).toMatchObject({ active: false, latched: false });
+  });
+
+  it("an unreadable status does not skip the away stop (turn_off is idempotent)", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "23:30", nowMs: NOW, states: bedtimeStates(), playing: null, st: ACTIVE, away: true,
+    });
+    expect(d.action).toBe("stop");
+  });
+
+  it("leaves noise someone else started alone — away is not a wake-up for it", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "23:30", nowMs: NOW, states: bedtimeStates(), playing: true, st: IDLE, away: true,
+    });
+    expect(d.action).toBeNull();
+    expect(d.next.active).toBe(false); // and it is never adopted
+  });
+
+  it("clears a latch so the first night back arms fresh", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "23:00", nowMs: NOW, states: bedtimeStates(), playing: false,
+      st: { enabled: true, active: false, latched: true }, away: true,
+    });
+    expect(d.action).toBeNull();
+    expect(d.next.latched).toBe(false);
+  });
+});
+
 describe("stopping — the room waking, never the clock", () => {
   const ACTIVE: SleepwatchState = { enabled: true, active: true, latched: false, startedAtMs: NOW - 3_600_000 };
 

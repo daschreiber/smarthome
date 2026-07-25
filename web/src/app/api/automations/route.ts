@@ -3,9 +3,10 @@ import { authenticate } from "@/lib/auth";
 import { canDeleteRecord, canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import {
-  AutomationSpecSchema, createAutomation, deleteAutomation, listAutomations, setEnabled,
-  updateAutomation,
+  AutomationSpecSchema, createAutomation, deleteAutomation, listAutomations, setAwayBehavior,
+  setEnabled, updateAutomation,
 } from "@/lib/automations";
+import { isAway } from "@/lib/away";
 import { nextSun } from "@/lib/sun";
 
 export async function GET(req: NextRequest) {
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
     })),
     tz: process.env.APP_TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     sun: await nextSun(),
+    away: isAway(),
   });
 }
 
@@ -31,7 +33,10 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => null)) as
-    | { action?: "create" | "update" | "delete" | "toggle"; id?: string; enabled?: boolean; spec?: unknown }
+    | {
+        action?: "create" | "update" | "delete" | "toggle" | "away_behavior";
+        id?: string; enabled?: boolean; runsWhileAway?: boolean; spec?: unknown;
+      }
     | null;
   if (!body?.action) return NextResponse.json({ error: "action required" }, { status: 400 });
 
@@ -75,6 +80,16 @@ export async function POST(req: NextRequest) {
       audit({
         ts: new Date().toISOString(), user: auth.user, deviceId: "automations",
         entityId: `automation.${body.id}`, command: "delete_automation", args: {}, ok: true, durationMs: 0,
+      });
+      return NextResponse.json({ ok: true });
+    }
+    if (body.action === "away_behavior") {
+      const behavior = body.runsWhileAway === true ? "run" : "pause";
+      setAwayBehavior(body.id, behavior);
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId: "automations",
+        entityId: `automation.${body.id}`, command: "set_away_behavior",
+        args: { behavior }, ok: true, durationMs: 0,
       });
       return NextResponse.json({ ok: true });
     }

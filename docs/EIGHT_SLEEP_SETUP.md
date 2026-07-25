@@ -43,23 +43,33 @@ know it can break if Eight Sleep changes their API again.
 
 ## Stage 3 — collect the entity and service names
 
+> Done on-site 2026-07-25. Entities found:
+>
+> - Left / Daniella: `sensor.daniella_s_eight_sleep_side_bed_temperature`,
+>   `binary_sensor.daniella_s_eight_sleep_side_bed_presence`
+> - Right / Daniel: `sensor.daniel_s_eight_sleep_side_bed_temperature`,
+>   `binary_sensor.daniel_s_eight_sleep_side_bed_presence`
+>
+> Service names all matched; `heat_set` additionally REQUIRES `duration`
+> (seconds) per the integration's services.yaml — the app supplies it
+> (default 28800 = a full night; see lib/eightsleep).
+
 In Developer Tools → States, filter for `eight` and note, per side:
 
 - the **bed temperature entity** (the one the eight_sleep services
-  target — on current versions it looks like
-  `sensor.<name>_bed_temperature` or similar),
+  target),
 - the **bed presence entity** (`binary_sensor.<name>_bed_presence`).
 
 In Developer Tools → Actions (Services), filter for `eight_sleep` and
 confirm these services exist with these names:
 
-- `eight_sleep.heat_set` (fields: target, sleep_stage)
+- `eight_sleep.heat_set` (fields: target, duration, sleep_stage)
 - `eight_sleep.side_on` / `eight_sleep.side_off`
 - `eight_sleep.away_mode_start` / `eight_sleep.away_mode_stop`
 
 Sanity-check by calling `eight_sleep.heat_set` once from Developer Tools
-against one side's temp entity (target 10, sleep_stage "current") and
-confirming the Eight Sleep app reflects it.
+against one side's temp entity (target 10, duration 600,
+sleep_stage "current") and confirming the Eight Sleep app reflects it.
 
 > If any service name or field differs from the list above, STOP and
 > report the actual names — they are constants in one place in the app
@@ -67,17 +77,19 @@ confirming the Eight Sleep app reflects it.
 
 ## Stage 4 — switch the app on
 
-In the app deployment (Railway), set — sides you have, entities from
-Stage 3:
+In the app deployment (Railway), set (the exact values from Stage 3):
 
 ```
-EIGHTSLEEP_LEFT_TARGET_ENTITY=sensor.…_bed_temperature
-EIGHTSLEEP_LEFT_PRESENCE_ENTITY=binary_sensor.…_bed_presence
-EIGHTSLEEP_LEFT_LABEL=Daniel's side          # optional display name
-EIGHTSLEEP_RIGHT_TARGET_ENTITY=…
-EIGHTSLEEP_RIGHT_PRESENCE_ENTITY=…
-EIGHTSLEEP_RIGHT_LABEL=…
+EIGHTSLEEP_LEFT_TARGET_ENTITY=sensor.daniella_s_eight_sleep_side_bed_temperature
+EIGHTSLEEP_LEFT_PRESENCE_ENTITY=binary_sensor.daniella_s_eight_sleep_side_bed_presence
+EIGHTSLEEP_LEFT_LABEL=Daniella's side
+EIGHTSLEEP_RIGHT_TARGET_ENTITY=sensor.daniel_s_eight_sleep_side_bed_temperature
+EIGHTSLEEP_RIGHT_PRESENCE_ENTITY=binary_sensor.daniel_s_eight_sleep_side_bed_presence
+EIGHTSLEEP_RIGHT_LABEL=Daniel's side
 ```
+
+Optional: `EIGHTSLEEP_HEAT_DURATION_SECONDS` — how long a warmth command
+holds before the Pod's own schedule resumes (default 28800 = 8 h).
 
 Redeploy/restart the app. A side exists once its `*_TARGET_ENTITY` is set;
 presence and label are optional (presence unlocks the Sleep sense

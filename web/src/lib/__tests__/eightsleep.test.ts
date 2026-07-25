@@ -15,6 +15,7 @@ import type { Device } from "../registry";
 const ENV_KEYS = [
   "EIGHTSLEEP_LEFT_TARGET_ENTITY", "EIGHTSLEEP_LEFT_PRESENCE_ENTITY", "EIGHTSLEEP_LEFT_LABEL",
   "EIGHTSLEEP_RIGHT_TARGET_ENTITY", "EIGHTSLEEP_RIGHT_PRESENCE_ENTITY", "EIGHTSLEEP_RIGHT_LABEL",
+  "EIGHTSLEEP_HEAT_DURATION_SECONDS",
 ];
 
 beforeEach(() => { for (const k of ENV_KEYS) delete process.env[k]; });
@@ -72,12 +73,24 @@ describe("service call wire shape", () => {
   });
 
   it("warmth is heat_set on the CURRENT sleep stage, clamped to Eight Sleep's scale", () => {
+    // duration is REQUIRED by the integration (services.yaml, confirmed
+    // on-site 2026-07-25): how long the level holds before the Pod's own
+    // schedule resumes. Default: a full night.
     expect(bedCallFor(side, { kind: "level", level: 30 })).toEqual({
       domain: "eight_sleep", service: "heat_set",
-      data: { entity_id: "sensor.left_bed_temp", target: 30, sleep_stage: "current" },
+      data: { entity_id: "sensor.left_bed_temp", target: 30, duration: 28800, sleep_stage: "current" },
     });
     expect(() => bedCallFor(side, { kind: "level", level: 101 })).toThrow();
     expect(() => bedCallFor(side, { kind: "level", level: -101 })).toThrow();
+  });
+
+  it("hold duration is env-tunable, with nonsense falling back to the default", () => {
+    process.env.EIGHTSLEEP_HEAT_DURATION_SECONDS = "3600";
+    expect(bedCallFor(side, { kind: "level", level: 10 }).data.duration).toBe(3600);
+    process.env.EIGHTSLEEP_HEAT_DURATION_SECONDS = "-5";
+    expect(bedCallFor(side, { kind: "level", level: 10 }).data.duration).toBe(28800);
+    process.env.EIGHTSLEEP_HEAT_DURATION_SECONDS = "not a number";
+    expect(bedCallFor(side, { kind: "level", level: 10 }).data.duration).toBe(28800);
   });
 });
 

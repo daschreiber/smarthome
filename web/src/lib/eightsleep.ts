@@ -33,6 +33,21 @@ import { callService } from "./ha";
 
 export const EIGHT_DOMAIN = "eight_sleep";
 export const SVC_HEAT_SET = "heat_set";
+/**
+ * heat_set REQUIRES a duration (seconds) — how long the level holds before
+ * the Pod's own schedule/Autopilot takes back over (confirmed on-site
+ * 2026-07-25 against the integration's services.yaml). Default is a full
+ * night: a bedtime pre-warm should still be holding at 3am, and when the
+ * window lapses the bed returns to whatever Eight Sleep would do anyway —
+ * the app holds a level, it never permanently reprograms the Pod.
+ * Override with EIGHTSLEEP_HEAT_DURATION_SECONDS.
+ */
+export const DEFAULT_HEAT_DURATION_S = 8 * 3600;
+
+export function heatDurationSeconds(): number {
+  const raw = Number(process.env.EIGHTSLEEP_HEAT_DURATION_SECONDS);
+  return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : DEFAULT_HEAT_DURATION_S;
+}
 export const SVC_SIDE_ON = "side_on";
 export const SVC_SIDE_OFF = "side_off";
 export const SVC_AWAY_START = "away_mode_start";
@@ -113,7 +128,12 @@ export function bedCallFor(
       return {
         domain: EIGHT_DOMAIN,
         service: SVC_HEAT_SET,
-        data: { ...target, target: level, sleep_stage: "current" },
+        data: {
+          ...target,
+          target: level,
+          duration: heatDurationSeconds(),
+          sleep_stage: "current",
+        },
       };
     }
     case "away":

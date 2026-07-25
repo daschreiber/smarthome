@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { nowParts } from "./automations";
 import { isAway } from "./away";
-import { bedPresenceEntities } from "./eightsleep";
 import { audit } from "./audit";
 import { getStates } from "./ha";
 import { registry } from "./registry";
@@ -48,10 +47,10 @@ import { noiseConfigured, noiseStatusFresh, noiseTurnOff, noiseTurnOn } from "./
  * - The TV lift going down does NOT stop the noise (it only gates arming):
  *   late-night TV with noise running is the couple's call, not ours.
  *
- * Eight Sleep presence (once lib/eightsleep is configured) upgrades both
- * ends: arming additionally requires someone actually IN the bed, and
- * "everyone left the bed" — an edge, same discipline as the shades — joins
- * lights and shades as a wake signal. Unconfigured, nothing changes.
+ * Eight Sleep presence is deliberately NOT an input here (owner's call,
+ * 2026-07-25, and the first field test agreed: presence read "bed empty"
+ * for 4½ minutes with someone lying in it). The watcher runs on lights and
+ * the TV lift only; bed presence is display-only on the bed cards.
  */
 
 export const SLEEP_ROOM = "Master Bedroom";
@@ -101,9 +100,6 @@ export interface SleepwatchState {
   /** Last-seen cover state/position per MBR shade — the baseline the
    *  "shade opened" edge is detected against. */
   coverSnap?: Record<string, CoverSnap>;
-  /** Last-seen Eight Sleep presence state per side — the baseline the
-   *  "everyone left the bed" edge is detected against. */
-  presSnap?: Record<string, string>;
 }
 
 const DEFAULT_STATE: SleepwatchState = { enabled: true, active: false, latched: false };
@@ -219,20 +215,7 @@ export function evaluateSleepwatch(opts: {
     snap[id] = cur;
     if (movedOpen(st.coverSnap?.[id], cur)) opened.push(id);
   }
-  // Eight Sleep presence (optional — empty until the Pod is configured,
-  // see lib/eightsleep): a far better signal than lights. Waking is an
-  // EDGE like the shades — someone WAS in bed last tick and now every side
-  // affirmatively reads empty. A level ("bed is empty") would kill the
-  // noise the moment the sensors blip; unknown/unavailable never counts.
-  const presEntities = bedPresenceEntities();
-  const presSnap: Record<string, string> = {};
-  for (const id of presEntities) presSnap[id] = get(id);
-  const wasInBed = presEntities.some((id) => st.presSnap?.[id] === "on");
-  const nowAllEmpty =
-    presEntities.length > 0 && presEntities.every((id) => get(id) === "off");
-  const bedEmptied = wasInBed && nowAllEmpty;
-
-  const base = { ...st, coverSnap: snap, presSnap };
+  const base = { ...st, coverSnap: snap };
 
   // Away mode: never arm, and stop a session WE own (set going before
   // leaving, or the mode flipped on mid-stream). Same stop semantics as a
@@ -251,12 +234,10 @@ export function evaluateSleepwatch(opts: {
   // MOVING toward open. Never the clock (mornings end by opening the
   // blinds, not at 08:00 — owner's call, 2026-07-24), and never an entity
   // going "unavailable" mid-night.
-  const cancel = lightsOn.length > 0 || opened.length > 0 || bedEmptied;
+  const cancel = lightsOn.length > 0 || opened.length > 0;
 
   if (cancel) {
-    const why = lightsOn.length > 0 ? `light on: ${lightsOn[0]}`
-      : opened.length > 0 ? `shade opening: ${opened[0]}`
-      : "everyone left the bed";
+    const why = lightsOn.length > 0 ? `light on: ${lightsOn[0]}` : `shade opening: ${opened[0]}`;
     // Stop unless affirmatively silent already: turn_off is idempotent, so
     // an unreadable status must not skip the wake-up stop. The next state
     // only clears active once the stop SUCCEEDS (the tick keeps the old
@@ -271,22 +252,11 @@ export function evaluateSleepwatch(opts: {
   }
 
   // Arming needs every check affirmatively true — unknown/unavailable states
-  // block a start (never wake anyone on missing data). When Eight Sleep
-  // presence is configured it joins the conditions: a dark room with an
-  // EMPTY bed is "still up", not bedtime — no noise until someone lies down.
-  //
-  // EXCEPTION to the affirmative rule, deliberate: presence gates arming
-  // only while it's READABLE. Eight Sleep is cloud-only, so an outage takes
-  // every sensor to unavailable at once — and that must degrade to the
-  // pre-Eight-Sleep conditions (lights + lift), not silently kill the
-  // nightly noise. A readable "off" with no "on" still blocks: an empty
-  // bed is evidence, a dead cloud isn't.
-  const presReadable = presEntities.filter((id) => get(id) === "on" || get(id) === "off");
+  // block a start (never wake anyone on missing data).
   const armed =
     inWindow(hhmm) &&
     watchedLightEntities().every((id) => get(id) === "off") &&
-    get(TV_LIFT_ENTITY) === liftSleepState() &&
-    (presReadable.length === 0 || presReadable.some((id) => get(id) === "on"));
+    get(TV_LIFT_ENTITY) === liftSleepState();
 
   if (playing === null) {
     // Status unreadable: change nothing about the noise. Never adopt,

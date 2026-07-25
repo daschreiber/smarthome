@@ -1130,7 +1130,6 @@ function SleepSense({ away }: { away: boolean }) {
   const [st, setSt] = useState<{
     enabled: boolean; active: boolean; configured: boolean; canToggle: boolean;
     window: { start: string; end: string };
-    bedPresenceSides?: number;
   } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1168,7 +1167,7 @@ function SleepSense({ away }: { away: boolean }) {
                 ? "standing down while Away mode is on — arms again the night you're back"
                 : st.active
                 ? "noise is on — stops when a light comes on or a shade opens (no morning timer)"
-                : `arms ${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count)${(st.bedPresenceSides ?? 0) > 0 ? ", someone's in bed," : ""} and the TV is stowed · stops when a light comes on${(st.bedPresenceSides ?? 0) > 0 ? ", everyone leaves the bed," : ""} or a shade opens — no morning timer · plays the sound and volume the Sleep sound card is set to`}
+                : `arms ${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count) and the TV is stowed · stops when a light comes on or a shade opens — no morning timer · plays the sound and volume the Sleep sound card is set to`}
         </div>
       </div>
       <button

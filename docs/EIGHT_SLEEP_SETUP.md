@@ -7,8 +7,10 @@ switch on the app-side support that is already built and deployed:
   Sleep's −100…+100 scale, side on/off).
 - **Automations**: "Bed on at warmth +30 at 21:30" from the normal builder.
 - **Away mode** flips Eight Sleep's own away mode on both sides.
-- **Sleep sense** upgrades: arming requires someone actually in bed, and
-  "everyone left the bed" becomes a wake signal.
+- **Bed presence** shows on the cards ("someone's in bed" / "bed empty").
+  It is display-only by owner decision (2026-07-25): the first field test
+  showed presence reading "bed empty" for 4½ minutes with someone lying
+  in it, so Sleep sense deliberately does NOT consume it.
 
 Everything activates purely by setting environment variables — no deploy of
 new code is needed after this runbook, only a restart with the new envs.
@@ -92,8 +94,8 @@ Optional: `EIGHTSLEEP_HEAT_DURATION_SECONDS` — how long a warmth command
 holds before the Pod's own schedule resumes (default 28800 = 8 h).
 
 Redeploy/restart the app. A side exists once its `*_TARGET_ENTITY` is set;
-presence and label are optional (presence unlocks the Sleep sense
-upgrades — set it if it exists).
+presence and label are optional (presence only adds the in-bed/empty
+display on the card).
 
 ## Stage 5 — verify
 
@@ -107,16 +109,18 @@ upgrades — set it if it exists).
    out and watch it fire (Activity logs it).
 4. Flip Away mode on → both sides show away in the Eight Sleep app →
    flip it back off. The flips are in Activity as `bed_away_on/off`.
-5. Sleep sense card on the Automations screen now mentions
-   "someone's in bed" among its conditions.
+5. Sleep sense is UNCHANGED — its card must still describe only lights,
+   the TV lift, and shades. Bed presence never starts or stops the noise.
 
 ## Watch-outs
 
 - **Cloud lag**: presence and temperature updates arrive on the
-  integration's polling cadence — treat sub-minute lag as normal.
+  integration's polling cadence — the 2026-07-25 field test saw presence
+  lag past 4½ minutes. Treat the card's presence as an indication, not
+  truth.
+- **duration is advisory**: the same test sent duration 600 and HA then
+  reported Heating Time Remaining 10800 — Eight Sleep appears to apply
+  its own session length. Side off works reliably; don't count on the
+  hold window being exact.
 - **Subscription**: base temperature control works per side, but some
   intelligence (Autopilot) assumes Eight Sleep's subscription.
-- **First night**: Sleep sense now requires presence to arm. If the
-  presence sensors misbehave (never "on"), the noise will not start —
-  the fix is removing the `EIGHTSLEEP_*_PRESENCE_ENTITY` envs (arming
-  then falls back to lights + TV lift only).

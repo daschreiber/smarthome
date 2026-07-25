@@ -66,6 +66,7 @@ Initial remote access should use Home Assistant Cloud or another outbound secure
 - [Application API contract](docs/API_CONTRACT.md)
 - [Installation and commissioning runbook](docs/INSTALLATION_RUNBOOK.md)
 - [Apple Home via HomeKit Bridge and Apple TV hub](docs/APPLE_HOME_SETUP.md)
+- [Eight Sleep bed — on-site setup runbook](docs/EIGHT_SLEEP_SETUP.md)
 - [Design and delivery loop](docs/DESIGN_AND_DELIVERY_LOOP.md)
 - [Test plan](docs/TEST_PLAN.md)
 - [Security and operations](docs/SECURITY_AND_OPERATIONS.md)

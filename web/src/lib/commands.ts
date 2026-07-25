@@ -64,6 +64,12 @@ export const CommandSchema = z.discriminatedUnion("command", [
     command: z.literal("set_fan_mode"),
     fanMode: z.string().min(1).max(32).regex(/^[a-z0-9_ ]+$/i),
   }),
+  // Eight Sleep bed warmth: the Pod's own unit-less scale, -100 (coolest)
+  // to +100 (warmest) — deliberately not °C (see lib/eightsleep).
+  z.object({
+    command: z.literal("set_bed_level"),
+    level: z.number().int().min(-100).max(100),
+  }),
 ]);
 
 export type Command = z.infer<typeof CommandSchema>;
@@ -92,6 +98,7 @@ const CAPABILITY_FOR_COMMAND: Record<Command["command"], string> = {
   return_to_dock: "vacuum_control",
   set_fan_speed: "vacuum_control",
   set_fan_mode: "fan_mode",
+  set_bed_level: "bed_level",
 };
 
 /** Per-kind safe set-point ranges (°C), enforced server-side. */
@@ -140,10 +147,13 @@ export function expectedStates(cmd: Command, kind?: Device["kind"]): string[] | 
       // A climate zone that turns on lands in an hvac mode we can't predict
       // (heat/cool/auto…), so state comparison can't prove it — report "sent".
       if (kind === "climate") return null;
+      // A bed side's entity is a temperature reading; it never says "on".
+      if (kind === "bed") return null;
       return ["on"];
     case "set_brightness":
       return ["on"];
     case "turn_off":
+      if (kind === "bed") return null;
       return ["off"];
     case "open":
       return ["open", "opening"];
@@ -172,6 +182,9 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
   assertCommandAllowed(device, cmd);
   if (device.kind === "sauna") {
     throw new Error("sauna commands are executed by the sauna adapter, not Home Assistant");
+  }
+  if (device.kind === "bed") {
+    throw new Error("bed commands are executed by the Eight Sleep adapter (lib/eightsleep)");
   }
   const target = { entity_id: device.entityId };
   // Climate zones command their CoolMaster units directly — the bridge is the
@@ -263,5 +276,8 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
         service: "set_fan_mode",
         data: { ...climateTarget(), fan_mode: cmd.fanMode },
       };
+    case "set_bed_level":
+      // Only kind "bed" carries bed_level, and bed threw above — unreachable.
+      throw new Error("set_bed_level is a bed command");
   }
 }

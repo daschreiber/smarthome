@@ -7,6 +7,7 @@ import { authenticate } from "@/lib/auth";
 import { unitEntityIds } from "@/lib/coolmaster";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
 import { noiseStatusFresh, noiseTurnOff, noiseTurnOn, setNoiseVolume } from "@/lib/whitenoise";
+import { executeOnDevice } from "@/lib/execute";
 
 /**
  * Command execution flow per IMPLEMENTATION_SPEC §9:
@@ -99,6 +100,33 @@ export async function POST(
         command, args, ok: false, durationMs: Date.now() - started, error: message,
       });
       const clientError = /does not support|out of range/.test(message);
+      return NextResponse.json({ status: "failed", error: message }, { status: clientError ? 400 : 502 });
+    }
+  }
+
+  // Bed sides command through the eight_sleep services (lib/eightsleep).
+  // The Pod's entities can't prove a command took effect (the temp entity
+  // just keeps reporting a reading), so the honest status is "sent".
+  if (device.kind === "bed") {
+    try {
+      await executeOnDevice(device, cmd);
+      const durationMs = Date.now() - started;
+      const message =
+        cmd.command === "set_bed_level"
+          ? `warmth ${cmd.level > 0 ? "+" : ""}${cmd.level}`
+          : cmd.command === "turn_on" ? "side on" : "side off";
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
+        command, args, ok: true, durationMs,
+      });
+      return NextResponse.json({ status: "sent", state: "unknown", message, durationMs });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
+        command, args, ok: false, durationMs: Date.now() - started, error: message,
+      });
+      const clientError = /does not support|out of range|must be/.test(message);
       return NextResponse.json({ status: "failed", error: message }, { status: clientError ? 400 : 502 });
     }
   }

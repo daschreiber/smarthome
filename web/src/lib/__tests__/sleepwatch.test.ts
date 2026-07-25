@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   CLOSET_LIGHTS, MAX_RETRIES, READING_LIGHTS, RETRY_WINDOW_MS, TV_LIFT_ENTITY,
   coverEntities, evaluateSleepwatch, inWindow, watchedLightEntities,
@@ -118,6 +118,96 @@ describe("arming", () => {
 
   it("does not start outside the window even if the room is dark", () => {
     const d = evaluateSleepwatch({ hhmm: "14:00", nowMs: NOW, states: bedtimeStates(), playing: false, st: IDLE });
+    expect(d.action).toBeNull();
+  });
+});
+
+describe("Eight Sleep presence — arming needs a body, leaving the bed wakes", () => {
+  const LEFT = "binary_sensor.left_bed_presence";
+  const RIGHT = "binary_sensor.right_bed_presence";
+  const ACTIVE: SleepwatchState = { enabled: true, active: true, latched: false, startedAtMs: NOW - 3_600_000 };
+
+  beforeEach(() => {
+    process.env.EIGHTSLEEP_LEFT_TARGET_ENTITY = "sensor.left_bed_temp";
+    process.env.EIGHTSLEEP_LEFT_PRESENCE_ENTITY = LEFT;
+    process.env.EIGHTSLEEP_RIGHT_TARGET_ENTITY = "sensor.right_bed_temp";
+    process.env.EIGHTSLEEP_RIGHT_PRESENCE_ENTITY = RIGHT;
+  });
+  afterEach(() => {
+    for (const k of Object.keys(process.env)) if (k.startsWith("EIGHTSLEEP_")) delete process.env[k];
+  });
+
+  it("a dark room with an EMPTY bed does not arm — that's 'still up', not bedtime", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "23:00", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "off", [RIGHT]: "off" }), playing: false, st: IDLE,
+    });
+    expect(d.action).toBeNull();
+  });
+
+  it("someone lying down (either side) arms it", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "23:00", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "off", [RIGHT]: "on" }), playing: false, st: IDLE,
+    });
+    expect(d.action).toBe("start");
+  });
+
+  it("unknown presence blocks arming — never start on missing data", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "23:00", nowMs: NOW, states: bedtimeStates(), playing: false, st: IDLE,
+    });
+    expect(d.action).toBeNull(); // presence entities absent from states = unknown
+  });
+
+  it("everyone leaving the bed stops the noise — an edge, like the shades", () => {
+    // Tick 1: both in bed — baseline snapshot.
+    const t1 = evaluateSleepwatch({
+      hhmm: "06:30", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "on", [RIGHT]: "on" }), playing: true, st: ACTIVE,
+    });
+    expect(t1.action).toBeNull();
+    // Tick 2: both sides affirmatively empty — wake up.
+    const t2 = evaluateSleepwatch({
+      hhmm: "06:31", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "off", [RIGHT]: "off" }), playing: true, st: t1.next,
+    });
+    expect(t2.action).toBe("stop");
+    expect(t2.reason).toBe("everyone left the bed");
+  });
+
+  it("one person getting up does NOT stop it — the other is still asleep", () => {
+    const t1 = evaluateSleepwatch({
+      hhmm: "03:00", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "on", [RIGHT]: "on" }), playing: true, st: ACTIVE,
+    });
+    const t2 = evaluateSleepwatch({
+      hhmm: "03:05", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "off", [RIGHT]: "on" }), playing: true, st: t1.next,
+    });
+    expect(t2.action).toBeNull();
+  });
+
+  it("sensors dropping to unavailable is not 'left the bed'", () => {
+    const t1 = evaluateSleepwatch({
+      hhmm: "04:00", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "on", [RIGHT]: "on" }), playing: true, st: ACTIVE,
+    });
+    const t2 = evaluateSleepwatch({
+      hhmm: "04:01", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "unavailable", [RIGHT]: "unavailable" }), playing: true, st: t1.next,
+    });
+    expect(t2.action).toBeNull();
+  });
+
+  it("an empty-bed LEVEL without the edge never stops it (restart-safe)", () => {
+    // Fresh state (no snapshot, e.g. right after a deploy) + empty bed:
+    // no baseline, no edge, no stop.
+    const d = evaluateSleepwatch({
+      hhmm: "06:30", nowMs: NOW,
+      states: bedtimeStates({ [LEFT]: "off", [RIGHT]: "off" }), playing: true,
+      st: { ...ACTIVE, presSnap: undefined },
+    });
     expect(d.action).toBeNull();
   });
 });

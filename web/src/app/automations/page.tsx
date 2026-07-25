@@ -1059,6 +1059,9 @@ function AwayMode({ away, onChange }: { away: boolean; onChange: () => Promise<v
     canToggle: boolean;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  // The Eight Sleep sync is best-effort server-side; a failure must still
+  // reach the person who just flipped the switch, not only the audit log.
+  const [bedNote, setBedNote] = useState<string | null>(null);
 
   const refresh = () =>
     fetch("/api/away")
@@ -1072,13 +1075,18 @@ function AwayMode({ away, onChange }: { away: boolean; onChange: () => Promise<v
 
   const toggle = async () => {
     setBusy(true);
+    setBedNote(null);
     try {
       const res = await fetch("/api/away", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ away: !away }),
       });
-      if ((await res.json()).ok) {
+      const out = (await res.json()) as { ok?: boolean; bed?: { synced: boolean } | null };
+      if (out.ok) {
+        if (out.bed && !out.bed.synced) {
+          setBedNote("couldn't reach Eight Sleep to sync the bed — set it in their app (details in Activity)");
+        }
         await refresh();
         await onChange(); // re-fetch the list so the row labels follow
       }
@@ -1098,6 +1106,7 @@ function AwayMode({ away, onChange }: { away: boolean; onChange: () => Promise<v
               `${st.runningCount > 0 ? `, ${st.runningCount} marked to keep running` : ""}` +
               " · sleep sense is standing down · auto-off timers still work · everything stays controllable by hand"
             : "one switch for nights or weeks out: pauses the schedules and sleep sense, keeps auto-off timers working, changes nothing for anyone still coming and going"}
+          {bedNote && <span style={{ color: "var(--danger)" }}> · {bedNote}</span>}
         </div>
       </div>
       <button
@@ -1121,7 +1130,6 @@ function SleepSense({ away }: { away: boolean }) {
   const [st, setSt] = useState<{
     enabled: boolean; active: boolean; configured: boolean; canToggle: boolean;
     window: { start: string; end: string };
-    bedPresenceSides?: number;
   } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1159,7 +1167,7 @@ function SleepSense({ away }: { away: boolean }) {
                 ? "standing down while Away mode is on — arms again the night you're back"
                 : st.active
                 ? "noise is on — stops when a light comes on or a shade opens (no morning timer)"
-                : `arms ${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count)${(st.bedPresenceSides ?? 0) > 0 ? ", someone's in bed," : ""} and the TV is stowed · stops when a light comes on${(st.bedPresenceSides ?? 0) > 0 ? ", everyone leaves the bed," : ""} or a shade opens — no morning timer · plays the sound and volume the Sleep sound card is set to`}
+                : `arms ${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count) and the TV is stowed · stops when a light comes on or a shade opens — no morning timer · plays the sound and volume the Sleep sound card is set to`}
         </div>
       </div>
       <button

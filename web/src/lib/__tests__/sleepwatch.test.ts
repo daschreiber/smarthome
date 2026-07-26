@@ -52,9 +52,9 @@ describe("entity derivation", () => {
 
   it("finds the three MBR shades for movement watching", () => {
     expect(coverEntities().sort()).toEqual([
-      "cover.master_bedroom_master_bedroom_balcony_left",
-      "cover.master_bedroom_master_bedroom_balcony_right",
-      "cover.master_bedroom_master_bedroom_window",
+      "cover.mbr_balcony_left_blinds_knx",
+      "cover.mbr_balcony_right_blinds_knx",
+      "cover.mbr_window_blinds_knx",
     ]);
   });
 });

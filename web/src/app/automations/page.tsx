@@ -636,7 +636,6 @@ export default function Automations() {
       <p className="h-sub">Times are {tz ? `${tz.split("/").pop()!.replace(/_/g, " ")} time` : "house time"}. One-shot automations disable themselves after firing.</p>
       {error && <div className="error-banner">{error}</div>}
 
-      <AwayMode away={away} onChange={load} />
       <SleepSense away={away} />
 
       {grouped.map((g) => (
@@ -648,32 +647,36 @@ export default function Automations() {
         // Enabled but out of season: home-only while away, away-only while home.
         const suppressed = a.enabled && (away ? mode === "home" : mode === "away");
         return (
-          <div key={a.id} className={`dev${a.enabled && !suppressed ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
-            <button
-              aria-expanded={open}
-              onClick={() => setExpandedId(open ? null : a.id)}
-              style={{
-                flex: 1, minWidth: 0, background: "none", border: "none", padding: 0,
-                textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer",
-              }}
-            >
-              <div className="nm">{a.name}</div>
-              <div className="st">
-                {!a.enabled ? "paused"
-                  : suppressed ? (away ? "paused while away" : "waits for Away mode")
-                  : nf ? `next ${nextFireLabel(nf, now)}${away && mode === "away" ? " (away only)" : ""}`
-                  : sunFallback ? `next at ${sunFallback}`
-                  : "nothing upcoming"}
-              </div>
-              {open
-                ? a.steps.map((s, i) => <div key={i} className="st">{describeStep(s, label)}</div>)
-                : (
-                  <div className="st" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.steps.map((s) => describeStep(s, label)).join(" · ")}
-                  </div>
-                )}
-            </button>
-            <div className="btn-row" style={{ flexDirection: "column", alignItems: "flex-end" }}>
+          // Expanded controls live in a full-width footer BELOW the text —
+          // never in the right-hand column, which on a phone squeezes the
+          // name to a word per line (seen in the field, 2026-07-26).
+          <div key={a.id} className={`dev${a.enabled && !suppressed ? "" : " paused"}`} style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <button
+                aria-expanded={open}
+                onClick={() => setExpandedId(open ? null : a.id)}
+                style={{
+                  flex: 1, minWidth: 0, background: "none", border: "none", padding: 0,
+                  textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer",
+                }}
+              >
+                <div className="nm">{a.name}</div>
+                <div className="st">
+                  {!a.enabled ? "paused"
+                    : suppressed ? (away ? "paused while away" : "waits for Away mode")
+                    : nf ? `next ${nextFireLabel(nf, now)}${away && mode === "away" ? " (away only)" : ""}`
+                    : sunFallback ? `next at ${sunFallback}`
+                    : "nothing upcoming"}
+                  {!open && mode !== "always" && !suppressed ? ` · ${mode === "home" ? "when home" : "when away"}` : ""}
+                </div>
+                {open
+                  ? a.steps.map((s, i) => <div key={i} className="st">{describeStep(s, label)}</div>)
+                  : (
+                    <div className="st" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {a.steps.map((s) => describeStep(s, label)).join(" · ")}
+                    </div>
+                  )}
+              </button>
               <button
                 className="toggle"
                 aria-pressed={a.enabled}
@@ -681,40 +684,39 @@ export default function Automations() {
                 disabled={busy}
                 onClick={() => post({ action: "toggle", id: a.id, enabled: !a.enabled })}
               />
-              {open && (
-                <>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    {([["always", "Always"], ["home", "When home"], ["away", "When away"]] as const).map(([v, chipLabel]) => (
-                      <button
-                        key={v}
-                        className="mini-btn"
-                        aria-pressed={mode === v}
-                        style={mode === v ? chipOn : undefined}
-                        disabled={busy}
-                        title="When this automation is active: always, only while someone's home, or only while Away mode is on"
-                        onClick={() => { if (mode !== v) post({ action: "active_when", id: a.id, activeWhen: v }); }}
-                      >
-                        {chipLabel}
-                      </button>
-                    ))}
-                  </div>
-                  {a.steps.length === 1 && (
-                    <button className="mini-btn" disabled={busy} onClick={() => startEdit(a)}>
-                      Edit
-                    </button>
-                  )}
-                  {a.canDelete && (
-                    <button
-                      className="mini-btn"
-                      disabled={busy}
-                      onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) post({ action: "delete", id: a.id }); }}
-                    >
-                      Delete
-                    </button>
-                  )}
-                </>
-              )}
             </div>
+            {open && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 10 }}>
+                <div className="view-toggle" role="group" aria-label={`When ${a.name} is active`}>
+                  {([["always", "Always"], ["home", "When home"], ["away", "When away"]] as const).map(([v, chipLabel]) => (
+                    <button
+                      key={v}
+                      aria-pressed={mode === v}
+                      disabled={busy}
+                      title="When this automation is active: always, only while someone's home, or only while Away mode is on"
+                      onClick={() => { if (mode !== v) post({ action: "active_when", id: a.id, activeWhen: v }); }}
+                    >
+                      {chipLabel}
+                    </button>
+                  ))}
+                </div>
+                <span style={{ flex: 1 }} />
+                {a.steps.length === 1 && (
+                  <button className="mini-btn" disabled={busy} onClick={() => startEdit(a)}>
+                    Edit
+                  </button>
+                )}
+                {a.canDelete && (
+                  <button
+                    className="mini-btn"
+                    disabled={busy}
+                    onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) post({ action: "delete", id: a.id }); }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         );
           })}
@@ -1051,80 +1053,6 @@ export default function Automations() {
       )}
       <NavBar />
     </main>
-  );
-}
-
-/**
- * Away mode's card: one switch for "we're out for a few nights/weeks".
- * Scheduled automations pause (unless marked "Runs while away"), Sleep
- * sense stands down, auto-off timers keep working — kids and cleaners
- * still come and go, so nothing else changes. Logic lives in lib/away and
- * the scheduler; this card reads status and flips the flag.
- */
-function AwayMode({ away, onChange }: { away: boolean; onChange: () => Promise<void> | void }) {
-  const [st, setSt] = useState<{
-    away: boolean; since: string | null; homeOnlyCount: number; awayOnlyCount: number;
-    canToggle: boolean;
-  } | null>(null);
-  const [busy, setBusy] = useState(false);
-  // The Eight Sleep sync is best-effort server-side; a failure must still
-  // reach the person who just flipped the switch, not only the audit log.
-  const [bedNote, setBedNote] = useState<string | null>(null);
-
-  const refresh = () =>
-    fetch("/api/away")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setSt)
-      .catch(() => setSt(null));
-
-  useEffect(() => { refresh(); }, []);
-
-  if (!st) return null;
-
-  const toggle = async () => {
-    setBusy(true);
-    setBedNote(null);
-    try {
-      const res = await fetch("/api/away", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ away: !away }),
-      });
-      const out = (await res.json()) as { ok?: boolean; bed?: { synced: boolean } | null };
-      if (out.ok) {
-        if (out.bed && !out.bed.synced) {
-          setBedNote("couldn't reach Eight Sleep to sync the bed — set it in their app (details in Activity)");
-        }
-        await refresh();
-        await onChange(); // re-fetch the list so the row labels follow
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const since = st.since ? new Date(st.since).toLocaleDateString() : null;
-  return (
-    <div className="dev" style={{ alignItems: "flex-start" }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="nm">Away mode</div>
-        <div className="st">
-          {away
-            ? `on${since ? ` since ${since}` : ""} — ${st.homeOnlyCount} when-home automation${st.homeOnlyCount === 1 ? "" : "s"} paused` +
-              `${st.awayOnlyCount > 0 ? `, ${st.awayOnlyCount} away-only running` : ""}` +
-              " · everything marked Always runs as normal · sleep sense is standing down · auto-off timers still work"
-            : "the I'm-away switch (also on the Home screen). Automations run by their setting — Always (the default, unaffected), When home (pause while away), When away (presence lighting and such) · sleep sense stands down while away · timers keep working"}
-          {bedNote && <span style={{ color: "var(--danger)" }}> · {bedNote}</span>}
-        </div>
-      </div>
-      <button
-        className="toggle"
-        aria-pressed={away}
-        aria-label={`Away mode ${away ? "on" : "off"}`}
-        disabled={busy || !st.canToggle}
-        onClick={toggle}
-      />
-    </div>
   );
 }
 

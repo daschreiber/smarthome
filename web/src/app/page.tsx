@@ -572,7 +572,7 @@ export default function Page() {
               </div>
             </a>
             <a className="room-card" href="/systems/heating" style={{ textDecoration: "none", display: "block" }}>
-              <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><FlameIcon size={18} /> Heating</div>
+              <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><FlameIcon size={18} /> Underfloor heating</div>
               <div className={`rs ${heatingOnTotal > 0 ? "on" : ""}`}>
                 {heatingOnTotal > 0 ? `${heatingOnTotal} room${heatingOnTotal === 1 ? "" : "s"}` : "all off"}
               </div>

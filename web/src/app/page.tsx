@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FloorPlan from "./FloorPlan";
 import NavBar from "./NavBar";
-import { BlindsIcon, BulbIcon, FlameIcon, GridIcon, MapIcon, SnowIcon } from "./icons";
+import { BlindsIcon, BulbIcon, FlameIcon, GridIcon, LockIcon, MapIcon, SnowIcon } from "./icons";
 
 /**
  * Phase C app shell in the decided design direction (docs/DESIGN_DIRECTION.md):
@@ -520,21 +520,27 @@ export default function Page() {
                 )}
               </div>
               <div className="scenes">
+                {/* Control4 scene switches and app scenes dress alike — tapping
+                    does the same job. The tiny lock is the one honest tell:
+                    C4 programming is fixed by the installer, so "edit" can
+                    never apply to these. */}
                 {scenes.map((s) => (
                   <button
                     key={s.id}
                     className="scene-pill"
                     disabled={!!busy[s.id]}
+                    title="Control4 scene — programmed by the installer, not editable in the app"
                     onClick={() => send(s.id, { command: "turn_on" })}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
                   >
                     {s.label.replace(/^All House /, "")}
+                    <span style={{ opacity: 0.55, display: "flex" }} aria-label="fixed Control4 scene"><LockIcon size={11} /></span>
                   </button>
                 ))}
                 {customScenes.map((s) => (
                   <button
                     key={s.id}
                     className="scene-pill"
-                    style={{ background: "var(--chip)", color: "var(--ink)", border: "1px solid var(--card-line)" }}
                     disabled={editScenes && !s.canDelete}
                     onClick={() => {
                       if (editScenes) {

@@ -38,6 +38,11 @@ export const ClockIcon = ({ size }: { size?: number }) => (
   <I size={size} d={<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.2 2" /></>} />
 );
 
+/** Marks the Control4-programmed scene pills: fixed by the installer, not editable in the app. */
+export const LockIcon = ({ size }: { size?: number }) => (
+  <I size={size} d={<><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>} />
+);
+
 export const MoreIcon = ({ size }: { size?: number }) => (
   <I size={size} filled d={<><circle cx="5" cy="12" r="1.9" stroke="none" /><circle cx="12" cy="12" r="1.9" stroke="none" /><circle cx="19" cy="12" r="1.9" stroke="none" /></>} />
 );

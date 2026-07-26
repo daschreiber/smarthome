@@ -231,6 +231,7 @@ export default function Automations() {
   // Eight Sleep warmth, the Pod's own -100 (cool) … +100 (warm) scale.
   const [actLevel, setActLevel] = useState(30);
   const [targets, setTargets] = useState<TargetDevice[]>([]);
+  const [deviceIndex, setDeviceIndex] = useState<Record<string, { label: string; room: string }>>({});
   // Per-light editor ("Set each light…"): what to do with each light in the room.
   // Missing / "leave" = don't touch it. Keyed by device id.
   type LightMode = "leave" | "on" | "off" | "pct";
@@ -267,6 +268,10 @@ export default function Automations() {
           .map((d) => ({ id: d.id, label: d.label, room: d.room, kind: d.kind, category: d.category, capabilities: d.capabilities ?? [] }))
           .sort((a, b) => `${a.room} ${a.label}`.localeCompare(`${b.room} ${b.label}`)),
       );
+      // Display lookups (labels, room grouping) must resolve EVERY device,
+      // including scene switches excluded from the builder's target list —
+      // an existing automation may reference one (the all-rooms closet strip).
+      setDeviceIndex(Object.fromEntries(devs.map((d) => [d.id, { label: d.label, room: d.room }])));
       // Timers apply to lights AND underfloor heating ("never longer than 2h").
       const timeable = devs.filter(
         (d) => (d.kind === "light" && d.category !== "scene_switch") || d.kind === "heating",
@@ -573,7 +578,7 @@ export default function Automations() {
   };
 
   const lightById = (id: string) => lights.find((l) => l.id === id);
-  const label = (id: string) => targets.find((t) => t.id === id)?.label ?? id;
+  const label = (id: string) => deviceIndex[id]?.label ?? id;
 
   const now = houseNow(tz || undefined);
   // Soonest-first; enabled-but-spent (fired one-shots) next; paused last.
@@ -601,7 +606,7 @@ export default function Automations() {
   // daily cycle, with its paused automations sinking to the group's end.
   const grouped: Array<{ name: string; rows: typeof sorted }> = [];
   for (const w of sorted) {
-    const g = automationGroup(w.a.steps, (id) => targets.find((t) => t.id === id)?.room);
+    const g = automationGroup(w.a.steps, (id) => deviceIndex[id]?.room);
     const existing = grouped.find((x) => x.name === g);
     if (existing) existing.rows.push(w);
     else grouped.push({ name: g, rows: [w] });

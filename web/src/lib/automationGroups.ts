@@ -15,6 +15,9 @@ export interface GroupableAction {
 export const SCENES_GROUP = "Scenes";
 export const MIXED_GROUP = "Several rooms";
 export const OTHER_GROUP = "Other";
+/** Devices mapped to this pseudo-room span rooms by definition (e.g. the
+ *  all-rooms closet lightstrip), so they group under "Several rooms". */
+export const WHOLE_HOUSE_ROOM = "Whole House";
 
 export function automationGroup(
   steps: Array<{ actions: GroupableAction[] }>,
@@ -31,6 +34,7 @@ export function automationGroup(
       } else if (a.type === "scene") hasScene = true;
     }
   }
+  if (rooms.has(WHOLE_HOUSE_ROOM)) return MIXED_GROUP;
   if (rooms.size === 1) return [...rooms][0];
   if (rooms.size > 1) return MIXED_GROUP;
   return hasScene ? SCENES_GROUP : OTHER_GROUP;

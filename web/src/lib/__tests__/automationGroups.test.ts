@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { automationGroup, MIXED_GROUP, OTHER_GROUP, SCENES_GROUP } from "../automationGroups";
+import { automationGroup, MIXED_GROUP, OTHER_GROUP, SCENES_GROUP, WHOLE_HOUSE_ROOM } from "../automationGroups";
 
 const roomOf = (id: string) =>
-  ({ balcony_plants: "Balcony (6th)", terrace_lights: "Terrace", sauna: "Sauna" })[id];
+  ({ balcony_plants: "Balcony (6th)", terrace_lights: "Terrace", sauna: "Sauna", closets_strip: WHOLE_HOUSE_ROOM })[id];
 
 describe("automationGroup", () => {
   it("groups by the one room the actions touch", () => {
@@ -55,6 +55,12 @@ describe("automationGroup", () => {
         ],
         roomOf,
       ),
+    ).toBe(MIXED_GROUP);
+  });
+
+  it("a Whole House device spans rooms by definition — mixed, never 'Whole House'", () => {
+    expect(
+      automationGroup([{ actions: [{ type: "device", deviceId: "closets_strip" }] }], roomOf),
     ).toBe(MIXED_GROUP);
   });
 

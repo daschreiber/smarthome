@@ -26,15 +26,21 @@ Diagnosed 2026-07-24, plan "B" implemented 2026-07-26. Full history below.
 - HA: KNX integration added 2026-07-26 via config flow (entry
   `01KYEC9TYPNN76GH8QY1Y4B1ME`, "Tunneling @ 1.1.127 @ 10.0.0.70:3671").
   Rollback = delete that integration.
-- 12 cover entities created via the WS API `knx/create_entity` (platform
-  cover, `ga_up_down` write + `ga_stop` write, travel 120s both ways):
+- 13 cover entities created via the WS API `knx/create_entity` (platform
+  cover, `ga_up_down` write + `ga_stop` write; travel 120s except the MBR
+  trio at 50s, both per the Composer backup's driver config):
   `cover.<room>_blinds_knx`. Group addresses in `shade_ga_map.json`.
-  Medium Guest Room still missing (was asleep during discovery) — capture is
-  one app/keypad nudge while a monitor runs, then one more `knx/create_entity`.
+  Medium Guest Room's GAs came from the Composer backup (`Schreiber.c4p`,
+  owner-provided 2026-07-26) and were live-verified; the backup's
+  `project.xml` also confirmed every bus-captured GA and proved the GT blind
+  driver has no status/position GA at all.
 - Keypads and the C4 app write the SAME GAs (move `3/x/x` DPT1.008 0=up
-  1=down; stop `4/x/x`). C4 auto-stops every travel at exactly 120 s — which
-  is why app-closes sometimes stop "shy" on blinds whose true travel is
-  longer. HA's direct commands have no such cutoff.
+  1=down; stop `4/x/x`), except the open-space GROUP buttons which write
+  their own GAs (`3/0/13` = all four Kitchen+Lounge, `3/0/8` = MBR trio) —
+  both now passive addresses on those 7 covers. C4 auto-stops every travel
+  at its configured moving time — which is why app-closes sometimes stopped
+  "shy" on blinds whose true travel is longer. HA's direct commands have no
+  such cutoff.
 
 ## THE BLIND SPOT (verified live 2026-07-26)
 
@@ -91,9 +97,26 @@ debugging.
        Note: a bare open_cover during mid-close did NOT reverse the Medium
        Guest blind — send stop_cover first when interrupting a move
        (automation-relevant; unclear if actuator or dropped telegram).
-7. [ ] Scroll C4 When>>Then list for any other blind-touching automations
-       (goodnight sweep) — retire in favor of app/HA versions.
-8. [ ] COVER_STATE_TRUSTED on Railway after a few clean days. Measured truth
-       still requires plan A (integrator ETS fix; GAs in shade_ga_map.json).
-9. [ ] HomeKit: eventually swap the hk_* optimistic wrappers for the
-       *_blinds_knx covers in the bridge (state now real; position works).
+7. [x] C4 automation audit DONE (2026-07-26, from the Composer backup's
+       project.xml — no need to scroll the C4 app): the ONLY blind-touching
+       programming in the whole project was scheduler event 8 "Blinds Up
+       (open spaces)" (6 opens at sunrise; owner already deleted it and it
+       lives in the app now). There is NO goodnight sweep and no
+       blind-closing programming anywhere in C4. Other schedules (warming
+       drawer, Gym AC Shabbat, dim switches) don't touch blinds.
+8. [ ] Flip `COVER_STATE_TRUSTED=1` on Railway once HA's positions have
+       stayed correct for a few days. Plainly: the web app currently treats
+       shade position as untrustworthy (buttons only, no position shown/
+       used) because the old C4 feedback was garbage. The new HA covers
+       track everything that moves a blind (app, HomeKit, keypads incl.
+       group buttons), so after a few clean days we tell the app "you can
+       believe and display positions now". True *measured* position (vs.
+       well-tracked estimates) still needs plan A: the integrator enabling
+       the actuators' position-status objects in ETS.
+9. [ ] HomeKit swap: the Apple Home app currently uses 13 `hk_*` wrapper
+       covers that only know "last command sent" (built when C4 feedback
+       was broken; they drift whenever a wall button is used). Plainly:
+       remove the wrappers from the HomeKit bridge and expose the
+       `*_blinds_knx` covers instead — Apple Home then shows real state,
+       tracks keypad presses, and gains slider (position) control.
+       One-time settings change on the Green; re-pair nothing.

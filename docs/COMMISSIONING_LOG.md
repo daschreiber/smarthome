@@ -276,3 +276,45 @@ Full topology survey and findings in **docs/AUDIO_SYSTEM.md**. Summary:
   Spotify Connect ("Spotify C4 <Room>" in the Spotify picker) — indoor +
   outdoor Spotify with zero new hardware.** Verified live: Kitchen zone
   reported the playing track's title in `media_title`.
+
+## 2026-07-26 — Per-floor heat/cool changeover in the app; Eight Sleep confirmed done
+
+The house's one HVAC truth the app never knew: each floor has ONE central
+VRF unit, so rooms on a floor cannot mix heating and cooling — the MBR
+can't heat while any 6th-floor zone cools. The changeover is a KNX relay
+per floor (`light.knx_switch_ac_heat_5th/6th`, **on = heating,
+off = cooling**), which also gives free read-back of a floor's mode.
+
+The installer's Control4 "AC 5th / Heating 5th" macros (owner screenshots)
+decode to: command a sacrificial unit to the OPPOSITE of the target mode,
+3s, flip the relay, 7s, flip it again (KNX reliability), 3s, unit off —
+~13s. Sacrificial units: 5th = Rack UNIT 109 (`climate.l1_109`),
+6th = Utility Room (`climate.l1_110`). The opposite-mode step looks wrong
+but is field-tested dealer programming — replicated verbatim, not
+second-guessed (`web/src/lib/changeover.ts`, 7 tests pin the sequence).
+App surface: `POST /api/climate/mode {floor, mode}` (fire-and-forget,
+one per floor at a time, audited), `floorModes` in `/api/home`, and a
+confirm-guarded Cool|Heat toggle under the Home floor tabs. The Home
+"Heating" system card became "Underfloor heating" — with Climate now
+covering both directions, the old name read as a second way to heat air.
+
+Eight Sleep: confirmed fully live in production (all `EIGHTSLEEP_*` envs
+set on Railway; away-mode sync ships with `/api/away` → `bed_away_on/off`
+in Activity). The owner's "greyed-out test" was the leftover DISABLED
+`eight_sleep_rollout_test` automation from the 2026-07-25 field test —
+deleted from `/data/automations.json` via `railway ssh` (backup:
+`automations.json.bak-20260726`). Owner scope decision: away sync is the
+ONLY Eight Sleep wiring wanted; no further bed features.
+
+Smaller strokes, same day:
+- Sauna follower: A/C at 18° (was 20) and fan "high" — the CoolMaster
+  unit's max (modes checked live: low/medium/high/auto). Overridable via
+  SAUNA_AC_TEMP / SAUNA_AC_FAN.
+- Automations page split into **"If → then"** (Sleep sense, Sauna
+  follower, auto-off timers — moved up from the bottom) and **"Time
+  switches"** (the scheduled list), matching how the owner reads the
+  rules. Sleep sense's card now states it is home-only by design — the
+  owner went looking for a "When home" selector it never needed.
+- Whole House devices (the all-rooms closet strip, a `scene_switch`)
+  group under "Several rooms" with real labels — display lookups now
+  resolve every device, not just the builder's filtered target list.

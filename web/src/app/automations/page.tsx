@@ -641,9 +641,96 @@ export default function Automations() {
       <p className="h-sub">Times are {tz ? `${tz.split("/").pop()!.replace(/_/g, " ")} time` : "house time"}. One-shot automations disable themselves after firing.</p>
       {error && <div className="error-banner">{error}</div>}
 
+      {/* The page reads in two halves the way the owner thinks about it
+          (2026-07-26): rules that react to the HOUSE (if → then) and rules
+          that follow the CLOCK (time switches). */}
+      <div className="section-heading">If → then</div>
+      <p className="h-sub" style={{ marginTop: 0 }}>
+        Standing rules that react to what happens in the house, not to the clock.
+      </p>
       <SleepSense away={away} />
       <SaunaFollower />
+      <div className="section-label">Auto-off timers</div>
+      <p className="h-sub" style={{ marginTop: -2 }}>
+        Whenever the device turns on — from any switch, scene, or app — it turns itself off after
+        the set time. Timers keep working in Away mode — a light someone leaves on still goes off.
+      </p>
+      {timers.map((t) => {
+        const dev = lightById(t.deviceId);
+        return (
+          <div key={t.id} className="dev">
+            <div>
+              <div className="nm">{dev ? `${dev.room} — ${dev.label}` : t.deviceId}</div>
+              <div className="st">off after {t.afterMinutes} min{t.enabled ? "" : " · paused"}</div>
+            </div>
+            <div className="btn-row">
+              <button className="mini-btn" disabled={busy} onClick={() => timerOp({ action: "toggle", id: t.id, enabled: !t.enabled })}>
+                {t.enabled ? "Pause" : "Resume"}
+              </button>
+              {t.canDelete && (
+                <button
+                  className="mini-btn"
+                  disabled={busy}
+                  onClick={() => {
+                    if (window.confirm("Delete this auto-off timer?")) timerOp({ action: "delete", id: t.id });
+                  }}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {!timerFormOpen && (
+        <button className="mini-btn" onClick={() => setTimerFormOpen(true)}>+ Add auto-off timer</button>
+      )}
+      {timerFormOpen && (
+        <div className="dev-block" style={{ padding: 14 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <select
+              value={timerDevice}
+              onChange={(e) => setTimerDevice(e.target.value)}
+              style={{ ...field, flex: "1 1 220px" }}
+            >
+              <option value="">choose a device…</option>
+              {lights.map((l) => (
+                <option key={l.id} value={l.id}>{l.room} — {l.label}</option>
+              ))}
+            </select>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
+              off after
+              <input
+                type="number"
+                min={1}
+                max={720}
+                value={timerMinutes}
+                onChange={(e) => setTimerMinutes(Number(e.target.value))}
+                style={{ ...field, width: 64 }}
+              />
+              min
+            </label>
+            <button
+              className="mini-btn"
+              disabled={busy || !timerDevice || !(timerMinutes >= 1)}
+              onClick={async () => {
+                if (await timerOp({ action: "create", deviceId: timerDevice, afterMinutes: timerMinutes })) {
+                  setTimerDevice("");
+                  setTimerFormOpen(false);
+                }
+              }}
+            >
+              + Add timer
+            </button>
+            <button className="mini-btn" onClick={() => setTimerFormOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
+      <div className="section-heading">Time switches</div>
+      <p className="h-sub" style={{ marginTop: 0 }}>
+        Scheduled by time of day or the sun.
+      </p>
       {grouped.map((g) => (
         <Fragment key={g.name}>
           {grouped.length > 1 && <div className="section-label">{g.name}</div>}
@@ -989,82 +1076,6 @@ export default function Automations() {
         </>
       )}
 
-      <div className="section-label">Auto-off timers</div>
-      <p className="h-sub" style={{ marginTop: -2 }}>
-        Whenever the device turns on — from any switch, scene, or app — it turns itself off after
-        the set time. Timers keep working in Away mode — a light someone leaves on still goes off.
-      </p>
-      {timers.map((t) => {
-        const dev = lightById(t.deviceId);
-        return (
-          <div key={t.id} className="dev">
-            <div>
-              <div className="nm">{dev ? `${dev.room} — ${dev.label}` : t.deviceId}</div>
-              <div className="st">off after {t.afterMinutes} min{t.enabled ? "" : " · paused"}</div>
-            </div>
-            <div className="btn-row">
-              <button className="mini-btn" disabled={busy} onClick={() => timerOp({ action: "toggle", id: t.id, enabled: !t.enabled })}>
-                {t.enabled ? "Pause" : "Resume"}
-              </button>
-              {t.canDelete && (
-                <button
-                  className="mini-btn"
-                  disabled={busy}
-                  onClick={() => {
-                    if (window.confirm("Delete this auto-off timer?")) timerOp({ action: "delete", id: t.id });
-                  }}
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
-      {!timerFormOpen && (
-        <button className="mini-btn" onClick={() => setTimerFormOpen(true)}>+ Add auto-off timer</button>
-      )}
-      {timerFormOpen && (
-        <div className="dev-block" style={{ padding: 14 }}>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <select
-              value={timerDevice}
-              onChange={(e) => setTimerDevice(e.target.value)}
-              style={{ ...field, flex: "1 1 220px" }}
-            >
-              <option value="">choose a device…</option>
-              {lights.map((l) => (
-                <option key={l.id} value={l.id}>{l.room} — {l.label}</option>
-              ))}
-            </select>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--dim)" }}>
-              off after
-              <input
-                type="number"
-                min={1}
-                max={720}
-                value={timerMinutes}
-                onChange={(e) => setTimerMinutes(Number(e.target.value))}
-                style={{ ...field, width: 64 }}
-              />
-              min
-            </label>
-            <button
-              className="mini-btn"
-              disabled={busy || !timerDevice || !(timerMinutes >= 1)}
-              onClick={async () => {
-                if (await timerOp({ action: "create", deviceId: timerDevice, afterMinutes: timerMinutes })) {
-                  setTimerDevice("");
-                  setTimerFormOpen(false);
-                }
-              }}
-            >
-              + Add timer
-            </button>
-            <button className="mini-btn" onClick={() => setTimerFormOpen(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
       <NavBar />
     </main>
   );
@@ -1078,7 +1089,7 @@ export default function Automations() {
  */
 function SaunaFollower() {
   const [st, setSt] = useState<{
-    enabled: boolean; available: boolean; acTemp: number; canToggle: boolean;
+    enabled: boolean; available: boolean; acTemp: number; acFan?: string; canToggle: boolean;
   } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1110,7 +1121,7 @@ function SaunaFollower() {
         <div className="nm">Sauna follower — room A/C</div>
         <div className="st">
           {st.enabled
-            ? `sauna on → Sauna A/C on at ${st.acTemp}° · sauna off → A/C off · however the sauna was started, app or panel · manual A/C changes mid-session are left alone`
+            ? `sauna on → Sauna A/C on at ${st.acTemp}°, fan ${st.acFan ?? "high"} · sauna off → A/C off · however the sauna was started, app or panel · manual A/C changes mid-session are left alone`
             : "paused"}
         </div>
       </div>
@@ -1172,7 +1183,7 @@ function SleepSense({ away }: { away: boolean }) {
                 ? "standing down while Away mode is on — arms again the night you're back"
                 : st.active
                 ? "noise is on — stops when a light comes on or a shade opens (no morning timer)"
-                : `arms ${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count) and the TV is stowed · stops when a light comes on or a shade opens — no morning timer · plays the sound and volume the Sleep sound card is set to`}
+                : `arms ${st.window.start}–${st.window.end} · starts when the bedroom lights are off (bedside reading lights don't count) and the TV is stowed · stops when a light comes on or a shade opens — no morning timer · plays the sound and volume the Sleep sound card is set to · home-only by design — stands down whenever Away mode is on`}
         </div>
       </div>
       <button

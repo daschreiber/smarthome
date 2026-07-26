@@ -3,7 +3,7 @@ import { authenticate } from "@/lib/auth";
 import { canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 import {
-  loadSaunawatch, saunaAcDevices, saunaAcTemp, saunawatchAvailable, saveSaunawatch,
+  loadSaunawatch, saunaAcDevices, saunaAcFan, saunaAcTemp, saunawatchAvailable, saveSaunawatch,
 } from "@/lib/saunawatch";
 
 /** The sauna follower's switchboard: read status for the Automations card,
@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     enabled: st.enabled,
     available: saunawatchAvailable(),
     acTemp: saunaAcTemp(),
+    acFan: saunaAcFan(),
     acZones: saunaAcDevices().length,
     canToggle: canProgram(auth.role),
   });

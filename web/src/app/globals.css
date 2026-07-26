@@ -154,6 +154,11 @@ body {
 .mode-row .mode-title { font-weight: 650; font-size: var(--fs-md); }
 .mode-row .mode-sub { font-size: var(--fs-xs); color: var(--dim); margin-top: 2px; }
 
+/* Top-level page halves (e.g. Automations: "If → then" / "Time switches") —
+   a size up from .section-label so the small uppercase room labels read as
+   nested inside them. */
+.section-heading { font-size: var(--fs-lg); font-weight: 700; margin: 22px 0 2px; letter-spacing: -0.01em; }
+
 .section-label {
   font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--dim); margin: 18px 0 8px;

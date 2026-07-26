@@ -104,19 +104,17 @@ debugging.
        lives in the app now). There is NO goodnight sweep and no
        blind-closing programming anywhere in C4. Other schedules (warming
        drawer, Gym AC Shabbat, dim switches) don't touch blinds.
-8. [ ] Flip `COVER_STATE_TRUSTED=1` on Railway once HA's positions have
-       stayed correct for a few days. Plainly: the web app currently treats
-       shade position as untrustworthy (buttons only, no position shown/
-       used) because the old C4 feedback was garbage. The new HA covers
-       track everything that moves a blind (app, HomeKit, keypads incl.
-       group buttons), so after a few clean days we tell the app "you can
-       believe and display positions now". True *measured* position (vs.
-       well-tracked estimates) still needs plan A: the integrator enabling
-       the actuators' position-status objects in ETS.
-9. [ ] HomeKit swap: the Apple Home app currently uses 13 `hk_*` wrapper
-       covers that only know "last command sent" (built when C4 feedback
-       was broken; they drift whenever a wall button is used). Plainly:
-       remove the wrappers from the HomeKit bridge and expose the
-       `*_blinds_knx` covers instead — Apple Home then shows real state,
-       tracks keypad presses, and gains slider (position) control.
-       One-time settings change on the Green; re-pair nothing.
+8. [x] DONE 2026-07-26: `COVER_STATE_TRUSTED=1` set on Railway (owner opted
+       to skip the observation window). The web app now shows and uses real
+       shade positions from the HA covers. If tracking ever misbehaves,
+       unset the var to fall back to buttons-only. True *measured* position
+       (vs. well-tracked estimates) still needs plan A: the integrator
+       enabling the actuators' position-status objects in ETS.
+9. [x] DONE 2026-07-26: HomeKit bridge include-list swapped via the options
+       flow — the 13 `hk_*` wrappers are out, the 13 `*_blinds_knx` covers
+       are in (the 130 other bridged entities untouched; verified by
+       re-reading the saved options). Apple Home now shows real state,
+       tracks keypad presses, and has position sliders. The `hk_*` template
+       covers still exist in HA but serve nothing; the `template:` block in
+       configuration.yaml (repo copy: `ha/homekit_covers.yaml`) can be
+       removed at leisure.

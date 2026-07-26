@@ -25,8 +25,9 @@ import { saunaConfigured, saunaStatus } from "./sauna";
  *   disconnected from KLAFS, holds the last known state instead of
  *   inventing an edge. Same rule after a restart: the first readable
  *   status only sets the baseline, it never acts.
- * - The A/C target is SAUNA_AC_TEMP °C (default 20, clamped to the room
- *   climate bounds 10-32).
+ * - The A/C target is SAUNA_AC_TEMP °C (default 18, clamped to the room
+ *   climate bounds 10-32), fan SAUNA_AC_FAN (default "high" — the max the
+ *   CoolMaster units offer; owner request 2026-07-26: 18° + max fan).
  */
 
 export interface SaunawatchState {
@@ -65,8 +66,14 @@ export function saunaAcDevices(): Device[] {
 
 export function saunaAcTemp(): number {
   const raw = Number(process.env.SAUNA_AC_TEMP);
-  const t = Number.isFinite(raw) ? raw : 20;
+  const t = Number.isFinite(raw) ? raw : 18;
   return Math.min(32, Math.max(10, t));
+}
+
+/** Fan while the follower runs the A/C. The sauna unit's modes are
+ *  low/medium/high/auto (checked live 2026-07-26) — "high" is its max. */
+export function saunaAcFan(): string {
+  return process.env.SAUNA_AC_FAN || "high";
 }
 
 /** The follower exists once the sauna is configured and the room has A/C. */
@@ -125,6 +132,7 @@ export async function tickSaunawatch(): Promise<void> {
       if (action === "ac_on") {
         await executeOnDevice(dev, { command: "turn_on" });
         await executeOnDevice(dev, { command: "set_temperature", temperature: temp });
+        await executeOnDevice(dev, { command: "set_fan_mode", fanMode: saunaAcFan() });
       } else {
         await executeOnDevice(dev, { command: "turn_off" });
       }
@@ -135,7 +143,7 @@ export async function tickSaunawatch(): Promise<void> {
   audit({
     ts: new Date().toISOString(), user: "saunawatch", deviceId: "automations",
     entityId: "saunawatch", command: action === "ac_on" ? "sauna_ac_on" : "sauna_ac_off",
-    args: action === "ac_on" ? { temperature: temp } : {},
+    args: action === "ac_on" ? { temperature: temp, fanMode: saunaAcFan() } : {},
     ok: failures.length === 0, durationMs: Date.now() - started,
     error: failures.length ? failures.join("; ") : undefined,
   });

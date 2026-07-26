@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  evaluateSaunaFollow, loadSaunawatch, saunaAcDevices, saunaAcTemp, saveSaunawatch,
+  evaluateSaunaFollow, loadSaunawatch, saunaAcDevices, saunaAcFan, saunaAcTemp, saveSaunawatch,
   type SaunawatchState,
 } from "../saunawatch";
 
@@ -19,6 +19,7 @@ beforeEach(() => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "saunawatch-test-"));
   process.env.SAUNAWATCH_PATH = path.join(dir, "saunawatch.json");
   delete process.env.SAUNA_AC_TEMP;
+  delete process.env.SAUNA_AC_FAN;
 });
 
 const ON: SaunawatchState = { enabled: true, lastPower: true };
@@ -69,8 +70,8 @@ describe("configuration", () => {
     expect(saunaAcDevices().map((d) => d.entityId)).toEqual(["climate.ac_heating_a_c_sauna"]);
   });
 
-  it("set-point defaults to 20° and clamps the env override to room bounds", () => {
-    expect(saunaAcTemp()).toBe(20);
+  it("set-point defaults to 18° and clamps the env override to room bounds", () => {
+    expect(saunaAcTemp()).toBe(18);
     process.env.SAUNA_AC_TEMP = "24";
     expect(saunaAcTemp()).toBe(24);
     process.env.SAUNA_AC_TEMP = "5";
@@ -78,6 +79,12 @@ describe("configuration", () => {
     process.env.SAUNA_AC_TEMP = "50";
     expect(saunaAcTemp()).toBe(32);
     process.env.SAUNA_AC_TEMP = "warm";
-    expect(saunaAcTemp()).toBe(20);
+    expect(saunaAcTemp()).toBe(18);
+  });
+
+  it("fan defaults to high (the unit's max) with an env override", () => {
+    expect(saunaAcFan()).toBe("high");
+    process.env.SAUNA_AC_FAN = "medium";
+    expect(saunaAcFan()).toBe("medium");
   });
 });

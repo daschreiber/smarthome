@@ -5,7 +5,11 @@ import { audit } from "@/lib/audit";
 import { getStates } from "@/lib/ha";
 import { registry, getDevice } from "@/lib/registry";
 import { applySceneById } from "@/lib/execute";
-import { buildSceneStates, createScene, deleteScene, getScene, listScenes, type SceneState } from "@/lib/scenes";
+import {
+  buildSceneStates, createScene, deleteScene, getScene, listScenes, updateSceneDevice,
+  type SceneState,
+} from "@/lib/scenes";
+import { CommandSchema, assertCommandAllowed } from "@/lib/commands";
 import { saunaConfigured, saunaStatus } from "@/lib/sauna";
 
 export async function GET(req: NextRequest) {
@@ -28,13 +32,14 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as
     | {
-        action?: "capture" | "apply" | "delete"; name?: string; room?: string; id?: string;
+        action?: "capture" | "apply" | "delete" | "set_device"; name?: string; room?: string; id?: string;
         confirmSauna?: boolean; shades?: "open" | "close";
+        deviceId?: string; commands?: unknown[];
       }
     | null;
   if (!body?.action) return NextResponse.json({ error: "action required" }, { status: 400 });
-  // Guests can apply scenes but not create or delete them.
-  if ((body.action === "capture" || body.action === "delete") && !canProgram(auth.role)) {
+  // Guests can apply scenes but not create, edit, or delete them.
+  if ((body.action === "capture" || body.action === "delete" || body.action === "set_device") && !canProgram(auth.role)) {
     return NextResponse.json({ error: "your account can't create or delete scenes" }, { status: 403 });
   }
   const started = Date.now();
@@ -64,6 +69,14 @@ export async function POST(req: NextRequest) {
         const sauna = await saunaStatus().catch(() => null);
         if (sauna?.connected && sauna.poweredOn) {
           sceneStates.push({ deviceId: saunaDevice.id, command: { command: "turn_on" } });
+          // Capture the target too — replaying "on" without it fell back to
+          // the sauna app's default (85°), not what the capturer had set.
+          if (sauna.selectedTemperature >= 40 && sauna.selectedTemperature <= 100) {
+            sceneStates.push({
+              deviceId: saunaDevice.id,
+              command: { command: "set_temperature", temperature: sauna.selectedTemperature },
+            });
+          }
         }
       }
       const scene = createScene(body.name, body.room, auth.user, sceneStates);
@@ -73,6 +86,42 @@ export async function POST(req: NextRequest) {
         ok: true, durationMs: Date.now() - started,
       });
       return NextResponse.json({ ok: true, scene: { ...scene, deviceCount: scene.states.length } });
+    }
+
+    // Surgical scene edit: replace one device's commands, everything else
+    // untouched. Same ownership rule as delete (creator or admin), full
+    // command validation — a stored command must be one the device could
+    // execute today, set-point bounds included (sauna 40-100).
+    if (body.action === "set_device") {
+      if (!body.id || !body.deviceId || !Array.isArray(body.commands)) {
+        return NextResponse.json({ error: "id, deviceId, and commands (array) required" }, { status: 400 });
+      }
+      const scene = getScene(body.id);
+      if (!scene) return NextResponse.json({ error: "no such scene" }, { status: 404 });
+      if (!canDeleteRecord(auth.role, auth.user, scene.createdBy)) {
+        return NextResponse.json(
+          { error: "only the person who created a scene (or an admin) can edit it" },
+          { status: 403 },
+        );
+      }
+      const device = getDevice(body.deviceId);
+      if (!device) return NextResponse.json({ error: "unknown device" }, { status: 404 });
+      const commands: Array<Record<string, unknown>> = [];
+      for (const raw of body.commands) {
+        const parsed = CommandSchema.safeParse(raw);
+        if (!parsed.success) {
+          return NextResponse.json({ error: "invalid command", detail: parsed.error.flatten() }, { status: 400 });
+        }
+        assertCommandAllowed(device, parsed.data); // throws → 400 below
+        commands.push(parsed.data as unknown as Record<string, unknown>);
+      }
+      const updated = updateSceneDevice(body.id, body.deviceId, commands);
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId: "scenes", entityId: `scene.${body.id}`,
+        command: "set_scene_device", args: { device: body.deviceId, commands }, ok: true,
+        durationMs: Date.now() - started,
+      });
+      return NextResponse.json({ ok: true, scene: { ...updated, deviceCount: updated.states.length } });
     }
 
     if (body.action === "delete") {

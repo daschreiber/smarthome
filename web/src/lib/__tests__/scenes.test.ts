@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { buildSceneStates, createScene, deleteScene, getScene, listScenes } from "../scenes";
+import { buildSceneStates, createScene, deleteScene, getScene, listScenes, updateSceneDevice } from "../scenes";
 import type { Device } from "../registry";
 import type { HaState } from "../ha";
 
@@ -105,5 +105,46 @@ describe("scene store", () => {
   it("refuses empty captures and empty names", () => {
     expect(() => createScene("Empty", "Den", "d@x.com", [])).toThrow(/nothing capturable/);
     expect(() => createScene("  ", "Den", "d@x.com", [{ deviceId: "a", command: { command: "turn_on" } }])).toThrow(/name/);
+  });
+});
+
+describe("updateSceneDevice — the surgical edit", () => {
+  it("replaces one device's commands and touches nothing else", () => {
+    const s = createScene("Pre-workout", "Sauna", "d@x.com", [
+      { deviceId: "gym__lights", command: { command: "turn_on" } },
+      { deviceId: "sauna__klafs_sauna", command: { command: "turn_on" } },
+    ]);
+    const updated = updateSceneDevice(s.id, "sauna__klafs_sauna", [
+      { command: "turn_on" },
+      { command: "set_temperature", temperature: 95 },
+    ]);
+    const cmds = updated.states.filter((st) => st.deviceId === "sauna__klafs_sauna").map((st) => st.command);
+    expect(cmds).toEqual([
+      { command: "turn_on" },
+      { command: "set_temperature", temperature: 95 },
+    ]);
+    // The other device is byte-for-byte untouched.
+    expect(updated.states.filter((st) => st.deviceId === "gym__lights")).toEqual([
+      { deviceId: "gym__lights", command: { command: "turn_on" } },
+    ]);
+    expect(getScene(s.id)?.states).toEqual(updated.states); // persisted
+  });
+
+  it("adds a device the scene didn't have, and empty commands removes one", () => {
+    const s = createScene("Cozy", "Den", "d@x.com", [
+      { deviceId: "den__lights", command: { command: "turn_on" } },
+    ]);
+    updateSceneDevice(s.id, "den__ac", [{ command: "turn_on" }]);
+    expect(getScene(s.id)?.states.map((st) => st.deviceId).sort()).toEqual(["den__ac", "den__lights"]);
+    updateSceneDevice(s.id, "den__ac", []);
+    expect(getScene(s.id)?.states.map((st) => st.deviceId)).toEqual(["den__lights"]);
+  });
+
+  it("refuses to empty a scene entirely, and unknown scenes throw", () => {
+    const s = createScene("Solo", "Den", "d@x.com", [
+      { deviceId: "den__lights", command: { command: "turn_on" } },
+    ]);
+    expect(() => updateSceneDevice(s.id, "den__lights", [])).toThrow(/delete it instead/);
+    expect(() => updateSceneDevice("nope", "x", [{ command: "turn_on" }])).toThrow(/no such scene/);
   });
 });

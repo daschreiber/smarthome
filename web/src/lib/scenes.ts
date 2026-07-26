@@ -59,6 +59,28 @@ export function deleteScene(id: string): void {
   save(scenes.filter((s) => s.id !== id));
 }
 
+/**
+ * Surgical edit: replace ONE device's commands inside a scene, leaving
+ * every other device untouched ("fix the sauna in Pre-workout, nothing
+ * else changes"). Empty commands removes the device from the scene.
+ * Validation against the command schema and device capabilities lives in
+ * the route; this is pure storage.
+ */
+export function updateSceneDevice(
+  sceneId: string,
+  deviceId: string,
+  commands: Array<Record<string, unknown>>,
+): Scene {
+  const scenes = load();
+  const scene = scenes.find((s) => s.id === sceneId);
+  if (!scene) throw new Error("no such scene");
+  const kept = scene.states.filter((st) => st.deviceId !== deviceId);
+  scene.states = [...kept, ...commands.map((command) => ({ deviceId, command }))];
+  if (scene.states.length === 0) throw new Error("a scene can't be emptied — delete it instead");
+  save(scenes);
+  return scene;
+}
+
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }

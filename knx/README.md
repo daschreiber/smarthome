@@ -59,18 +59,28 @@ debugging.
 - HA-side live tap (no extra tunnel): WS `knx/subscribe_telegrams`; recent
   buffer via `knx/group_monitor_info`. Sees only what HA sees (no C4 CONs).
 
-## Status / next steps
+## Status / next steps (updated 2026-07-26 midday)
 
-1. [x] KNX integration + 12 covers live; keypad tracking verified (Daniel's
-       study followed a physical keypad close in real time).
-2. [ ] Calibration sweep: with all blinds physically up, `cover.open_cover`
-       on all 12 KNX covers → all read open/100 after ~2 min. Then one
-       keypad-close spot check.
-3. [ ] Add Medium Guest Room (capture GAs, create entity 13).
-4. [ ] Repoint web app (and later HomeKit) from the C4 cover entities /
-       hk_* wrappers to the `*_blinds_knx` entities.
-5. [ ] Retire C4-side shade automations (owner, in Composer/C4 app).
-6. [ ] COVER_STATE_TRUSTED on Railway: defensible after a few days of clean
-       tracking (dead-reckoning caveats accepted by owner); measured truth
-       still requires plan A (integrator email — group addresses in
-       shade_ga_map.json make the ETS job concrete).
+1. [x] KNX integration + 13 covers live (Medium Guest filled from the
+       Composer backup by a parallel session; MBR travel times fixed to 50s).
+       Keypad tracking verified live (Daniel's study).
+2. [x] Web app repointed: entity map swaps the 12→13 shades to
+       `*_blinds_knx`; deviceIds unchanged so scenes/automations survived.
+3. [x] C4 "Blinds Up (open spaces)" schedule deleted by owner; ported to the
+       app as a sunrise automation (Lounge x2, Kitchen x2, Den, Guest Bath)
+       and fired once via the new Run-now button — those six covers
+       calibrated to a true open/100. Sunrise firing doubles as daily
+       re-calibration. "Master Bedroom Blinds Saturday" self-calibrates the
+       MBR trio weekly.
+4. [x] Owner confirms no remaining dependence on the C4 app for blinds.
+5. [ ] Button-verification walk: one down-press per room's wall button while
+       watching HA — confirms every keypad is native KNX (only Daniel's
+       study proven so far).
+6. [ ] First-travel calibration still pending: both studies + Large Guest
+       (unknown until their first full open/close or next command).
+7. [ ] Scroll C4 When>>Then list for any other blind-touching automations
+       (goodnight sweep) — retire in favor of app/HA versions.
+8. [ ] COVER_STATE_TRUSTED on Railway after a few clean days. Measured truth
+       still requires plan A (integrator ETS fix; GAs in shade_ga_map.json).
+9. [ ] HomeKit: eventually swap the hk_* optimistic wrappers for the
+       *_blinds_knx covers in the bridge (state now real; position works).

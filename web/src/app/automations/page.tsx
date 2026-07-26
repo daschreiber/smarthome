@@ -637,6 +637,7 @@ export default function Automations() {
       {error && <div className="error-banner">{error}</div>}
 
       <SleepSense away={away} />
+      <SaunaFollower />
 
       {grouped.map((g) => (
         <Fragment key={g.name}>
@@ -1053,6 +1054,61 @@ export default function Automations() {
       )}
       <NavBar />
     </main>
+  );
+}
+
+/**
+ * The sauna follower's card: the Sauna room's A/C runs in unison with the
+ * sauna — a standing house rule triggered by the sauna's STATE, which the
+ * step builder can't express. Server logic lives in lib/saunawatch; this
+ * card only reads status and flips enabled.
+ */
+function SaunaFollower() {
+  const [st, setSt] = useState<{
+    enabled: boolean; available: boolean; acTemp: number; canToggle: boolean;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/saunawatch")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setSt)
+      .catch(() => setSt(null));
+  }, []);
+
+  // Absent hardware = absent card (no sauna service or no Sauna room A/C).
+  if (!st || !st.available) return null;
+
+  const toggle = () => {
+    setBusy(true);
+    fetch("/api/saunawatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !st.enabled }),
+    })
+      .then((r) => r.json())
+      .then((out) => { if (out.ok) setSt({ ...st, enabled: out.enabled }); })
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className={`dev${st.enabled ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="nm">Sauna follower — room A/C</div>
+        <div className="st">
+          {st.enabled
+            ? `sauna on → Sauna A/C on at ${st.acTemp}° · sauna off → A/C off · however the sauna was started, app or panel · manual A/C changes mid-session are left alone`
+            : "paused"}
+        </div>
+      </div>
+      <button
+        className="toggle"
+        aria-pressed={st.enabled}
+        aria-label={`Sauna follower ${st.enabled ? "on" : "paused"}`}
+        disabled={busy || !st.canToggle}
+        onClick={toggle}
+      />
+    </div>
   );
 }
 

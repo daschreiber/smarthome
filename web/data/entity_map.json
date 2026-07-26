@@ -1604,7 +1604,7 @@
   "visible": true
  },
  {
-  "entity_id": "cover.medium_guest_room_medium_guest_room_blinds",
+  "entity_id": "cover.medium_guest_room_blinds_knx",
   "domain": "cover",
   "original_name": "Medium Guest Room Medium Guest Room Blinds",
   "display_name": "Medium Guest Room Blinds",

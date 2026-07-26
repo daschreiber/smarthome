@@ -1687,6 +1687,9 @@ function MediaCard({
 function AwaySwitch({ headers }: { headers: () => HeadersInit }) {
   const [st, setSt] = useState<{ away: boolean; canToggle: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  // The Eight Sleep away sync is best-effort server-side; a failure must
+  // still reach whoever flipped the switch, not only the audit log.
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/away", { headers: headers() })
@@ -1700,27 +1703,36 @@ function AwaySwitch({ headers }: { headers: () => HeadersInit }) {
   const set = (away: boolean) => {
     if (busy || away === st.away) return;
     setBusy(true);
+    setNote(null);
     fetch("/api/away", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...headers() },
       body: JSON.stringify({ away }),
     })
       .then((r) => r.json())
-      .then((out: { ok?: boolean; away?: boolean }) => {
-        if (out.ok) setSt({ ...st, away: out.away === true });
+      .then((out: { ok?: boolean; away?: boolean; bed?: { synced: boolean } | null }) => {
+        if (out.ok) {
+          setSt({ ...st, away: out.away === true });
+          if (out.bed && !out.bed.synced) setNote("bed didn't sync — set Away in the Eight Sleep app");
+        }
       })
       .catch(() => {})
       .finally(() => setBusy(false));
   };
 
   return (
-    <div className="view-toggle" role="group" aria-label="Home or away" style={{ marginTop: 4 }}>
-      <button aria-pressed={!st.away} disabled={busy || !st.canToggle} onClick={() => set(false)}>
-        I&rsquo;m home
-      </button>
-      <button aria-pressed={st.away} disabled={busy || !st.canToggle} onClick={() => set(true)}>
-        Away
-      </button>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, marginTop: 4 }}>
+      <div className="view-toggle" role="group" aria-label="Home or away">
+        <button aria-pressed={!st.away} disabled={busy || !st.canToggle} onClick={() => set(false)}>
+          I&rsquo;m home
+        </button>
+        <button aria-pressed={st.away} disabled={busy || !st.canToggle} onClick={() => set(true)}>
+          Away
+        </button>
+      </div>
+      {note && (
+        <div className="st" style={{ color: "var(--danger)", textAlign: "right", maxWidth: 190 }}>{note}</div>
+      )}
     </div>
   );
 }

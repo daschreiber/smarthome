@@ -702,6 +702,14 @@ export default function Automations() {
                   ))}
                 </div>
                 <span style={{ flex: 1 }} />
+                <button
+                  className="mini-btn"
+                  disabled={busy}
+                  title="Fire this automation's actions right now (doesn't touch its schedule)"
+                  onClick={() => post({ action: "run", id: a.id })}
+                >
+                  Run now
+                </button>
                 {a.steps.length === 1 && (
                   <button className="mini-btn" disabled={busy} onClick={() => startEdit(a)}>
                     Edit

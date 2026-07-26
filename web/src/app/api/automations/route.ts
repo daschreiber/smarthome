@@ -7,6 +7,7 @@ import {
   setEnabled, updateAutomation,
 } from "@/lib/automations";
 import { ACTIVE_WHEN_VALUES, isAway, type ActiveWhen } from "@/lib/away";
+import { executeAction } from "@/lib/execute";
 import { nextSun } from "@/lib/sun";
 
 export async function GET(req: NextRequest) {
@@ -28,17 +29,20 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = authenticate(req);
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!canProgram(auth.role)) {
-    return NextResponse.json({ error: "your account can't change automations" }, { status: 403 });
-  }
 
   const body = (await req.json().catch(() => null)) as
     | {
-        action?: "create" | "update" | "delete" | "toggle" | "active_when";
+        action?: "create" | "update" | "delete" | "toggle" | "active_when" | "run";
         id?: string; enabled?: boolean; activeWhen?: string; spec?: unknown;
       }
     | null;
   if (!body?.action) return NextResponse.json({ error: "action required" }, { status: 400 });
+  // "Run now" operates devices rather than programming automations — the
+  // same commands any signed-in user can issue from the room screens — so
+  // it skips the programmer gate that protects the mutations below.
+  if (!canProgram(auth.role) && body.action !== "run") {
+    return NextResponse.json({ error: "your account can't change automations" }, { status: 403 });
+  }
 
   try {
     if (body.action === "create") {
@@ -55,6 +59,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, automation: auto });
     }
     if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+    if (body.action === "run") {
+      const target = listAutomations().find((a) => a.id === body.id);
+      if (!target) return NextResponse.json({ error: "unknown automation" }, { status: 404 });
+      // Fire every step's actions immediately, in order — the scheduler's
+      // loop, minus markFired: a manual run must not eat today's scheduled
+      // firing or touch lastFired.
+      const started = Date.now();
+      const failures: string[] = [];
+      let total = 0;
+      for (const step of target.steps) {
+        for (const action of step.actions) {
+          try {
+            const r = await executeAction(action);
+            total += r.total;
+            failures.push(...r.failed.map((f) => `${f.target}: ${f.error}`));
+          } catch (err) {
+            failures.push(err instanceof Error ? err.message : String(err));
+          }
+        }
+      }
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId: "automations",
+        entityId: `automation.${target.id}`, command: "run_automation",
+        args: { targets: total }, ok: failures.length === 0,
+        durationMs: Date.now() - started,
+        error: failures.length ? failures.join("; ") : undefined,
+      });
+      if (failures.length) {
+        return NextResponse.json(
+          { error: `ran with ${failures.length} failure(s): ${failures.join("; ")}` },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json({ ok: true, targets: total });
+    }
     if (body.action === "update") {
       const parsed = AutomationSpecSchema.safeParse(body.spec);
       if (!parsed.success) {

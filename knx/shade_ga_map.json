@@ -1,18 +1,123 @@
 {
-  "_comment": "Captured 2026-07-26 via bus monitor during owner-driven discovery walk (C4 app commands, per blind: down / stop / up). Move GA: DPT 1.008, 0=up 1=down. Stop GA: DPT 1.007 step/stop. Keypads write the SAME GAs (verified Daniel study keypad 1.1.36 -> 3/1/13). CROSS-VERIFIED 2026-07-26 against the Composer backup (Schreiber.c4p, project.xml): every bus-captured GA matches the driver config exactly; Medium Guest Room and the unconfirmed Lounge Left stop filled/confirmed from the backup. C4 'Moving time' is 120s for all blinds EXCEPT the three Master Bedroom blinds, configured at 50s — use 50s travel time for MBR dead-reckoning covers. Backup also proves the GT blind driver has NO status/position GA (only up/down + stop per blind), so measured position truly requires the integrator/ETS fix.",
+  "_comment": "Captured 2026-07-26 via bus monitor during owner-driven discovery walk (C4 app commands, per blind: down / stop / up). Move GA: DPT 1.008, 0=up 1=down. Stop GA: DPT 1.007 step/stop. Keypads write the SAME GAs (verified Daniel study keypad 1.1.36 -> 3/1/13). CROSS-VERIFIED 2026-07-26 against the Composer backup (Schreiber.c4p, project.xml): every bus-captured GA matches the driver config exactly; Medium Guest Room and the unconfirmed Lounge Left stop filled/confirmed from the backup. C4 'Moving time' is 120s for all blinds EXCEPT the three Master Bedroom blinds, configured at 50s — use 50s travel time for MBR dead-reckoning covers. Backup also proves the GT blind driver has NO status/position GA (only up/down + stop per blind), so measured position truly requires the integrator/ETS fix. BUTTON WALK 2026-07-26 afternoon: all keypads native KNX; per-blind keypad sources recorded below. Open-space GROUP buttons: 3/0/13 (kp 1.1.24) moves all four Kitchen+Lounge blinds; 3/0/8 (kp 1.1.31) moves the MBR trio — both added as passive ga_up_down on those 7 HA covers (stop 4/0/13 / 4/0/8 inferred from the 3/x<->4/x convention, added passive too). Guest Bathroom has no wall button by design.",
   "shades": [
-    { "room": "Daniel's Study",    "c4_entity": "cover.daniel_s_study_daniel_study_blinds",           "move": "3/1/13", "stop": "4/1/13", "stop_confirmed": true,  "c4_travel_s": 120 },
-    { "room": "Daniella's Study",  "c4_entity": "cover.daniella_s_study_daniella_study_blinds",       "move": "3/1/1",  "stop": "4/1/1",  "stop_confirmed": true,  "c4_travel_s": 120 },
-    { "room": "Den",               "c4_entity": "cover.den_den_blinds",                               "move": "3/1/8",  "stop": "4/1/8",  "stop_confirmed": true,  "c4_travel_s": 120 },
-    { "room": "Guest Bathroom",    "c4_entity": "cover.guest_bathroom_guest_bathroom_blinds",         "move": "3/1/14", "stop": "4/1/14", "stop_confirmed": true,  "c4_travel_s": 120 },
-    { "room": "Kitchen Left",      "c4_entity": "cover.kitchen_kitchen_left",                         "move": "3/2/11", "stop": "4/2/11", "stop_confirmed": true,  "c4_travel_s": 120 },
-    { "room": "Kitchen Right",     "c4_entity": "cover.kitchen_kitchen_right",                        "move": "3/2/3",  "stop": "4/2/3",  "stop_confirmed": true,  "c4_travel_s": 120 },
-    { "room": "Large Guest Room",  "c4_entity": "cover.large_guest_room_large_guest_room_blinds",     "move": "3/0/10", "stop": "4/0/10", "stop_confirmed": true,  "c4_travel_s": 120 },
-    { "room": "Lounge Left",       "c4_entity": "cover.lounge_lounge_left",                           "move": "3/2/10", "stop": "4/2/10", "stop_confirmed": true,  "c4_travel_s": 120, "_note": "stop GA confirmed from c4p backup, not bus capture" },
-    { "room": "Lounge Right",      "c4_entity": "cover.lounge_lounge_right",                          "move": "3/2/8",  "stop": "4/2/8",  "stop_confirmed": true,  "c4_travel_s": 120 },
-    { "room": "MBR Balcony Left",  "c4_entity": "cover.master_bedroom_master_bedroom_balcony_left",   "move": "3/2/17", "stop": "4/2/17", "stop_confirmed": true,  "c4_travel_s": 50 },
-    { "room": "MBR Balcony Right", "c4_entity": "cover.master_bedroom_master_bedroom_balcony_right",  "move": "3/2/1",  "stop": "4/2/1",  "stop_confirmed": true,  "c4_travel_s": 50 },
-    { "room": "MBR Window",        "c4_entity": "cover.master_bedroom_master_bedroom_window",         "move": "3/2/13", "stop": "4/2/13", "stop_confirmed": true,  "c4_travel_s": 50 },
-    { "room": "Medium Guest Room", "c4_entity": "cover.medium_guest_room_medium_guest_room_blinds",   "move": "3/1/16", "stop": "4/1/16", "stop_confirmed": true,  "c4_travel_s": 120, "_note": "from c4p backup, not bus capture — no walk needed" }
+    {
+      "room": "Daniel's Study",
+      "c4_entity": "cover.daniel_s_study_daniel_study_blinds",
+      "move": "3/1/13",
+      "stop": "4/1/13",
+      "stop_confirmed": true,
+      "c4_travel_s": 120,
+      "keypad": "1.1.36"
+    },
+    {
+      "room": "Daniella's Study",
+      "c4_entity": "cover.daniella_s_study_daniella_study_blinds",
+      "move": "3/1/1",
+      "stop": "4/1/1",
+      "stop_confirmed": true,
+      "c4_travel_s": 120,
+      "keypad": "1.1.42"
+    },
+    {
+      "room": "Den",
+      "c4_entity": "cover.den_den_blinds",
+      "move": "3/1/8",
+      "stop": "4/1/8",
+      "stop_confirmed": true,
+      "c4_travel_s": 120,
+      "keypad": "1.1.43"
+    },
+    {
+      "room": "Guest Bathroom",
+      "c4_entity": "cover.guest_bathroom_guest_bathroom_blinds",
+      "move": "3/1/14",
+      "stop": "4/1/14",
+      "stop_confirmed": true,
+      "c4_travel_s": 120
+    },
+    {
+      "room": "Kitchen Left",
+      "c4_entity": "cover.kitchen_kitchen_left",
+      "move": "3/2/11",
+      "stop": "4/2/11",
+      "stop_confirmed": true,
+      "c4_travel_s": 120,
+      "group_move": "3/0/13"
+    },
+    {
+      "room": "Kitchen Right",
+      "c4_entity": "cover.kitchen_kitchen_right",
+      "move": "3/2/3",
+      "stop": "4/2/3",
+      "stop_confirmed": true,
+      "c4_travel_s": 120,
+      "group_move": "3/0/13"
+    },
+    {
+      "room": "Large Guest Room",
+      "c4_entity": "cover.large_guest_room_large_guest_room_blinds",
+      "move": "3/0/10",
+      "stop": "4/0/10",
+      "stop_confirmed": true,
+      "c4_travel_s": 120,
+      "keypad": "1.1.37"
+    },
+    {
+      "room": "Lounge Left",
+      "c4_entity": "cover.lounge_lounge_left",
+      "move": "3/2/10",
+      "stop": "4/2/10",
+      "stop_confirmed": true,
+      "c4_travel_s": 120,
+      "_note": "stop GA confirmed from c4p backup, not bus capture",
+      "group_move": "3/0/13"
+    },
+    {
+      "room": "Lounge Right",
+      "c4_entity": "cover.lounge_lounge_right",
+      "move": "3/2/8",
+      "stop": "4/2/8",
+      "stop_confirmed": true,
+      "c4_travel_s": 120,
+      "group_move": "3/0/13"
+    },
+    {
+      "room": "MBR Balcony Left",
+      "c4_entity": "cover.master_bedroom_master_bedroom_balcony_left",
+      "move": "3/2/17",
+      "stop": "4/2/17",
+      "stop_confirmed": true,
+      "c4_travel_s": 50,
+      "group_move": "3/0/8"
+    },
+    {
+      "room": "MBR Balcony Right",
+      "c4_entity": "cover.master_bedroom_master_bedroom_balcony_right",
+      "move": "3/2/1",
+      "stop": "4/2/1",
+      "stop_confirmed": true,
+      "c4_travel_s": 50,
+      "group_move": "3/0/8"
+    },
+    {
+      "room": "MBR Window",
+      "c4_entity": "cover.master_bedroom_master_bedroom_window",
+      "move": "3/2/13",
+      "stop": "4/2/13",
+      "stop_confirmed": true,
+      "c4_travel_s": 50,
+      "group_move": "3/0/8"
+    },
+    {
+      "room": "Medium Guest Room",
+      "c4_entity": "cover.medium_guest_room_medium_guest_room_blinds",
+      "move": "3/1/16",
+      "stop": "4/1/16",
+      "stop_confirmed": true,
+      "c4_travel_s": 120,
+      "_note": "from c4p backup, not bus capture — no walk needed",
+      "keypad": "1.1.35"
+    }
   ]
 }

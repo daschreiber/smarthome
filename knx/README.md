@@ -73,11 +73,24 @@ debugging.
        re-calibration. "Master Bedroom Blinds Saturday" self-calibrates the
        MBR trio weekly.
 4. [x] Owner confirms no remaining dependence on the C4 app for blinds.
-5. [ ] Button-verification walk: one down-press per room's wall button while
-       watching HA — confirms every keypad is native KNX (only Daniel's
-       study proven so far).
-6. [ ] First-travel calibration still pending: both studies + Large Guest
-       (unknown until their first full open/close or next command).
+5. [x] Button-verification walk DONE (2026-07-26 afternoon, owner walk with
+       live telegram recorder): every keypad is native KNX. Per-room buttons
+       write the per-blind GAs (Daniella 3/1/1 kp 1.1.42, Large Guest 3/0/10
+       kp 1.1.37, Den 3/1/8 kp 1.1.43, Medium Guest 3/1/16 kp 1.1.35,
+       Daniel's study 3/1/13 kp 1.1.36). The open spaces use GROUP buttons:
+       one button for all four Kitchen+Lounge blinds (3/0/13, kp 1.1.24) and
+       one for the MBR trio (3/0/8, kp 1.1.31). Those group GAs are now
+       PASSIVE addresses on the 7 covers (move 3/0/x + inferred stop 4/0/x),
+       so group-button presses track in HA. Guest Bathroom has no button by
+       design (always open). Keypad quirk: direction memory means a press
+       can need a second press to go the intended way (first press emits the
+       opposite direction value, second the real one).
+6. [x] First-travel calibration DONE: all 13 covers at a true open/100
+       (sunrise automation covered the open spaces; owner "open all" +
+       guided walk covered studies, Large Guest, Medium Guest, MBR trio).
+       Note: a bare open_cover during mid-close did NOT reverse the Medium
+       Guest blind — send stop_cover first when interrupting a move
+       (automation-relevant; unclear if actuator or dropped telegram).
 7. [ ] Scroll C4 When>>Then list for any other blind-touching automations
        (goodnight sweep) — retire in favor of app/HA versions.
 8. [ ] COVER_STATE_TRUSTED on Railway after a few clean days. Measured truth

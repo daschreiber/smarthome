@@ -1,3 +1,6 @@
+# DEPRECATED 2026-07-26 — the HomeKit bridge now exposes the real
+# *_blinds_knx covers directly; these hk_* wrappers are no longer bridged
+# and this block can be removed from configuration.yaml at leisure.
 # HomeKit cover workaround — see docs/APPLE_HOME_SETUP.md
 #
 # The Control4 cover entities claim position support, but position commands

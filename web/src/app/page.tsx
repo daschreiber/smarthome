@@ -87,6 +87,13 @@ interface MusicNow {
   room: string | null;
 }
 
+/** A floor's heat/cool changeover state (from /api/home `floorModes`). */
+interface FloorModeInfo {
+  mode: "heat" | "cool" | null;
+  pending: "heat" | "cool" | null;
+  error: string | null;
+}
+
 const GROUP_ORDER = ["Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
 /** Display names for groups whose entity-map name reads wrong in the UI.
  * "Media" is owner-renamed to "Music" — the section is the room's sound,
@@ -114,6 +121,7 @@ export default function Page() {
   const [layout, setLayout] = useState<"grid" | "plan">("grid");
   const [role, setRole] = useState<"admin" | "member" | "guest">("member");
   const [floorHeating, setFloorHeating] = useState<string[]>([]);
+  const [floorModes, setFloorModes] = useState<Record<string, FloorModeInfo>>({});
   const [musicNow, setMusicNow] = useState<MusicNow | null>(null);
   // True only when the server vouches for cover state (COVER_STATE_TRUSTED=1
   // after the C4 position-feedback fix). Until then shades show no state.
@@ -180,11 +188,13 @@ export default function Page() {
         devices: UiDevice[];
         role?: "admin" | "member" | "guest";
         floorHeatingRooms?: string[];
+        floorModes?: Record<string, FloorModeInfo>;
         coverStateTrusted?: boolean;
       };
       setDevices(out.devices);
       if (out.role) setRole(out.role);
       setFloorHeating(out.floorHeatingRooms ?? []);
+      setFloorModes(out.floorModes ?? {});
       setCoverTrust(out.coverStateTrusted === true);
       setError(null);
     } catch (err) {
@@ -281,6 +291,35 @@ export default function Page() {
       }
     },
     [headers, refresh],
+  );
+
+  // Floor heat/cool changeover: the server runs the ~13s Control4-derived
+  // relay sequence in the background, so this returns fast and the normal
+  // /api/home polling shows `pending` until the relay reports the new mode.
+  const sendFloorMode = useCallback(
+    async (fl: 5 | 6, mode: "heat" | "cool") => {
+      const key = `mode:${fl}`;
+      setBusy((b) => ({ ...b, [key]: true }));
+      try {
+        const res = await fetch("/api/climate/mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers() },
+          body: JSON.stringify({ floor: fl, mode }),
+        });
+        const out = await res.json();
+        if (!res.ok || out.ok === false) throw new Error(out.error ?? "changeover failed");
+        // Optimistic: show "switching" before the next poll catches up.
+        setFloorModes((m) => ({
+          ...m,
+          [fl]: { ...(m[fl] ?? { mode: null, error: null }), pending: mode },
+        }));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "changeover failed");
+      } finally {
+        setBusy((b) => ({ ...b, [key]: false }));
+      }
+    },
+    [headers],
   );
 
   // Room-scoped system fan-out ("Room lights off", "Shades open") — one
@@ -383,6 +422,8 @@ export default function Page() {
   }
 
   const favDevices = devices.filter((d) => favs.includes(d.id));
+  const fm = floorModes[String(floor)];
+  const fmShown = fm?.pending ?? fm?.mode ?? null;
 
   return (
     <main className="shell">
@@ -436,6 +477,46 @@ export default function Page() {
                 >
                   {v === "grid" ? <GridIcon size={15} /> : <MapIcon size={15} />}
                   {v === "grid" ? "Grid" : "Plan"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Whole-floor heat/cool changeover: one floor = one central unit,
+              so rooms can't mix modes — this flips the whole selected floor
+              via the Control4-derived relay sequence (lib/changeover). */}
+          <div className="mode-row">
+            <div>
+              <div className="mode-title">A/C mode</div>
+              <div className="mode-sub">
+                {fm?.pending
+                  ? `switching floor ${floor} to ${fm.pending === "heat" ? "heating" : "cooling"}…`
+                  : fm?.mode
+                    ? `floor ${floor} is on ${fm.mode === "heat" ? "heating" : "cooling"}`
+                    : `floor ${floor} mode unknown`}
+                {!fm?.pending && fm?.error ? " · last switch failed" : ""}
+              </div>
+            </div>
+            <div className="onoff" role="group" aria-label={`Floor ${floor} A/C mode`}>
+              {(["cool", "heat"] as const).map((m) => (
+                <button
+                  key={m}
+                  aria-pressed={fmShown === m}
+                  disabled={!!busy[`mode:${floor}`] || !!fm?.pending}
+                  onClick={() => {
+                    if (fmShown === m) return;
+                    if (
+                      window.confirm(
+                        `Switch floor ${floor} to ${m === "heat" ? "heating" : "cooling"}?\nThe changeover takes about 15 seconds.`,
+                      )
+                    ) {
+                      sendFloorMode(floor, m);
+                    }
+                  }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                >
+                  {m === "cool" ? <SnowIcon size={14} /> : <FlameIcon size={14} />}
+                  {m === "cool" ? "Cool" : "Heat"}
                 </button>
               ))}
             </div>

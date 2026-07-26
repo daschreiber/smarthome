@@ -3,6 +3,7 @@ import { getStates } from "@/lib/ha";
 import { registry } from "@/lib/registry";
 import { authenticate } from "@/lib/auth";
 import { coolmasterEntityId } from "@/lib/coolmaster";
+import { changeoverStatus, modeFromRelayState, relayEntityId } from "@/lib/changeover";
 import { saunaConfigured, saunaScheduleStatus, saunaStatus } from "@/lib/sauna";
 import { noiseConfigured, noiseStatus } from "@/lib/whitenoise";
 import { bedConfigured, bedSideForDeviceId } from "@/lib/eightsleep";
@@ -297,6 +298,22 @@ export async function GET(req: NextRequest) {
       ),
     ];
 
+    // Per-floor heat/cool mode, read straight off the hidden KNX changeover
+    // relays (on = heating) plus any changeover currently running.
+    const floorModes = Object.fromEntries(
+      ([5, 6] as const).map((f) => {
+        const status = changeoverStatus(f);
+        return [
+          f,
+          {
+            mode: modeFromRelayState(states.get(relayEntityId(f))?.state),
+            pending: status.pending,
+            error: status.lastError,
+          },
+        ];
+      }),
+    );
+
     // The role rides along so the UI can hide programming affordances for
     // guests; enforcement lives in the API routes, never in the browser.
     // coverStateTrusted: C4 shade position feedback is currently fiction
@@ -304,7 +321,7 @@ export async function GET(req: NextRequest) {
     // COVER_STATE_TRUSTED=1 once the Control4 feedback is fixed and the
     // open/closed indicators light back up without a code change.
     return NextResponse.json({
-      devices, role: auth.role, floorHeatingRooms,
+      devices, role: auth.role, floorHeatingRooms, floorModes,
       coverStateTrusted: process.env.COVER_STATE_TRUSTED === "1",
     });
   } catch (err) {

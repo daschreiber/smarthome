@@ -1,0 +1,144 @@
+group,alexa_name,likely_current_name,type,entity_id
+(none — leave ungrouped),All House Exit,KNX Switch All House Exit,scene switch,light.knx_switch_all_house_exit
+(none — leave ungrouped),All House Morning,KNX Switch All House Morning,scene switch,light.knx_switch_all_house_morning
+(none — leave ungrouped),All House Night,KNX Switch All House Night,scene switch,light.knx_switch_all_house_night
+(none — leave ungrouped),All Rooms closets Lightstrip,KNX Switch All Rooms closets Lightstrip,scene switch,light.knx_switch_all_rooms_closets_lightstrip
+(none — leave ungrouped),Main All House,KNX Switch Main All House,scene switch,light.knx_switch_main_all_house
+(none — leave ungrouped),Welcome,KNX Switch Welcome,scene switch,light.knx_switch_welcome
+Balcony 5th,Balcony lights,KNX Switch 5th Balcony lights,light,light.knx_switch_5th_balcony_lights
+Balcony 6th,Balcony Plants,KNX Switch 6th Balcony Plants,light,light.knx_switch_6th_balcony_plants
+Balcony 6th,Balcony Wall,KNX Switch 6th Balcony Wall,light,light.knx_switch_6th_balcony_wall
+Daniel's Study,Daniel Study Blinds,HK Daniel Study Blinds,cover,cover.hk_daniel_study_blinds
+Daniel's Study,Daniel Study Closet led,KNX Switch Daniel Study Closet led,light,light.knx_switch_daniel_study_closet_led
+Daniel's Study,Daniel Study Desk light,KNX Switch Daniel Study Desk light,light,light.knx_switch_daniel_study_desk_light
+Daniel's Study,Daniel Study Hidden,KNX Switch Daniel Study Hidden,light,light.knx_switch_daniel_study_hidden
+Daniel's Study,Daniel Study lights,KNX Dimmer Daniel Study lights,light,light.knx_dimmer_daniel_study_lights
+Daniel's Study,Daniel Study Strip 1,KNX Dimmer Daniel Study Strip 1,light,light.knx_dimmer_daniel_study_strip_1
+Daniel's Study,Daniel Study Strip 2,KNX Dimmer Daniel Study Strip 2,light,light.knx_dimmer_daniel_study_strip_2
+Daniel's Study,Daniel's Study A/C,L1.104,climate,climate.l1_104
+Daniella's Study,Daniella Study Blinds,HK Daniella Study Blinds,cover,cover.hk_daniella_study_blinds
+Daniella's Study,Daniella Study Desk,KNX Switch Daniella Study Desk,light,light.knx_switch_daniella_study_desk
+Daniella's Study,Daniella Study Hidden,KNX Switch Daniella Study Hidden,light,light.knx_switch_daniella_study_hidden
+Daniella's Study,Daniella Study lights,KNX Switch Daniella Study lights,light,light.knx_switch_daniella_study_lights
+Daniella's Study,Daniella Study Shelfs led,KNX Switch Daniella Study Shelfs led,light,light.knx_switch_daniella_study_shelfs_led
+Daniella's Study,Daniella Study Spots,KNX Dimmer Daniella Study Spots,light,light.knx_dimmer_daniella_study_spots
+Daniella's Study,Daniella Study Strip,KNX Switch Daniella Study Strip,light,light.knx_switch_daniella_study_strip
+Daniella's Study,Daniella's Study A/C,L1.105,climate,climate.l1_105
+Den,Den A/C,L1.101,climate,climate.l1_101
+Den,Den Blinds,HK Den Blinds,cover,cover.hk_den_blinds
+Den,Den Center Spots,KNX Dimmer Den Center Spots,light,light.knx_dimmer_den_center_spots
+Den,Den Hidden,KNX Switch Den Hidden,light,light.knx_switch_den_hidden
+Den,Den lights,KNX Dimmer Den lights,light,light.knx_dimmer_den_lights
+Den,Den Sides Spots,KNX Dimmer Den Sides Spots,light,light.knx_dimmer_den_sides_spots
+Den,Den Strip,KNX Dimmer Den Strip,light,light.knx_dimmer_den_strip
+Den,Games Closet lightstrip,KNX Switch Games Closet lightstrip,light,light.knx_switch_games_closet_lightstrip
+Dining,Dining Table,KNX Switch Dining Table,light,light.knx_switch_dining_table
+Downstairs Toilet,Downstairs Toilet Defog,KNX Switch Downstairs Toilet Defog,light,light.knx_switch_downstairs_toilet_defog
+Downstairs Toilet,Downstairs Toilet Hidden,KNX Switch Downstairs Toilet Hidden,light,light.knx_switch_downstairs_toilet_hidden
+Downstairs Toilet,Downstairs Toilet Mirror,KNX Switch Downstairs Toilet Mirror,light,light.knx_switch_downstairs_toilet_mirror
+Downstairs Toilet,Downstairs Toilet Restroom lights,KNX Switch Downstairs Toilet Restroom lights,light,light.knx_switch_downstairs_toilet_restroom_lights
+Downstairs Toilet,Downstairs Toilet Spots 1,KNX Switch Downstairs Toilet Spots 1,light,light.knx_switch_downstairs_toilet_spots_1
+Downstairs Toilet,Downstairs Toilet Spots 2,KNX Switch Downstairs Toilet Spots 2,light,light.knx_switch_downstairs_toilet_spots_2
+Downstairs Toilet,Downstairs Toilet Vent,KNX Switch Downstairs Toilet Vent,light,light.knx_switch_downstairs_toilet_vent
+Downstairs Toilet,Restroom Spots,KNX Dimmer Restroom Spots,light,light.knx_dimmer_restroom_spots
+Downstairs Toilet,Restroom Vent,KNX Switch Restroom Vent,light,light.knx_switch_restroom_vent
+Entrance,Entrance Night led,KNX Switch Entrance Night led,light,light.knx_switch_entrance_night_led
+Entrance,Entrance Strip,KNX Dimmer Entrance Strip,light,light.knx_dimmer_entrance_strip
+Entrance,Hall Spots,KNX Dimmer Hall Spots,light,light.knx_dimmer_hall_spots
+Guest Bathroom,Guest Bathroom Blinds,HK Guest Bathroom Blinds,cover,cover.hk_guest_bathroom_blinds
+Guest Bathroom,Guest Bathroom lights,KNX Switch Guest Bathroom lights,light,light.knx_switch_guest_bathroom_lights
+Guest Bathroom,Guest Bathroom Mirror,KNX Switch Guest Bathroom Mirror,light,light.knx_switch_guest_bathroom_mirror
+Guest Bathroom,Guest Bathroom Spots 1,KNX Switch Guest Bathroom Spots 1,light,light.knx_switch_guest_bathroom_spots_1
+Guest Bathroom,Guest Bathroom Spots 2,KNX Switch Guest Bathroom Spots 2,light,light.knx_switch_guest_bathroom_spots_2
+Guest Bathroom,Guest Bathroom Strip,KNX Switch Guest Bathroom Strip,light,light.knx_switch_guest_bathroom_strip
+Guest Bathroom,Guest Bathroom Towel Rail,KNX Switch Guest Bathroom Towel Rail,light,light.knx_switch_guest_bathroom_towel_rail
+Guest Bathroom,Guest Bathroom Vent,KNX Switch Guest Bathroom Vent,light,light.knx_switch_guest_bathroom_vent
+Gym,Gym A/C,L1.106,climate,climate.l1_106
+Gym,Gym lights,KNX Dimmer Gym lights,light,light.knx_dimmer_gym_lights
+Kitchen,Kitchen A/C 1,L1.111,climate,climate.l1_111
+Kitchen,Kitchen A/C 2,L1.114,climate,climate.l1_114
+Kitchen,Kitchen A/C 3,L1.115,climate,climate.l1_115
+Kitchen,Kitchen Ceiling,KNX Dimmer Kitchen Ceiling,light,light.knx_dimmer_kitchen_ceiling
+Kitchen,Kitchen Hidden,KNX Switch Kitchen Hidden,light,light.knx_switch_kitchen_hidden
+Kitchen,Kitchen Island,KNX Dimmer Kitchen Island,light,light.knx_dimmer_kitchen_island
+Kitchen,Kitchen Left Blinds,HK Kitchen Left Blinds,cover,cover.hk_kitchen_left_blinds
+Kitchen,Kitchen Right Blinds,HK Kitchen Right Blinds,cover,cover.hk_kitchen_right_blinds
+Kitchen,Kitchen Sink led,KNX Switch Kitchen Sink led,light,light.knx_switch_kitchen_sink_led
+Kitchen,Kitchen Strip 1,KNX Dimmer Kitchen Strip 1,light,light.knx_dimmer_kitchen_strip_1
+Kitchen,Kitchen Strip 2,KNX Dimmer Kitchen Strip 2,light,light.knx_dimmer_kitchen_strip_2
+Large Guest Room,Large Guest Room A/C,L1.108,climate,climate.l1_108
+Large Guest Room,Large Guest Room Blinds,HK Large Guest Room Blinds,cover,cover.hk_large_guest_room_blinds
+Large Guest Room,Large Guest Room Closets Lightstrip,KNX Switch Large Guest Room Closets Lightstrip,light,light.knx_switch_large_guest_room_closets_lightstrip
+Large Guest Room,Large Guest Room Fan,KNX Switch Large Guest Room Fan,light,light.knx_switch_large_guest_room_fan
+Large Guest Room,Large Guest Room Hidden,KNX Switch Large Guest Room Hidden,light,light.knx_switch_large_guest_room_hidden
+Large Guest Room,Large Guest Room lights,KNX Dimmer Large Guest Room  lights,light,light.knx_dimmer_large_guest_room_lights
+Large Guest Room,Large Guest Room Reading Left,KNX Switch Large Guest Room Reading Left,light,light.knx_switch_large_guest_room_reading_left
+Large Guest Room,Large Guest Room Reading Right,KNX Dimmer Large Guest Room Reading Right,light,light.knx_dimmer_large_guest_room_reading_right
+Large Guest Room,Large Guest Room Spots,KNX Dimmer Large Guest Room Spots,light,light.knx_dimmer_large_guest_room_spots
+Large Guest Room,Large Guest Room Strip,KNX Dimmer Large Guest Room Strip,light,light.knx_dimmer_large_guest_room_strip
+Left Corridor,Left Corridor lights,KNX Dimmer Left Corridor lights,light,light.knx_dimmer_left_corridor_lights
+Left Corridor,Left Corridor Night LED,KNX Switch Left CorridorNight led,light,light.knx_switch_left_corridornight_led
+Lounge,Lounge A/C 1,L1.201,climate,climate.l1_201
+Lounge,Lounge A/C 2,L1.202,climate,climate.l1_202
+Lounge,Lounge Closet Led,KNX Switch Lounge Closet Led,light,light.knx_switch_lounge_closet_led
+Lounge,Lounge Cove,KNX Dimmer Lounge Cove,light,light.knx_dimmer_lounge_cove
+Lounge,Lounge Hidden,KNX Switch Lounge Hidden,light,light.knx_switch_lounge_hidden
+Lounge,Lounge Left Blinds,HK Lounge Left Blinds,cover,cover.hk_lounge_left_blinds
+Lounge,Lounge Right Blinds,HK Lounge Right Blinds,cover,cover.hk_lounge_right_blinds
+Lounge,Lounge Spots,KNX Dimmer Lounge Spots,light,light.knx_dimmer_lounge_spots
+Lounge,Lounge Strip,KNX Dimmer Lounge Strip,light,light.knx_dimmer_lounge_strip
+Lounge,Lounge TV Led,KNX Switch Lounge TV Led,light,light.knx_switch_lounge_tv_led
+Master Bathroom,Master Bathroom Hidden,KNX Switch Master Bathroom Hidden,light,light.knx_switch_master_bathroom_hidden
+Master Bathroom,Master Bathroom Lights,KNX Switch Master Bathroom Lights,light,light.knx_switch_master_bathroom_lights
+Master Bathroom,Master Bathroom Mirror,KNX Switch Master Bathroom Mirror,light,light.knx_switch_master_bathroom_mirror
+Master Bathroom,Master Bathroom Night Light,KNX Switch Master Bathroom Night Light,light,light.knx_switch_master_bathroom_night_light
+Master Bathroom,Master Bathroom Strip,KNX Dimmer Master Bathroom Strip,light,light.knx_dimmer_master_bathroom_strip
+Master Bathroom,Master Bathroom Towel Rail,KNX Switch Master Bathroom Towel Rail,light,light.knx_switch_master_bathroom_towel_rail
+Master Bathroom,Master Bathroom Vent,KNX Switch Master Bathroom Vent,light,light.knx_switch_master_bathroom_vent
+Master Bedroom,Master Bedroom A/C,L1.112,climate,climate.l1_112
+Master Bedroom,Master Bedroom Balcony Left,HK Master Bedroom Balcony Left,cover,cover.hk_master_bedroom_balcony_left
+Master Bedroom,Master Bedroom Balcony Right,HK Master Bedroom Balcony Right,cover,cover.hk_master_bedroom_balcony_right
+Master Bedroom,Master Bedroom Closets Lightstrip,KNX Switch Master Bedroom Closets Lightstrip,light,light.knx_switch_master_bedroom_closets_lightstrip
+Master Bedroom,Master Bedroom Closets Strip,KNX Switch Master Bedroom Closets Strip,light,light.knx_switch_master_bedroom_closets_strip
+Master Bedroom,Master Bedroom Hidden,KNX Switch Master Bedroom Hidden,light,light.knx_switch_master_bedroom_hidden
+Master Bedroom,Master Bedroom Lights,KNX Dimmer Master Bedroom Lights,light,light.knx_dimmer_master_bedroom_lights
+Master Bedroom,Master Bedroom Read Left,KNX Switch Master Bedroom Read Left,light,light.knx_switch_master_bedroom_read_left
+Master Bedroom,Master Bedroom Read Right,KNX Switch Master Bedroom Read Right,light,light.knx_switch_master_bedroom_read_right
+Master Bedroom,Master Bedroom Spots,KNX Dimmer Master Bedroom Spots,light,light.knx_dimmer_master_bedroom_spots
+Master Bedroom,Master Bedroom Strip,KNX Dimmer Master Bedroom Strip,light,light.knx_dimmer_master_bedroom_strip
+Master Bedroom,Master Bedroom Window,HK Master Bedroom Window,cover,cover.hk_master_bedroom_window
+Master Bedroom,MBR TV Lift,KNX Switch MBR TV Lift,light,light.knx_switch_mbr_tv_lift
+Master Bedroom,White Noise,White Noise,switch,switch.white_noise
+Master Corridor,Master Corridor Closets Lightstrip,KNX Switch Master Corridor Closets Lightstrip,light,light.knx_switch_master_corridor_closets_lightstrip
+Master Corridor,Master Corridor Lights,KNX Dimmer Master Corridor Lights,light,light.knx_dimmer_master_corridor_lights
+Medium Guest Room,Medium Guest Room A/C,L1.102,climate,climate.l1_102
+Medium Guest Room,Medium Guest Room Blinds,HK Medium Guest Room Blinds,cover,cover.hk_medium_guest_room_blinds
+Medium Guest Room,Medium Guest Room Closets Lightstrip,KNX Switch Medium Guest Room Closets Lightstrip,light,light.knx_switch_medium_guest_room_closets_lightstrip
+Medium Guest Room,Medium Guest Room Fan,KNX Switch Medium Guest Room Fan,light,light.knx_switch_medium_guest_room_fan
+Medium Guest Room,Medium Guest Room Hidden,KNX Switch Medium Guest Room Hidden,light,light.knx_switch_medium_guest_room_hidden
+Medium Guest Room,Medium Guest Room lights,KNX Switch Medium Guest Room lights,light,light.knx_switch_medium_guest_room_lights
+Medium Guest Room,Medium Guest Room Reading Left,KNX Switch Medium Guest Room Reading Left,light,light.knx_switch_medium_guest_room_reading_left
+Medium Guest Room,Medium Guest Room Reading Right,KNX Switch Medium Guest Room Reading Right,light,light.knx_switch_medium_guest_room_reading_right
+Medium Guest Room,Medium Guest Room Spots,KNX Dimmer Medium Guest Room Spots,light,light.knx_dimmer_medium_guest_room_spots
+Medium Guest Room,Medium Guest Room Strip,KNX Dimmer Medium Guest Room Strip,light,light.knx_dimmer_medium_guest_room_strip
+Right Corridor,Right Corridor lights,KNX Dimmer Right Corridor lights,light,light.knx_dimmer_right_corridor_lights
+Right Corridor,Right Corridor Night led,KNX Switch Right Corridor Night led,light,light.knx_switch_right_corridor_night_led
+Sauna,Sauna A/C,L1.103,climate,climate.l1_103
+Sauna,Sauna Spots,KNX Dimmer Sauna Spots,light,light.knx_dimmer_sauna_spots
+Small Guest Room,Small Guest Room A/C,L1.107,climate,climate.l1_107
+Small Guest Room,Small Guest Room Closets Lightstrip,KNX Switch Small Guest Room Closets Lightstrip,light,light.knx_switch_small_guest_room_closets_lightstrip
+Small Guest Room,Small Guest Room Fan,KNX Switch Small Guest Room Fan,light,light.knx_switch_small_guest_room_fan
+Small Guest Room,Small Guest Room Hidden,KNX Switch Small Guest RoomHidden,light,light.knx_switch_small_guest_roomhidden
+Small Guest Room,Small Guest Room lights,KNX Dimmer Small Guest Room  lights,light,light.knx_dimmer_small_guest_room_lights
+Small Guest Room,Small Guest Room Reading light,KNX Switch Small Guest Room Reading light,light,light.knx_switch_small_guest_room_reading_light
+Small Guest Room,Small Guest Room Spots,KNX Dimmer Small Guest Room Spots,light,light.knx_dimmer_small_guest_room_spots
+Small Guest Room,Small Guest Room Strip,KNX Dimmer Small Guest Room Strip,light,light.knx_dimmer_small_guest_room_strip
+Stairs & Landing,Landing lights,KNX Dimmer Landing lights,light,light.knx_dimmer_landing_lights
+Stairs & Landing,Stairs,KNX Dimmer Stairs,light,light.knx_dimmer_stairs
+Terrace,Terrace Fan,KNX Switch Terrace Fan,light,light.knx_switch_terrace_fan
+Terrace,Terrace Heating,KNX Switch Terrace Heating,light,light.knx_switch_terrace_heating
+Terrace,Terrace Lights,KNX Switch Terrace Lights,light,light.knx_switch_terrace_lights
+Utility Room,Utility Room Hall,KNX Switch Utility Room Hall,light,light.knx_switch_utility_room_hall
+Utility Room,Utility Room Lights,KNX Switch Utility Room Lights,light,light.knx_switch_utility_room_lights
+Utility Room,Utility Room Spot,KNX Switch Utility Room Spot,light,light.knx_switch_utility_room_spot
+Utility Room,Utility Room Strip,KNX Switch Utility Room Strip,light,light.knx_switch_utility_room_strip

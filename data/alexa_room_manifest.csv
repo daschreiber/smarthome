@@ -108,7 +108,7 @@ Master Bedroom,Master Bedroom Spots,KNX Dimmer Master Bedroom Spots,light,light.
 Master Bedroom,Master Bedroom Strip,KNX Dimmer Master Bedroom Strip,light,light.knx_dimmer_master_bedroom_strip
 Master Bedroom,Master Bedroom Window,HK Master Bedroom Window,cover,cover.hk_master_bedroom_window
 Master Bedroom,MBR TV Lift,KNX Switch MBR TV Lift,light,light.knx_switch_mbr_tv_lift
-Master Bedroom,White Noise,White Noise,switch,switch.white_noise
+Master Bedroom,Sleep sound,Sleep sound,switch,switch.white_noise
 Master Corridor,Master Corridor Closets Lightstrip,KNX Switch Master Corridor Closets Lightstrip,light,light.knx_switch_master_corridor_closets_lightstrip
 Master Corridor,Master Corridor Lights,KNX Dimmer Master Corridor Lights,light,light.knx_dimmer_master_corridor_lights
 Medium Guest Room,Medium Guest Room A/C,L1.102,climate,climate.l1_102

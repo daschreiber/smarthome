@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import NavBar from "../../NavBar";
 import { BlindsIcon, BulbIcon, FlameIcon, SnowIcon } from "../../icons";
 import type { SystemKey } from "@/lib/commandRules";
 import { appKeyHeaders } from "@/lib/appKey";
+import ClimateCard from "../../ClimateCard";
 
 /**
  * System view: one function across the whole house (lighting / climate /
@@ -27,6 +28,8 @@ interface UiDevice {
   currentTemperature: number | null;
   targetTemperature: number | null;
   hvacMode: string | null;
+  fanSpeed?: string | null;
+  fanSpeedList?: string[] | null;
 }
 
 // Keyed by the server's SystemKey so a new system is a compile error here.
@@ -132,14 +135,17 @@ export default function SystemPage() {
   );
 
   const deviceCommand = useCallback(
-    async (id: string, body: Record<string, unknown>) => {
+    async (id: string, body: Record<string, unknown>): Promise<{ ok: boolean }> => {
       setBusy(true);
       try {
-        await fetch(`/api/devices/${id}/command`, {
+        const res = await fetch(`/api/devices/${id}/command`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...headers() },
           body: JSON.stringify(body),
         });
+        return { ok: res.ok };
+      } catch {
+        return { ok: false };
       } finally {
         setBusy(false);
         refresh();
@@ -214,7 +220,7 @@ export default function SystemPage() {
             {rooms.map(([room, ds]) =>
               system === "climate" ? (
                 ds.map((d) => (
-                  <ClimateRow key={d.id} d={d} busy={busy} send={deviceCommand} />
+                  <ClimateCard key={d.id} d={d} title={d.room} busy={busy} send={deviceCommand} />
                 ))
               ) : (
                 <div key={room} className="dev">
@@ -250,60 +256,5 @@ export default function SystemPage() {
       ))}
       <NavBar />
     </main>
-  );
-}
-
-function ClimateRow({
-  d, busy, send,
-}: {
-  d: UiDevice;
-  busy: boolean;
-  send: (id: string, body: Record<string, unknown>) => void;
-}) {
-  const [pending, setPending] = useState<number | null>(null);
-  // KNX doesn't echo setpoints reliably; keep showing the last target sent.
-  const [committed, setCommitted] = useState<number | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reported = d.targetTemperature != null && d.targetTemperature >= 10 ? d.targetTemperature : null;
-  const seed =
-    d.currentTemperature != null
-      ? Math.min(32, Math.max(10, Math.round(d.currentTemperature * 2) / 2))
-      : 21;
-  const target = pending ?? reported ?? committed ?? seed;
-  const active = d.available && d.state !== "off" && d.state !== "unavailable";
-
-  const step = (delta: number) => {
-    const next = Math.min(32, Math.max(10, target + delta));
-    setPending(next);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      send(d.id, { command: "set_temperature", temperature: next });
-      setCommitted(next);
-      setPending(null);
-    }, 800);
-  };
-
-  return (
-    <div className={`climate-card ${d.available ? "" : "unavailable"}`} style={{ marginBottom: 0 }}>
-      <div>
-        <div className="nm">{d.room}</div>
-        <div className={`mode ${active ? "active" : ""}`}>
-          {d.currentTemperature != null ? `${d.currentTemperature}° now · ` : ""}
-          {d.available ? (active ? d.state : "off") : "unavailable"}
-        </div>
-      </div>
-      <div className="climate-set">
-        <button className="round-btn" disabled={busy || !d.available} onClick={() => step(-0.5)} aria-label={`Lower ${d.room} target`}>−</button>
-        <div className="target">{target}°</div>
-        <button className="round-btn" disabled={busy || !d.available} onClick={() => step(0.5)} aria-label={`Raise ${d.room} target`}>+</button>
-        <button
-          className="mini-btn"
-          disabled={busy || !d.available}
-          onClick={() => send(d.id, { command: active ? "turn_off" : "turn_on" })}
-        >
-          {active ? "Off" : "On"}
-        </button>
-      </div>
-    </div>
   );
 }

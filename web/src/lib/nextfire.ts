@@ -2,8 +2,9 @@
  * Client-safe "when does this fire next" math for the Automations screen.
  * Mirrors the scheduler's matching rules (lib/automations.ts) without
  * importing that module — it reads the store from disk and can't ship to
- * the browser.
+ * the browser. The wall clock itself is shared (lib/houseclock.ts).
  */
+import { DAYS_SHORT, wallClock } from "./houseclock";
 
 export interface StepTiming {
   time?: string; // HH:MM (absent for sun-triggered steps)
@@ -23,22 +24,9 @@ export interface HouseNow {
   date: string; // YYYY-MM-DD
 }
 
-const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 export function houseNow(tz?: string, d = new Date()): HouseNow {
-  const timeZone = tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone, hour: "2-digit", minute: "2-digit", hour12: false,
-    year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
-  }).formatToParts(d);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  // en-GB can render midnight as "24:00"; normalize.
-  const hour = get("hour") === "24" ? "00" : get("hour");
-  return {
-    minutes: Number(hour) * 60 + Number(get("minute")),
-    day: DAYS_SHORT.indexOf(get("weekday")),
-    date: `${get("year")}-${get("month")}-${get("day")}`,
-  };
+  const { minutes, day, date } = wallClock(d, tz);
+  return { minutes, day, date };
 }
 
 export interface NextFire {

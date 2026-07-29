@@ -1,5 +1,3 @@
-import crypto from "node:crypto";
-
 /**
  * "Sign in with Google" — OAuth 2.0 authorization-code flow, kept deliberately
  * small. Google only replaces the password check: it proves "this person
@@ -19,42 +17,13 @@ export function googleConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-/**
- * Public base URL for building absolute URLs sent to the BROWSER. Behind
- * Railway's proxy the request origin is the internal bind address
- * (https://0.0.0.0:8080), which a browser cannot navigate to — so
- * APP_BASE_URL wins whenever it is set, and the request origin is only a
- * local-dev fallback.
- */
-export function appBaseUrl(requestOrigin: string): string {
-  return (process.env.APP_BASE_URL || requestOrigin).replace(/\/+$/, "");
-}
+/** Public base URL + HMAC OAuth state live in lib/urls.ts (shared with the
+ *  Spotify link flow); re-exported here for the auth routes and tests. */
+export { publicBaseUrl as appBaseUrl, createStateToken, verifyStateToken } from "./urls";
+import { publicBaseUrl } from "./urls";
 
 export function redirectUri(requestOrigin: string): string {
-  return `${appBaseUrl(requestOrigin)}/api/auth/google/callback`;
-}
-
-/** Random state value, HMAC-signed so the callback can verify we minted it. */
-export function createStateToken(nowMs = Date.now()): string {
-  const secret = process.env.APP_SESSION_SECRET;
-  if (!secret) throw new Error("APP_SESSION_SECRET is not set");
-  const payload = Buffer.from(`${crypto.randomBytes(12).toString("hex")}|${nowMs + 10 * 60_000}`).toString("base64url");
-  const sig = crypto.createHmac("sha256", secret + "|oauth-state").update(payload).digest("base64url");
-  return `${payload}.${sig}`;
-}
-
-export function verifyStateToken(state: string, nowMs = Date.now()): boolean {
-  const secret = process.env.APP_SESSION_SECRET;
-  if (!secret) return false;
-  const dot = state.lastIndexOf(".");
-  if (dot < 1) return false;
-  const payload = state.slice(0, dot);
-  const expect = crypto.createHmac("sha256", secret + "|oauth-state").update(payload).digest("base64url");
-  const a = Buffer.from(state.slice(dot + 1));
-  const b = Buffer.from(expect);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
-  const exp = Number(Buffer.from(payload, "base64url").toString().split("|")[1]);
-  return Number.isFinite(exp) && nowMs <= exp;
+  return `${publicBaseUrl(requestOrigin)}/api/auth/google/callback`;
 }
 
 export function googleAuthUrl(requestOrigin: string, state: string): string {

@@ -59,7 +59,9 @@ export interface Device {
   pinned?: boolean;
 }
 
-function slug(s: string): string {
+/** Shared app-wide slug: scene and automation ids use the same rules as
+ *  device ids (apostrophes collapse, not underscore). */
+export function slug(s: string): string {
   return s
     .toLowerCase()
     .replace(/['’]/g, "")

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import NavBar from "../../NavBar";
 import { BlindsIcon, BulbIcon, FlameIcon, SnowIcon } from "../../icons";
+import type { SystemKey } from "@/lib/commandRules";
 
 /**
  * System view: one function across the whole house (lighting / climate /
@@ -27,14 +28,13 @@ interface UiDevice {
   hvacMode: string | null;
 }
 
-const SYSTEMS = {
+// Keyed by the server's SystemKey so a new system is a compile error here.
+const SYSTEMS: Record<SystemKey, { title: string; icon: typeof BulbIcon; sub: string }> = {
   lighting: { title: "Lighting", icon: BulbIcon, sub: "Every light in the house" },
   climate: { title: "Climate", icon: SnowIcon, sub: "A/C & heating zones" },
   heating: { title: "Underfloor heating", icon: FlameIcon, sub: "Warm floors, room by room" },
   shades: { title: "Shades", icon: BlindsIcon, sub: "All the blinds and shades" },
-} as const;
-
-type SystemKey = keyof typeof SYSTEMS;
+};
 
 export default function SystemPage() {
   const params = useParams<{ system: string }>();

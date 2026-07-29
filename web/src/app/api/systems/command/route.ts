@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authenticate } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { executeSystemCommand } from "@/lib/execute";
+import { SYSTEM_COMMANDS } from "@/lib/commandRules";
 
 /**
  * House-wide system commands ("all lights off", "all A/C off", room subsets).
@@ -24,6 +25,9 @@ export async function POST(req: NextRequest) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid request" }, { status: 400 });
   const { system, command, rooms, brightnessPct } = parsed.data;
+  if (!SYSTEM_COMMANDS[system].includes(command)) {
+    return NextResponse.json({ error: `${command} is not a ${system} system command` }, { status: 400 });
+  }
   if (command === "set_brightness" && brightnessPct == null) {
     return NextResponse.json({ error: "set_brightness needs brightnessPct" }, { status: 400 });
   }

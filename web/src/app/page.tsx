@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FloorPlan from "./FloorPlan";
 import NavBar from "./NavBar";
 import { BlindsIcon, BulbIcon, FlameIcon, GridIcon, LockIcon, MapIcon, SnowIcon } from "./icons";
+import { canProgram as roleCanProgram } from "@/lib/permissions";
 
 /**
  * Phase C app shell in the decided design direction (docs/DESIGN_DIRECTION.md):
@@ -213,7 +214,7 @@ export default function Page() {
   // after the C4 position-feedback fix). Until then shades show no state.
   const [coverTrust, setCoverTrust] = useState(false);
   const keyRef = useRef("");
-  const canProgram = role !== "guest";
+  const canProgram = roleCanProgram(role);
 
   // What the cards render: server truth with any live optimistic overlays on
   // top. An overlay stops applying the moment the server proves it (`done`);

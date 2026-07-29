@@ -7,6 +7,7 @@ import {
   type NextSunIso,
 } from "@/lib/nextfire";
 import { automationGroup } from "@/lib/automationGroups";
+import { temperatureBounds } from "@/lib/commandRules";
 
 /**
  * Automations screen: a room-grouped, schedule-ordered list + a room-first
@@ -96,11 +97,10 @@ function chipsForRoom(roomDevs: TargetDevice[]): Array<{ key: ChipKey; label: st
   return chips;
 }
 
-/** Mirrors the server's temperatureBounds() so the input can't propose an out-of-range set-point. */
+/** The server's own bounds (lib/commandRules.ts), plus form step/default. */
 function tempBoundsFor(kind: string | undefined) {
-  return kind === "sauna"
-    ? { min: 40, max: 100, step: 1, dflt: 80 }
-    : { min: 10, max: 32, step: 0.5, dflt: 24 };
+  const { min, max } = temperatureBounds(kind === "sauna" ? "sauna" : "climate");
+  return kind === "sauna" ? { min, max, step: 1, dflt: 80 } : { min, max, step: 0.5, dflt: 24 };
 }
 
 function commandOptions(t: TargetDevice | undefined): Array<{ value: string; label: string }> {

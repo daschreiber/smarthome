@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Device } from "./registry";
+import { slug, type Device } from "./registry";
 import type { HaState } from "./ha";
 
 /**
@@ -79,10 +79,6 @@ export function updateSceneDevice(
   if (scene.states.length === 0) throw new Error("a scene can't be emptied — delete it instead");
   save(scenes);
   return scene;
-}
-
-function slug(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 /**

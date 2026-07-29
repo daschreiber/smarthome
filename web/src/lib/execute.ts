@@ -117,20 +117,10 @@ export function roomLights(room: string): Device[] {
   );
 }
 
-/**
- * House-wide systems (the /systems screens). Membership is intentionally
- * narrow: "lighting" is real lights only (group Lighting — fans, vents, and
- * towel rails ride the light domain but are NOT lights), "climate" is A/C
- * zones only (never the sauna), "shades" is every cover.
- */
-export type SystemKey = "lighting" | "climate" | "heating" | "shades";
-
-export const SYSTEM_COMMANDS: Record<SystemKey, Command["command"][]> = {
-  lighting: ["turn_on", "turn_off", "set_brightness"],
-  climate: ["turn_on", "turn_off"],
-  heating: ["turn_on", "turn_off"],
-  shades: ["open", "close", "stop"],
-};
+/** System vocabulary lives in lib/commandRules.ts (client-safe, shared
+ *  with the /systems pages); re-exported for the routes and tests. */
+export { SYSTEM_COMMANDS, type SystemKey } from "./commandRules";
+import { SYSTEM_COMMANDS, type SystemKey } from "./commandRules";
 
 export function systemDevices(system: SystemKey): Device[] {
   const all = registry().devices.filter((d) => d.visible);

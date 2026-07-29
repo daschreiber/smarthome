@@ -101,17 +101,10 @@ const CAPABILITY_FOR_COMMAND: Record<Command["command"], string> = {
   set_bed_level: "bed_level",
 };
 
-/** Per-kind safe set-point ranges (°C), enforced server-side. */
-export function temperatureBounds(kind: Device["kind"]): { min: number; max: number } {
-  switch (kind) {
-    case "climate":
-      return { min: 10, max: 32 };
-    case "sauna":
-      return { min: 40, max: 100 }; // matches the KLAFS app's own clamp
-    default:
-      return { min: 10, max: 32 };
-  }
-}
+/** Per-kind safe set-point ranges live in lib/commandRules.ts (client-safe,
+ *  shared with the Automations form). */
+export { temperatureBounds } from "./commandRules";
+import { temperatureBounds } from "./commandRules";
 
 export function assertCommandAllowed(device: Device, cmd: Command): void {
   const needed = CAPABILITY_FOR_COMMAND[cmd.command];

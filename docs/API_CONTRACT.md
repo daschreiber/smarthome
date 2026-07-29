@@ -77,9 +77,12 @@ validated per-device against its capabilities (`UNSUPPORTED_COMMAND` → 400):
 Devices flagged `requiresConfirmation` (the sauna heater) demand
 `confirm: true` or the call fails with **428**.
 
-Response: `{ status: "confirmed" | "sent", state, ... }` — *confirmed*
-means the server observed the resulting state within ~8s; *sent* means the
-command went out but the device can't prove it (bed, some media). Failures
+Response: `{ status: "confirmed" | "sent", state, ... }`. HA-backed devices
+answer *sent* the moment Home Assistant accepts the service call; read-back
+verification runs in the background and its verdict lands in the audit log
+(`(unverified)` marks a read-back that never proved the command). The sauna
+and white noise still verify inline — safety tier and listener ground-truth
+respectively — and are the two paths that can answer *confirmed*. Failures
 return `{ status: "failed", error }` with 400 (rejected) or 502 (upstream).
 
 ### `GET | PATCH /api/devices/:deviceId/vacuum`

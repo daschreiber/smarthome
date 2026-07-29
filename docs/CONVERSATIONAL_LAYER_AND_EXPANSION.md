@@ -88,10 +88,13 @@ To bring the two Roborocks live:
    **"Lounge Roborock"** / **"Den Roborock"** — or by floor —
    **"Floor 6 Roborock"** / **"Floor 5 Roborock"**. Both work: floor-named
    vacuums are mapped to their dock rooms (floor 6 → Lounge, floor 5 → Den).
-   Any other naming needs a `ROOM_OVERRIDES` entry in
-   `tools/build_entity_map.py`.
-3. Re-run `tools/export_inventory.py`, then `tools/build_entity_map.py`, and
-   redeploy. The placeholder cards are replaced by the real devices.
+   Any other naming needs a row edit in `data/entity_map.json`.
+3. Append the new vacuum rows to `data/entity_map.json` **by hand** (both
+   copies — root and `web/data/`) and redeploy. The placeholder cards are
+   replaced by the real devices. Do **not** re-run
+   `tools/build_entity_map.py`: the map is hand-maintained now, and
+   regenerating from the 2026-07-16 inventory snapshot would revert the
+   KNX shade migration (see the script's header).
 4. **Done 2026-07-21** — per-room cleaning, suction level, and passes: the
    card's Clean button opens an options panel. Rooms come live from
    `roborock.get_maps`; suction options come from the entity's

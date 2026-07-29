@@ -1,7 +1,23 @@
 #!/usr/bin/env python3
-"""Build the classified entity map (runbook Stage 4->5 bridge).
+"""ARCHIVAL — do not re-run. The entity map is hand-maintained now.
 
-Reads inventory/entities.json (raw Home Assistant states export) and produces:
+This script bootstrapped `data/entity_map.json` from the 2026-07-16 inventory
+snapshot (runbook Stage 4->5 bridge). Since then the map has been edited by
+hand and has diverged from anything this script can produce:
+
+  - the 13 shades were repointed from Control4 covers to the native
+    `cover.*_blinds_knx` entities (2026-07-26) — regenerating restores the
+    dead Control4 covers and silently reverts that migration;
+  - CoolMaster unit mappings, Yamaha receivers, and later additions were
+    edited directly into the JSON, never into these rules;
+  - `inventory/entities.json` predates all of it and is a frozen snapshot.
+
+To add a device: append a row to `data/entity_map.json` (root AND `web/data/`
+copies) as `docs/AUDIO_SYSTEM.md` describes. Running this script without
+`--regenerate-anyway` exits without writing.
+
+Original purpose: reads inventory/entities.json (raw Home Assistant states
+export) and produces:
   data/entity_map.json   - per-entity: room, category, app group, display name
   data/MAPPING_REVIEW.md - human-readable review sheet grouped by category
 
@@ -338,4 +354,15 @@ def main():
 
 
 if __name__ == "__main__":
+    import sys
+
+    if "--regenerate-anyway" not in sys.argv:
+        sys.exit(
+            "REFUSING TO RUN: data/entity_map.json is hand-maintained and has "
+            "diverged from the 2026-07-16 inventory snapshot this script reads "
+            "(KNX shade repoint, CoolMaster units, receivers). Regenerating "
+            "would revert those changes. Edit the JSON directly, or pass "
+            "--regenerate-anyway if you really mean to rebuild from the "
+            "snapshot."
+        )
     main()

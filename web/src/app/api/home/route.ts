@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStates } from "@/lib/ha";
+import { getStates, type HaState } from "@/lib/ha";
 import { registry } from "@/lib/registry";
 import { authenticate } from "@/lib/auth";
 import { coolmasterEntityId } from "@/lib/coolmaster";
@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
     // HA bulk states and sauna status in parallel; sauna failure must not
     // break the rest of the home view — but the REASON travels to the card.
     let saunaNote: string | null = saunaConfigured() ? null : "not configured";
-    const [haStates, sauna, saunaSchedule] = await Promise.all([
+    let noiseNote: string | null = null;
+    const [haStates, sauna, saunaSchedule, noise] = await Promise.all([
       getStates(),
       saunaConfigured()
         ? saunaStatus().catch((err: unknown) => {
@@ -32,14 +33,13 @@ export async function GET(req: NextRequest) {
           })
         : Promise.resolve(null),
       saunaConfigured() ? saunaScheduleStatus() : Promise.resolve({ stopAt: null }),
+      noiseConfigured()
+        ? noiseStatus().catch((err: unknown) => {
+            noiseNote = err instanceof Error ? err.message : String(err);
+            return null;
+          })
+        : Promise.resolve(null),
     ]);
-    let noiseNote: string | null = null;
-    const noise = noiseConfigured()
-      ? await noiseStatus().catch((err: unknown) => {
-          noiseNote = err instanceof Error ? err.message : String(err);
-          return null;
-        })
-      : null;
     const states = new Map(haStates.map((s) => [s.entity_id, s]));
     const devices = registry()
       .devices.filter((d) => d.visible)
@@ -136,6 +136,19 @@ export async function GET(req: NextRequest) {
           unit && typeof unit.attributes.temperature === "number"
             ? (unit.attributes.temperature as number)
             : null;
+        // A/C on/off state reads from the CoolMaster units too: the bridge is
+        // what actually commands the units and reflects within ~1s, while the
+        // Control4 zone entity mirrors it only after ~4s (lib/coolmaster) —
+        // that lag made the app show "off" for seconds after the A/C was
+        // already running. A multi-unit zone is on if any unit runs; the
+        // Control4 zone entity remains the fallback when units are absent.
+        const unitStates = (d.coolmasterUnits ?? [])
+          .map((u) => states.get(coolmasterEntityId(u)))
+          .filter((u): u is HaState => !!u && u.state !== "unavailable" && u.state !== "unknown");
+        const climateState =
+          d.kind === "climate" && unitStates.length
+            ? unitStates.find((u) => u.state !== "off")?.state ?? "off"
+            : null;
         return {
           id: d.id,
           label: d.label,
@@ -146,13 +159,14 @@ export async function GET(req: NextRequest) {
           category: d.category,
           capabilities: d.capabilities,
           requiresConfirmation: !!d.requiresConfirmation,
-          state: s?.state ?? "unknown",
-          available: !!s && s.state !== "unavailable" && s.state !== "unknown",
+          state: climateState ?? s?.state ?? "unknown",
+          available:
+            climateState != null || (!!s && s.state !== "unavailable" && s.state !== "unknown"),
           brightnessPct:
             attr("brightness") != null ? Math.round((attr("brightness")! / 255) * 100) : null,
           currentTemperature: attr("current_temperature"),
           targetTemperature: unitTarget ?? attr("temperature"),
-          hvacMode: d.kind === "climate" ? s?.state ?? null : null,
+          hvacMode: d.kind === "climate" ? climateState ?? s?.state ?? null : null,
           batteryPct: d.kind === "vacuum" ? attr("battery_level") : null,
           // Fan strength: vacuums report their own; climate zones read the
           // CoolMaster unit (the Control4 proxy reports no fan data), falling

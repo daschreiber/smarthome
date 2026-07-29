@@ -242,73 +242,71 @@ export async function POST(
     const call = buildServiceCall(device, cmd);
     await callService(call.domain, call.service, call.data);
 
-    // Read back until the state matches the command's intent. KNX status
-    // feedback arrives via the Control4 integration's Director polling, so
-    // ~4s is normal (observed 3.7s in commissioning); poll up to 8s.
-    // "confirmed" is ONLY claimed when the observed state proves the command
-    // (PRODUCT_SPEC §6); otherwise the command is reported as "sent".
+    // HA accepted the command — answer NOW ("sent") so the UI settles
+    // instantly, and verify in the background (the server is long-lived;
+    // same pattern as lib/changeover). Blocking the response on read-back
+    // held every tap for the ~4s the Control4 integration takes to poll KNX
+    // feedback from the Director (COMMISSIONING_LOG 2026-07-16 / 2026-07-29).
+    // The verified/unverified outcome still lands in the audit log: the
+    // read-back polls until the state proves the command's intent, and marks
+    // the result "(unverified)" when it never does.
     // Setpoints are the exception state can't prove: they verify against the
-    // CoolMaster unit's reported target temperature instead.
-    const wantedTemp = cmd.command === "set_temperature" ? cmd.temperature : null;
-    const setpointUnits = wantedTemp != null ? unitEntityIds(device) : null;
-    const readbackId = setpointUnits?.[0] ?? device.entityId;
-    const setpointReached = (s: { attributes: Record<string, unknown> } | null) =>
-      !!setpointUnits && !!s && s.attributes.temperature === wantedTemp;
-    // Fan speed and media source are the other attribute-verified commands:
-    // state alone can't prove them, but the entity echoes the accepted value.
-    const wantedFan = cmd.command === "set_fan_speed" ? cmd.fanSpeed : null;
-    const fanReached = (s: { attributes: Record<string, unknown> } | null) =>
-      wantedFan != null && !!s && s.attributes.fan_speed === wantedFan;
-    const wantedSource = cmd.command === "select_source" ? cmd.source : null;
-    const sourceReached = (s: { attributes: Record<string, unknown> } | null) =>
-      wantedSource != null && !!s && s.attributes.source === wantedSource;
-    const expected = expectedStates(cmd, device.kind);
-    const deadline = Date.now() + 8000;
-    let after = null;
-    for (;;) {
-      await new Promise((r) => setTimeout(r, 700));
-      after = await getState(readbackId);
-      if (setpointUnits) {
-        if (setpointReached(after)) break;
-        if (!after) break; // unit entity absent — integration not added yet
-      } else if (wantedFan != null) {
-        if (fanReached(after)) break;
-      } else if (wantedSource != null) {
-        if (sourceReached(after)) break;
-      } else if (!expected) break;
-      else if (after && expected.includes(after.state)) break;
-      if (Date.now() >= deadline) break;
-    }
-    const verified = setpointUnits
-      ? setpointReached(after)
-      : wantedFan != null
-        ? fanReached(after)
-        : wantedSource != null
-          ? sourceReached(after)
-          : !!expected && !!after && expected.includes(after.state);
-    const status = verified ? "confirmed" : "sent";
-
-    const durationMs = Date.now() - started;
-    audit({
-      ts: new Date().toISOString(),
-      user: auth.user,
-      deviceId,
-      entityId: device.entityId,
-      command,
-      args,
-      ok: true,
-      durationMs,
-      resultState: after ? `${after.state}${verified ? "" : " (unverified)"}` : undefined,
-    });
-    return NextResponse.json({
-      status,
-      state: after?.state ?? "unknown",
-      brightnessPct:
-        after && typeof after.attributes.brightness === "number"
-          ? Math.round(((after.attributes.brightness as number) / 255) * 100)
-          : null,
-      durationMs,
-    });
+    // CoolMaster unit's reported target temperature instead — and climate
+    // on/off reads back from the unit too (the bridge reflects in ~1s; the
+    // Control4 zone entity lags ~4s behind it).
+    const verifyInBackground = async () => {
+      const wantedTemp = cmd.command === "set_temperature" ? cmd.temperature : null;
+      const climateUnits = unitEntityIds(device);
+      const setpointUnits = wantedTemp != null ? climateUnits : null;
+      const readbackId = climateUnits?.[0] ?? device.entityId;
+      const setpointReached = (s: { attributes: Record<string, unknown> } | null) =>
+        !!setpointUnits && !!s && s.attributes.temperature === wantedTemp;
+      // Fan speed and media source are the other attribute-verified commands:
+      // state alone can't prove them, but the entity echoes the accepted value.
+      const wantedFan = cmd.command === "set_fan_speed" ? cmd.fanSpeed : null;
+      const fanReached = (s: { attributes: Record<string, unknown> } | null) =>
+        wantedFan != null && !!s && s.attributes.fan_speed === wantedFan;
+      const wantedSource = cmd.command === "select_source" ? cmd.source : null;
+      const sourceReached = (s: { attributes: Record<string, unknown> } | null) =>
+        wantedSource != null && !!s && s.attributes.source === wantedSource;
+      const expected = expectedStates(cmd, device.kind);
+      const deadline = Date.now() + 8000;
+      let after = null;
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 700));
+        after = await getState(readbackId).catch(() => null);
+        if (setpointUnits) {
+          if (setpointReached(after)) break;
+          if (!after) break; // unit entity absent — integration not added yet
+        } else if (wantedFan != null) {
+          if (fanReached(after)) break;
+        } else if (wantedSource != null) {
+          if (sourceReached(after)) break;
+        } else if (!expected) break;
+        else if (after && expected.includes(after.state)) break;
+        if (Date.now() >= deadline) break;
+      }
+      const verified = setpointUnits
+        ? setpointReached(after)
+        : wantedFan != null
+          ? fanReached(after)
+          : wantedSource != null
+            ? sourceReached(after)
+            : !!expected && !!after && expected.includes(after.state);
+      audit({
+        ts: new Date().toISOString(),
+        user: auth.user,
+        deviceId,
+        entityId: device.entityId,
+        command,
+        args,
+        ok: true,
+        durationMs: Date.now() - started,
+        resultState: after ? `${after.state}${verified ? "" : " (unverified)"}` : undefined,
+      });
+    };
+    void verifyInBackground();
+    return NextResponse.json({ status: "sent", state: "pending", durationMs: Date.now() - started });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     audit({

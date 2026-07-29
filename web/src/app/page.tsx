@@ -6,6 +6,7 @@ import NavBar from "./NavBar";
 import { BlindsIcon, BulbIcon, FlameIcon, GridIcon, LockIcon, MapIcon, SnowIcon } from "./icons";
 import { canProgram as roleCanProgram } from "@/lib/permissions";
 import { appKeyHeaders } from "@/lib/appKey";
+import ClimateCard from "./ClimateCard";
 
 /**
  * Phase C app shell in the decided design direction (docs/DESIGN_DIRECTION.md):
@@ -1248,7 +1249,7 @@ function Device({
   if (d.kind === "lock") return <LockCard d={d} busy={busy} send={send} />;
   if (d.kind === "noise") return <NoiseCard d={d} busy={busy} send={send} />;
   if (d.kind === "bed") return <BedCard d={d} busy={busy} send={send} star={star} />;
-  if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} star={star} />;
+  if (d.kind === "climate") return <ClimateCard d={d} hero flashCls={flashClass(flash)} busy={busy} send={send} star={star} />;
   if (d.kind === "vacuum") return <VacuumCard d={d} flash={flash} busy={busy} send={send} star={star} />;
   // Media zones with selectable inputs (the Control4 matrix rooms) get the
   // full source/transport card; plain streamers keep the toggle row below.
@@ -1360,113 +1361,6 @@ function Dimmer({
         if (e.key === "Enter") commit(Number((e.target as HTMLInputElement).value));
       }}
     />
-  );
-}
-
-function ClimateCard({
-  d, flash, busy, send, star,
-}: {
-  d: UiDevice;
-  flash?: Flash;
-  busy: boolean;
-  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
-  star?: React.ReactNode;
-}) {
-  const [target, setTarget] = useState<number | null>(null);
-  // The KNX side doesn't reliably echo the setpoint back (reports 0), so
-  // remember the last target we sent: the thermostat aligns to it, and the
-  // card must keep saying so. HA's echo still wins whenever it reports one.
-  const [committed, setCommitted] = useState<number | null>(null);
-  const known =
-    d.targetTemperature != null && d.targetTemperature >= 10 ? d.targetTemperature : null;
-  // With no setpoint at all, start stepping from the room's actual temperature.
-  const seed =
-    d.currentTemperature != null
-      ? Math.min(32, Math.max(10, Math.round(d.currentTemperature * 2) / 2))
-      : 24;
-  const shown = target ?? known ?? committed ?? seed;
-  const hasTarget = target != null || known != null || committed != null;
-  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const step = (delta: number) => {
-    const next = Math.min(32, Math.max(10, Math.round((shown + delta) * 2) / 2));
-    setTarget(next);
-    if (commitTimer.current) clearTimeout(commitTimer.current);
-    commitTimer.current = setTimeout(() => {
-      send(d.id, { command: "set_temperature", temperature: next }).then((r) => {
-        if (r.ok) setCommitted(next);
-        setTarget(null);
-      });
-    }, 900);
-  };
-
-  const active = d.hvacMode != null && d.hvacMode !== "off";
-  const pretty = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, " ");
-  // The card answers "how warm is it / what did I ask for": both numbers are
-  // labelled, and the setpoint row only exists while the zone runs — when it's
-  // off the On|Off segment is the whole story, so a second "off" and a stale
-  // target would just be noise.
-  return (
-    <div className={`climate-card hero ${active ? "on" : ""} ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
-      <div className="climate-main">
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {star}
-          <div>
-            {/* Owner's call: the room reading is context, not the hero —
-                quiet and grey; no mode pill (the tinted card + On segment
-                already say "running", and the fan row implies the mode). */}
-            <div className="now-quiet">
-              Room {d.currentTemperature != null ? `${d.currentTemperature}°` : "—"}
-            </div>
-            {!d.available && <div className="mode">unavailable</div>}
-          </div>
-        </div>
-        <div className="climate-set">
-          {active && (
-            <>
-              <button className="round-btn" disabled={busy || !d.available} onClick={() => step(-0.5)} aria-label="Lower target">−</button>
-              <div>
-                <div className="temp-lbl" style={{ textAlign: "center" }}>Set</div>
-                <div className="target">{hasTarget ? `${shown}°` : "—"}</div>
-              </div>
-              <button className="round-btn" disabled={busy || !d.available} onClick={() => step(0.5)} aria-label="Raise target">+</button>
-            </>
-          )}
-          <div className="onoff" role="group" aria-label={`${d.label} power`}>
-            <button
-              aria-pressed={active}
-              disabled={busy || !d.available}
-              onClick={() => { if (!active) send(d.id, { command: "turn_on" }); }}
-            >
-              On
-            </button>
-            <button
-              aria-pressed={!active}
-              disabled={busy || !d.available}
-              onClick={() => { if (active) send(d.id, { command: "turn_off" }); }}
-            >
-              Off
-            </button>
-          </div>
-        </div>
-      </div>
-      {active && d.fanSpeedList && d.fanSpeedList.length > 0 && (
-        <div className="climate-fan" role="group" aria-label={`${d.label} fan strength`}>
-          <span className="st">Fan</span>
-          {d.fanSpeedList.map((f) => (
-            <button
-              key={f}
-              className="fan-chip"
-              aria-pressed={d.fanSpeed === f}
-              disabled={busy}
-              onClick={() => { if (d.fanSpeed !== f) send(d.id, { command: "set_fan_mode", fanMode: f }); }}
-            >
-              {pretty(f)}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

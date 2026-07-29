@@ -23,6 +23,13 @@ export async function executeOnDevice(device: Device, cmd: Command): Promise<voi
     throw new Error("door locks are operated only from the lock card, never by scenes or automations");
   }
   if (device.kind === "sauna") {
+    // Enforce the per-kind safety bounds (sauna 40–100 °C) on EVERY path.
+    // The direct command route validates before dispatch, but scenes,
+    // automations, the scheduler, and the assistant all reach the heater
+    // through here — CommandSchema's outer 5–110 range is not the safety
+    // limit, so without this an automation or assistant proposal could set
+    // 101–110 °C.
+    assertCommandAllowed(device, cmd);
     if (cmd.command === "turn_on") await saunaStart();
     else if (cmd.command === "turn_off") await saunaStop();
     else if (cmd.command === "set_temperature") await saunaSetTemperature(cmd.temperature);

@@ -16,6 +16,7 @@ const Body = z.object({
   command: z.enum(["turn_on", "turn_off", "open", "close", "stop", "set_brightness"]),
   rooms: z.array(z.string()).max(50).optional(),
   brightnessPct: z.number().int().min(1).max(100).optional(),
+  confirm: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -24,9 +25,19 @@ export async function POST(req: NextRequest) {
 
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid request" }, { status: 400 });
-  const { system, command, rooms, brightnessPct } = parsed.data;
+  const { system, command, rooms, brightnessPct, confirm } = parsed.data;
   if (!SYSTEM_COMMANDS[system].includes(command)) {
     return NextResponse.json({ error: `${command} is not a ${system} system command` }, { status: 400 });
+  }
+  // Whole-house scope is disruptive; the UI's two-tap confirm must be enforced
+  // here, or a direct request bypasses it. Room-scoped subsets are ordinary
+  // quick controls and don't require confirmation.
+  const wholeHouse = !rooms || rooms.length === 0;
+  if (wholeHouse && confirm !== true) {
+    return NextResponse.json(
+      { error: "confirmation required", detail: `whole-house ${system} commands must re-send with "confirm": true` },
+      { status: 428 },
+    );
   }
   if (command === "set_brightness" && brightnessPct == null) {
     return NextResponse.json({ error: "set_brightness needs brightnessPct" }, { status: 400 });

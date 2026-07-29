@@ -140,6 +140,44 @@ describe("executeOnDevice noise routing", () => {
   });
 });
 
+describe("executeOnDevice sauna safety bounds", () => {
+  // The direct command route validates before dispatch, but scenes,
+  // automations, the scheduler, and the assistant reach the heater through
+  // executeOnDevice. CommandSchema's outer 5-110 range is not the safety
+  // limit — the per-kind 40-100 bound must hold here too.
+  const saunaDevice = {
+    id: "sauna__heater",
+    entityId: "climate.sauna",
+    kind: "sauna",
+    label: "Sauna",
+    room: "Sauna",
+    floor: null,
+    group: "Climate",
+    category: "sauna_heater",
+    visible: true,
+    capabilities: ["on_off", "set_temperature"],
+  } as Parameters<typeof executeOnDevice>[0];
+
+  it("rejects an out-of-range set-point and never calls upstream", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string | URL) => {
+      calls.push(String(url));
+      return new Response("{}", { status: 200 });
+    });
+    try {
+      await expect(
+        executeOnDevice(saunaDevice, { command: "set_temperature", temperature: 110 }),
+      ).rejects.toThrow(/out of range 40-100/);
+      await expect(
+        executeOnDevice(saunaDevice, { command: "set_temperature", temperature: 39 }),
+      ).rejects.toThrow(/out of range 40-100/);
+      expect(calls, "a rejected set-point must not reach the sauna service").toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe("stepHoldLights", () => {
   it("collects direct light turn-ons and room lights_on fan-outs, nothing else", () => {
     const step = {

@@ -114,7 +114,9 @@ export default function SystemPage() {
         const res = await fetch("/api/systems/command", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...headers() },
-          body: JSON.stringify({ system, command, ...(rooms ? { rooms } : {}) }),
+          // Whole-house sends (no rooms) go through the two-tap arm/confirm
+          // above; carry that confirmation to the server, which requires it.
+          body: JSON.stringify({ system, command, confirm: true, ...(rooms ? { rooms } : {}) }),
         });
         const out = await res.json();
         if (!res.ok) throw new Error(out.error ?? "command failed");

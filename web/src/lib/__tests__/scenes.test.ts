@@ -106,6 +106,18 @@ describe("scene store", () => {
     expect(() => createScene("Empty", "Den", "d@x.com", [])).toThrow(/nothing capturable/);
     expect(() => createScene("  ", "Den", "d@x.com", [{ deviceId: "a", command: { command: "turn_on" } }])).toThrow(/name/);
   });
+
+  it("refuses to capture over a scene another user owns, but the owner can still compose", () => {
+    createScene("Movie Night", "Den", "alice@x.com", [{ deviceId: "den__lights", command: { command: "turn_on" } }]);
+    // A different user cannot silently overwrite Alice's scene by name.
+    expect(() =>
+      createScene("movie night", "Gym", "bob@x.com", [{ deviceId: "gym__lights", command: { command: "turn_on" } }]),
+    ).toThrow(/another user/);
+    // Alice composing her own scene across rooms still works.
+    const composed = createScene("Movie Night", "Gym", "alice@x.com", [{ deviceId: "gym__lights", command: { command: "turn_on" } }]);
+    expect(listScenes()).toHaveLength(1);
+    expect(composed.states.map((st) => st.deviceId).sort()).toEqual(["den__lights", "gym__lights"]);
+  });
 });
 
 describe("updateSceneDevice — the surgical edit", () => {

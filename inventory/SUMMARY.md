@@ -1,5 +1,12 @@
 # Home Assistant Entity Inventory
 
+> **Frozen commissioning snapshot.** This export (and `entities.json`
+> beside it) predates the CoolMaster integration, the native KNX covers,
+> the Yamaha receivers, and the Roborocks. It is kept as the record of
+> what Control4 exposed at commissioning time — it is not refreshed, and
+> `data/entity_map.json` is maintained by hand, not regenerated from it
+> (see `tools/build_entity_map.py`).
+
 Generated: 2026-07-16 13:37 UTC  
 Source: GET /api/states (read-only)  
 Total entities exported: **239** (242 fetched, 3 skipped: person/device_tracker/zone)

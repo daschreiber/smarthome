@@ -15,5 +15,13 @@ export async function GET(req: NextRequest) {
       { status: 501 },
     );
   }
+  // The link flow's signed state needs the session secret; an APP_KEY-only
+  // deployment gets a clear pointer instead of a 500 from the mint.
+  if (!process.env.APP_SESSION_SECRET) {
+    return NextResponse.json(
+      { error: "set APP_SESSION_SECRET first — the Spotify link flow signs its OAuth state with it" },
+      { status: 501 },
+    );
+  }
   return NextResponse.redirect(authUrl(spotifyRedirectUri()));
 }

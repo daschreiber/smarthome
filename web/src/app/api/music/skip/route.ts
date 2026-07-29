@@ -26,6 +26,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "skip failed";
+    audit({
+      ts: new Date().toISOString(), user: auth.user, deviceId: "music:spotify",
+      entityId: "spotify", command: `skip_${direction}`, args: {}, ok: false,
+      durationMs: Date.now() - started, error: message,
+    });
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

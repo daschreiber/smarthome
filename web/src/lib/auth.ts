@@ -29,8 +29,3 @@ export function authenticate(req: NextRequest): { ok: boolean; user: string; rol
   if (process.env.NODE_ENV === "production") return { ok: false, user: "", role: "member" };
   return { ok: true, user: "dev", role: "admin" };
 }
-
-/** Back-compat boolean used by existing routes. */
-export function authorized(req: NextRequest): boolean {
-  return authenticate(req).ok;
-}

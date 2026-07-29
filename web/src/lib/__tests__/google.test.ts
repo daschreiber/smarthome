@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   appBaseUrl, createStateToken, emailFromIdTokenPayload, googleConfigured, redirectUri, verifyStateToken,
 } from "../google";
+import {
+  createStateToken as createStateTokenScoped,
+  verifyStateToken as verifyStateTokenScoped,
+} from "../urls";
 
 beforeEach(() => {
   process.env.APP_SESSION_SECRET = "test-secret";
@@ -42,6 +46,17 @@ describe("state tokens", () => {
     expect(verifyStateToken(t, 1_000_000 + 10 * 60_000 + 1)).toBe(false);
     expect(verifyStateToken(t.slice(0, -2) + "xx", 1_000_000)).toBe(false);
     expect(verifyStateToken("garbage", 1_000_000)).toBe(false);
+  });
+
+  it("never verifies in another flow: a Google sign-in state must not pass the Spotify callback", () => {
+    // The Google mint route is unauthenticated (it's the sign-in button);
+    // the Spotify mint is admin-gated. Cross-acceptance would let anyone
+    // relink the household Spotify account with a fished Google state.
+    const googleState = createStateToken(1_000_000);
+    expect(verifyStateTokenScoped("spotify-link", googleState, 1_000_000)).toBe(false);
+    const spotifyState = createStateTokenScoped("spotify-link", 1_000_000);
+    expect(verifyStateToken(spotifyState, 1_000_000)).toBe(false);
+    expect(verifyStateTokenScoped("spotify-link", spotifyState, 1_000_000)).toBe(true);
   });
 });
 

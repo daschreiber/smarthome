@@ -1,6 +1,8 @@
-import fs from "node:fs";
 import path from "node:path";
+import { readJsonFile, writeJsonFile } from "./store";
 import { z } from "zod";
+import { wallClock } from "./houseclock";
+import { slug } from "./registry";
 
 /**
  * App-level automations: time-triggered steps executed by the in-process
@@ -15,7 +17,7 @@ import { z } from "zod";
  * documented behavior.
  */
 
-export const ActionSchema = z.union([
+const ActionSchema = z.union([
   z.object({ type: z.literal("scene"), sceneId: z.string().min(1) }),
   z.object({
     type: z.literal("room"),
@@ -29,7 +31,7 @@ export const ActionSchema = z.union([
   }),
 ]);
 
-export const StepSchema = z
+const StepSchema = z
   .object({
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "time must be HH:MM").optional(),
     sun: z.enum(["sunset", "sunrise"]).optional(),
@@ -85,9 +87,7 @@ function storePath(): string {
 
 function load(): Automation[] {
   try {
-    const items = JSON.parse(fs.readFileSync(storePath(), "utf8")) as Array<
-      Automation & { awayBehavior?: "pause" | "run" }
-    >;
+    const items = readJsonFile<Array<Automation & { awayBehavior?: "pause" | "run" }>>(storePath(), []);
     // Legacy Away-mode field (lived one day, 2026-07-25): an explicit
     // "pause" was a choice to stop while away → "home"; anything else
     // takes the new default ("always", by absence). Normalized in memory;
@@ -103,7 +103,7 @@ function load(): Automation[] {
 }
 
 function save(items: Automation[]): void {
-  fs.writeFileSync(storePath(), JSON.stringify(items, null, 2));
+  writeJsonFile(storePath(), items);
 }
 
 export function listAutomations(): Automation[] {
@@ -112,7 +112,7 @@ export function listAutomations(): Automation[] {
 
 export function createAutomation(spec: AutomationSpec, createdBy: string): Automation {
   const items = load();
-  const base = spec.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "automation";
+  const base = slug(spec.name) || "automation";
   let id = base;
   let n = 2;
   while (items.some((a) => a.id === id)) id = `${base}_${n++}`;
@@ -164,20 +164,8 @@ export function updateAutomation(id: string, spec: AutomationSpec): Automation {
 export function nowParts(d = new Date(), tz = process.env.APP_TZ): {
   hhmm: string; day: number; date: string;
 } {
-  const timeZone = tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone, hour: "2-digit", minute: "2-digit", hour12: false,
-    year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
-  }).formatToParts(d);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  // en-GB can render midnight as "24:00"; normalize.
-  const hour = get("hour") === "24" ? "00" : get("hour");
-  return {
-    hhmm: `${hour}:${get("minute")}`,
-    day: days.indexOf(get("weekday")),
-    date: `${get("year")}-${get("month")}-${get("day")}`,
-  };
+  const { hhmm, day, date } = wallClock(d, tz);
+  return { hhmm, day, date };
 }
 
 /** Recent sun event instants (epoch ms), oldest first — see lib/sun.ts. */

@@ -111,7 +111,7 @@ export async function tick(): Promise<void> {
  * system (or a human at a wall switch) wins within a few minutes, with the
  * whole fight timestamped in the audit log.
  */
-export const HOLD_MAX_REASSERTS = 8;
+const HOLD_MAX_REASSERTS = 8;
 
 /**
  * holdUntil enforcement: while a fired step's hold window is open, any of

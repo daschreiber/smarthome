@@ -65,7 +65,9 @@ export interface Device {
   batteryEntity?: string;
 }
 
-function slug(s: string): string {
+/** Shared app-wide slug: scene and automation ids use the same rules as
+ *  device ids (apostrophes collapse, not underscore). */
+export function slug(s: string): string {
   return s
     .toLowerCase()
     .replace(/['’]/g, "")
@@ -80,9 +82,8 @@ function capabilitiesFor(row: MapRow): Capability[] {
         ? ["on_off", "brightness"]
         : ["on_off"];
     case "cover":
-      // All Control4 shades in the inventory report supported_features 15
-      // (open/close/stop/position); position values are unreliable (-1 seen),
-      // so expose stop-capable control and treat position as best-effort.
+      // Native HA KNX covers since 2026-07-26: open/close/stop plus real
+      // position feedback (trusted when COVER_STATE_TRUSTED=1).
       return ["open_close_stop", "position"];
     case "climate":
       return ["set_temperature", "hvac_mode", "fan_mode"];

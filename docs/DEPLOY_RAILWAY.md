@@ -67,6 +67,24 @@ network-scoped, only the login restriction was.
    | `GOOGLE_CLIENT_SECRET` | optional — pairs with `GOOGLE_CLIENT_ID`. Google only proves identity; access still requires the email to be on the app's user list |
    | `RESEND_API_KEY` | optional — enables password-reset emails (resend.com) |
    | `EMAIL_FROM` | optional — sender for reset emails, needs a verified domain on Resend |
+   | `AWAY_PATH` | `/data/away.json` — the Away switch's state file |
+   | `SAUNAWATCH_PATH` | `/data/saunawatch.json` — the sauna-follower watcher's state file |
+   | `SAUNA_AC_TEMP` | optional — Master Bathroom A/C setpoint while the sauna heats (default 18) |
+   | `SAUNA_AC_FAN` | optional — fan mode for the sauna follower (default `high`) |
+   | `COVER_STATE_TRUSTED` | `1` — shade positions come from the native KNX covers and are real; the UI shows sliders/state instead of best-effort buttons (set on Railway 2026-07-26, `knx/README.md` item 8) |
+   | `SLEEPWATCH_LIFT_STATE` | optional — HA state that pauses the sleep watcher (default `off`) |
+   | `EIGHTSLEEP_LEFT_TARGET_ENTITY` / `EIGHTSLEEP_RIGHT_TARGET_ENTITY` | Eight Sleep per-side temperature `number.*` entities — a side configured = a bed card side in the app (`docs/EIGHT_SLEEP_SETUP.md`) |
+   | `EIGHTSLEEP_LEFT_PRESENCE_ENTITY` / `EIGHTSLEEP_RIGHT_PRESENCE_ENTITY` | optional — per-side presence `binary_sensor.*` entities (display-only) |
+   | `EIGHTSLEEP_LEFT_LABEL` / `EIGHTSLEEP_RIGHT_LABEL` | optional — card labels (default "Bed — left/right side") |
+   | `EIGHTSLEEP_HEAT_DURATION_SECONDS` | optional — heat-level hold duration (default 28800 = a full 8-hour night, per `docs/EIGHT_SLEEP_SETUP.md`) |
+   | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | optional — enables the Spotify link flow (More → Spotify, admin-only) and the music controls on receiver cards |
+   | `SPOTIFY_TOKEN_PATH` | `/data/spotify_token.json` — where the linked account's refresh token lives |
+   | `SPOTIFY_DEFAULT_CONTEXT` | optional — playlist/album URI Play falls back to when nothing is paused |
+   | `VACUUM_ROOMS_PATH` | `/data/vacuum_rooms.json` — user-assigned Roborock segment names |
+   | `ENTITY_MAP_PATH` | optional — explicit path to `entity_map.json`; unset, the app falls back to `../data/` then `./data/` (the repo copies) |
+
+   This table is the deployment source of truth — when code starts reading
+   a new `process.env.*` variable, add it here in the same commit.
 
    The app refuses all requests in production if no auth is configured —
    misconfiguration fails closed, not open. Without `RESEND_API_KEY`,

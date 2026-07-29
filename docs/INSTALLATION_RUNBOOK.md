@@ -1,5 +1,10 @@
 # Installation and Commissioning Runbook
 
+> **Status: completed.** All stages were executed (Stages 1–6 on site by
+> 2026-07-16, deployment Stages 7–8 per `DEPLOY_RAILWAY.md` on
+> 2026-07-17). Kept as the record of how the system was brought up;
+> day-to-day state lives in `docs/COMMISSIONING_LOG.md`.
+
 Use this when the Home Assistant Green arrives.
 
 ## Before starting

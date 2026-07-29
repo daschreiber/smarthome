@@ -1,6 +1,6 @@
-import fs from "node:fs";
 import path from "node:path";
-import type { Device } from "./registry";
+import { readJsonFile, writeJsonFile } from "./store";
+import { slug, type Device } from "./registry";
 import type { HaState } from "./ha";
 
 /**
@@ -34,15 +34,11 @@ function scenesPath(): string {
 }
 
 function load(): Scene[] {
-  try {
-    return JSON.parse(fs.readFileSync(scenesPath(), "utf8")) as Scene[];
-  } catch {
-    return [];
-  }
+  return readJsonFile<Scene[]>(scenesPath(), []);
 }
 
 function save(scenes: Scene[]): void {
-  fs.writeFileSync(scenesPath(), JSON.stringify(scenes, null, 2));
+  writeJsonFile(scenesPath(), scenes);
 }
 
 export function listScenes(): Scene[] {
@@ -81,10 +77,6 @@ export function updateSceneDevice(
   return scene;
 }
 
-function slug(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-}
-
 /**
  * Pure: derive the replayable command list from live device+state data.
  * Exported for tests.
@@ -113,10 +105,13 @@ export function buildSceneStates(
         out.push({ deviceId: d.id, command: { command: "turn_off" } });
       }
     } else if (d.kind === "cover") {
-      // Covers are NOT captured from state: C4 position feedback is stuck
-      // (~1%, every cover reads "open" forever), so a blinds-down capture
-      // would store "open" and replay by raising them. Shades enter a scene
-      // only by explicit choice at capture time (the route appends them).
+      // Covers are NOT captured from state — originally because the C4
+      // position feedback was frozen; positions are real since the KNX
+      // repoint (COVER_STATE_TRUSTED), but the explicit-choice design is
+      // kept: the capturer declares shades open/closed at capture time
+      // (the route appends them), which reads intent rather than whatever
+      // position the shades happened to be in. Revisit if position-true
+      // scene capture is ever wanted.
       continue;
     } else if (d.kind === "climate") {
       // Capture the power state too: a scene that only sets 16° on a unit

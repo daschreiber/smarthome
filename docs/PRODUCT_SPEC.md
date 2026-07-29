@@ -1,5 +1,12 @@
 # Product Specification — Smart Home Control
 
+> **Status: pre-build product spec (2026-07), kept as the design record.**
+> The product shipped and then grew past this scope: sauna control, voice
+> (Alexa/Siri via HA exposure), and AI-proposed automations — all listed as
+> excluded in §4 — are live, deliberately built with the permission and
+> confirmation design this spec called for. What the app does today is
+> summarized in the root `README.md`; the API is `docs/API_CONTRACT.md`.
+
 ## 1. Goal
 
 Build a private, simple web and phone-friendly application that controls the existing Control4 home through Home Assistant Green.

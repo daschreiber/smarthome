@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import path from "node:path";
+import { readJsonFile, writeJsonFile } from "./store";
 
 /**
  * Per-user favorites, stored as a small JSON file next to the audit log.
@@ -14,11 +14,7 @@ function favPath(): string {
 }
 
 function load(): FavMap {
-  try {
-    return JSON.parse(fs.readFileSync(favPath(), "utf8")) as FavMap;
-  } catch {
-    return {};
-  }
+  return readJsonFile<FavMap>(favPath(), {});
 }
 
 export function getFavorites(user: string): string[] {
@@ -31,6 +27,6 @@ export function toggleFavorite(user: string, deviceId: string): string[] {
   if (set.has(deviceId)) set.delete(deviceId);
   else set.add(deviceId);
   all[user] = [...set];
-  fs.writeFileSync(favPath(), JSON.stringify(all, null, 2));
+  writeJsonFile(favPath(), all);
   return all[user];
 }

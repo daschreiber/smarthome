@@ -59,6 +59,11 @@ export async function POST(req: NextRequest) {
       });
     } else {
       setTimerEnabled(body.id, body.enabled !== false);
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId: "timers",
+        entityId: `timer.${body.id}`, command: "toggle_timer",
+        args: { enabled: body.enabled !== false }, ok: true, durationMs: 0,
+      });
     }
     return NextResponse.json({ ok: true, timers: timersFor(auth) });
   } catch (err) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkCredentials, createSessionToken, usersConfigured } from "@/lib/session";
+import { audit } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   if (!usersConfigured()) {
@@ -9,13 +10,23 @@ export async function POST(req: NextRequest) {
   if (!body?.email || !body?.password) {
     return NextResponse.json({ error: "email and password required" }, { status: 400 });
   }
+  const email = body.email.trim().toLowerCase();
   if (!checkCredentials(body.email, body.password)) {
+    audit({
+      ts: new Date().toISOString(), user: email, deviceId: "auth", entityId: "app.auth",
+      command: "password_signin", args: {}, ok: false, durationMs: 0,
+      error: "wrong email or password",
+    });
     // Small fixed delay to blunt guessing.
     await new Promise((r) => setTimeout(r, 600));
     return NextResponse.json({ error: "wrong email or password" }, { status: 401 });
   }
-  const res = NextResponse.json({ ok: true, user: body.email.trim().toLowerCase() });
-  res.cookies.set("session", createSessionToken(body.email.trim().toLowerCase()), {
+  audit({
+    ts: new Date().toISOString(), user: email, deviceId: "auth", entityId: "app.auth",
+    command: "password_signin", args: {}, ok: true, durationMs: 0,
+  });
+  const res = NextResponse.json({ ok: true, user: email });
+  res.cookies.set("session", createSessionToken(email), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

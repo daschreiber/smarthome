@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { haHealth } from "@/lib/ha";
 import { registry } from "@/lib/registry";
-import { authorized } from "@/lib/auth";
+import { authenticate } from "@/lib/auth";
 import { saunaConfigured, saunaStatus } from "@/lib/sauna";
 import { noiseConfigured, noiseStatus } from "@/lib/whitenoise";
 
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const auth = authenticate(req);
+  if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const ha = await haHealth();
   let sauna: { configured: boolean; ok: boolean; message: string };
   if (!saunaConfigured()) {

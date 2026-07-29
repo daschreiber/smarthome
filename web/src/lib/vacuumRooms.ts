@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readJsonFile, writeJsonFile } from "./store";
 import type { Segment } from "./vacuum";
 
 /**
@@ -26,11 +27,7 @@ function storePath(): string {
 }
 
 function load(): Store {
-  try {
-    return JSON.parse(fs.readFileSync(storePath(), "utf8")) as Store;
-  } catch {
-    return {};
-  }
+  return readJsonFile<Store>(storePath(), {});
 }
 
 export function segmentNames(entityId: string): Record<string, string> {
@@ -43,7 +40,7 @@ export function setSegmentName(entityId: string, segmentId: number, name: string
   if (name) forEntity[String(segmentId)] = name;
   else delete forEntity[String(segmentId)];
   all[entityId] = forEntity;
-  fs.writeFileSync(storePath(), JSON.stringify(all, null, 2) + "\n");
+  writeJsonFile(storePath(), all);
 }
 
 export type NamedSegment = Segment & { named: boolean };

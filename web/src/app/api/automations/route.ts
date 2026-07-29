@@ -136,6 +136,11 @@ export async function POST(req: NextRequest) {
     }
     // toggle
     setEnabled(body.id, body.enabled !== false);
+    audit({
+      ts: new Date().toISOString(), user: auth.user, deviceId: "automations",
+      entityId: `automation.${body.id}`, command: "toggle_automation",
+      args: { enabled: body.enabled !== false }, ok: true, durationMs: 0,
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "failed" }, { status: 400 });

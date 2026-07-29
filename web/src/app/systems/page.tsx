@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import NavBar from "../NavBar";
+import { appKeyHeaders } from "@/lib/appKey";
 import { BlindsIcon, BulbIcon, FlameIcon, SnowIcon } from "../icons";
 
 /** Systems index: one card per house-wide function, with live counts. */
@@ -16,17 +17,10 @@ interface UiDevice {
 
 export default function Systems() {
   const [devices, setDevices] = useState<UiDevice[]>([]);
-  const keyRef = useRef("");
-
-  useEffect(() => {
-    keyRef.current = localStorage.getItem("appKey") ?? "";
-  }, []);
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/home", {
-        headers: /^[\x21-\x7e]+$/.test(keyRef.current.trim()) && keyRef.current.trim() ? { "x-app-key": keyRef.current.trim() } : {},
-      });
+      const res = await fetch("/api/home", { headers: appKeyHeaders() });
       if (res.status === 401) { location.href = "/"; return; }
       if (res.ok) setDevices(((await res.json()) as { devices: UiDevice[] }).devices);
     } catch { /* next poll */ }

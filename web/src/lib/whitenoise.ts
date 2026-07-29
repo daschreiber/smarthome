@@ -32,7 +32,7 @@ export interface NoiseStatus {
 }
 
 /** True when sound control goes through Home Assistant (LAN add-on mode). */
-export function noiseViaHa(): boolean {
+function noiseViaHa(): boolean {
   const v = (process.env.WHITENOISE_VIA_HA ?? "").trim().toLowerCase();
   return v === "1" || v === "true";
 }

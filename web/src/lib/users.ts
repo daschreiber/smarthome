@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
 import path from "node:path";
+import { readJsonFile, writeJsonFile } from "./store";
 
 /**
  * User store: a JSON file (point USERS_PATH at a persistent volume in
@@ -39,16 +39,15 @@ export function verifyPassword(pw: string, stored: string): boolean {
   return test.length === ref.length && crypto.timingSafeEqual(test, ref);
 }
 
+// Missing file = empty store; corrupt file = loud error (lib/store.ts).
+// Critical here: if a truncated users.json read as "empty", ensureSeeded()
+// would re-seed from APP_USERS and overwrite every account.
 function load(): UserRecord[] {
-  try {
-    return JSON.parse(fs.readFileSync(usersPath(), "utf8")) as UserRecord[];
-  } catch {
-    return [];
-  }
+  return readJsonFile<UserRecord[]>(usersPath(), []);
 }
 
 function save(users: UserRecord[]): void {
-  fs.writeFileSync(usersPath(), JSON.stringify(users, null, 2));
+  writeJsonFile(usersPath(), users);
 }
 
 export function ensureSeeded(): void {

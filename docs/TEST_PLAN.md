@@ -37,11 +37,16 @@ Run against selected reversible devices only.
 
 ### Cover
 
-- Read open/closed/position state
+(Native HA KNX covers since 2026-07-26 — position state is real and
+trusted with `COVER_STATE_TRUSTED=1`; the old Control4 frozen-position
+caveats no longer apply.)
+
+- Read open/closed/position state and verify position tracks a wall-keypad
+  move
 - Open
 - Stop
 - Close
-- Set position where supported
+- Set position via the slider
 - Avoid repeated conflicting commands
 
 ### Climate
@@ -89,8 +94,11 @@ Run against selected reversible devices only.
 ## 4. Performance targets
 
 - Dashboard initial response: under 2 seconds on a normal connection, excluding cold starts
-- Command acknowledgement: under 1 second
-- Confirmed state: ordinarily under 5 seconds
+- Command acknowledgement: immediate — HA-backed commands answer `sent` as
+  soon as the service call is accepted, and the UI applies the change
+  optimistically (perceived-latency model, 2026-07-29)
+- Confirmed state: background verification ordinarily within 5 seconds;
+  the UI reconciles silently, surfacing only genuine failures
 - State polling while active: every 2–5 seconds for MVP
 - No uncontrolled retry storms
 

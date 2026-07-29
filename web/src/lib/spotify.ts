@@ -1,6 +1,7 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { createStateToken, publicBaseUrl } from "./urls";
+import { writeJsonFile } from "./store";
 
 /**
  * Spotify Web API client (Authorization Code flow). The backend acts as the
@@ -40,19 +41,12 @@ export function spotifyConfigured(): boolean {
  * The redirect URI must byte-match the Spotify dashboard entry. Never derive
  * it from the request: behind Railway's proxy, nextUrl.origin resolves to
  * the internal host — Spotify answered "redirect_uri: Not matching
- * configuration" to the owner's very first link attempt. APP_BASE_URL is
- * the public origin; RAILWAY_PUBLIC_DOMAIN backs it up.
+ * configuration" to the owner's very first link attempt. publicBaseUrl
+ * (lib/urls.ts) encodes that rule; no request origin is passed here, so it
+ * throws rather than guess.
  */
-export function appBaseUrl(): string {
-  const base =
-    process.env.APP_BASE_URL ??
-    (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null);
-  if (!base) throw new Error("APP_BASE_URL is not set — required for the Spotify redirect URI");
-  return base.replace(/\/$/, "");
-}
-
 export function spotifyRedirectUri(): string {
-  return `${appBaseUrl()}/api/spotify/callback`;
+  return `${publicBaseUrl()}/api/spotify/callback`;
 }
 
 function tokenPath(): string {
@@ -68,8 +62,7 @@ export function spotifyLinked(): boolean {
 }
 
 function saveRefreshToken(refreshToken: string): void {
-  fs.mkdirSync(path.dirname(tokenPath()), { recursive: true });
-  fs.writeFileSync(tokenPath(), JSON.stringify({ refresh_token: refreshToken }, null, 2));
+  writeJsonFile(tokenPath(), { refresh_token: refreshToken });
 }
 
 function basicAuth(): string {
@@ -80,28 +73,17 @@ function basicAuth(): string {
 
 // ---- OAuth ----
 
-/** In-memory state nonces (the web service is a long-lived node process). */
-const pendingStates = new Map<string, number>();
-
+/** The state is an HMAC-signed token (lib/urls.ts) — stateless, so the link
+ *  survives a deploy mid-flow and works across instances. */
 export function authUrl(redirectUri: string): string {
-  const state = crypto.randomBytes(16).toString("hex");
-  pendingStates.set(state, Date.now());
-  // Prune anything older than 10 minutes while we're here.
-  for (const [s, t] of pendingStates) if (Date.now() - t > 600_000) pendingStates.delete(s);
   const q = new URLSearchParams({
     response_type: "code",
     client_id: process.env.SPOTIFY_CLIENT_ID!,
     scope: "user-read-playback-state user-modify-playback-state",
     redirect_uri: redirectUri,
-    state,
+    state: createStateToken("spotify-link"),
   });
   return `${ACCOUNTS}/authorize?${q}`;
-}
-
-export function consumeState(state: string): boolean {
-  const known = pendingStates.has(state);
-  pendingStates.delete(state);
-  return known;
 }
 
 export async function exchangeCode(code: string, redirectUri: string): Promise<void> {

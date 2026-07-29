@@ -258,41 +258,49 @@ export async function POST(
       const wantedTemp = cmd.command === "set_temperature" ? cmd.temperature : null;
       const climateUnits = unitEntityIds(device);
       const setpointUnits = wantedTemp != null ? climateUnits : null;
-      const readbackId = climateUnits?.[0] ?? device.entityId;
-      const setpointReached = (s: { attributes: Record<string, unknown> } | null) =>
-        !!setpointUnits && !!s && s.attributes.temperature === wantedTemp;
+      // A multi-unit zone's command targets EVERY unit, so verification must
+      // read them all: one unit off with another still running is not a
+      // proven zone-wide off (Codex review, PR #89).
+      const readbackIds = climateUnits?.length ? climateUnits : [device.entityId];
+      type Read = { state: string; attributes: Record<string, unknown> } | null;
+      const setpointReached = (ss: Read[]) =>
+        !!setpointUnits && ss.every((s) => !!s && s.attributes.temperature === wantedTemp);
       // Fan speed and media source are the other attribute-verified commands:
-      // state alone can't prove them, but the entity echoes the accepted value.
+      // state alone can't prove them, but the entity echoes the accepted
+      // value. Both are single-entity commands (vacuum / media zone).
       const wantedFan = cmd.command === "set_fan_speed" ? cmd.fanSpeed : null;
-      const fanReached = (s: { attributes: Record<string, unknown> } | null) =>
-        wantedFan != null && !!s && s.attributes.fan_speed === wantedFan;
+      const fanReached = (ss: Read[]) =>
+        wantedFan != null && !!ss[0] && ss[0].attributes.fan_speed === wantedFan;
       const wantedSource = cmd.command === "select_source" ? cmd.source : null;
-      const sourceReached = (s: { attributes: Record<string, unknown> } | null) =>
-        wantedSource != null && !!s && s.attributes.source === wantedSource;
+      const sourceReached = (ss: Read[]) =>
+        wantedSource != null && !!ss[0] && ss[0].attributes.source === wantedSource;
       const expected = expectedStates(cmd, device.kind);
+      const stateReached = (ss: Read[]) =>
+        !!expected && ss.length > 0 && ss.every((s) => !!s && expected.includes(s.state));
       const deadline = Date.now() + 8000;
-      let after = null;
+      let reads: Read[] = [];
       for (;;) {
         await new Promise((r) => setTimeout(r, 700));
-        after = await getState(readbackId).catch(() => null);
+        reads = await Promise.all(readbackIds.map((id) => getState(id).catch(() => null)));
         if (setpointUnits) {
-          if (setpointReached(after)) break;
-          if (!after) break; // unit entity absent — integration not added yet
+          if (setpointReached(reads)) break;
+          if (reads.some((s) => !s)) break; // unit entity absent — integration not added yet
         } else if (wantedFan != null) {
-          if (fanReached(after)) break;
+          if (fanReached(reads)) break;
         } else if (wantedSource != null) {
-          if (sourceReached(after)) break;
+          if (sourceReached(reads)) break;
         } else if (!expected) break;
-        else if (after && expected.includes(after.state)) break;
+        else if (stateReached(reads)) break;
         if (Date.now() >= deadline) break;
       }
       const verified = setpointUnits
-        ? setpointReached(after)
+        ? setpointReached(reads)
         : wantedFan != null
-          ? fanReached(after)
+          ? fanReached(reads)
           : wantedSource != null
-            ? sourceReached(after)
-            : !!expected && !!after && expected.includes(after.state);
+            ? sourceReached(reads)
+            : stateReached(reads);
+      const seen = [...new Set(reads.filter(Boolean).map((s) => s!.state))].join("/");
       audit({
         ts: new Date().toISOString(),
         user: auth.user,
@@ -302,7 +310,7 @@ export async function POST(
         args,
         ok: true,
         durationMs: Date.now() - started,
-        resultState: after ? `${after.state}${verified ? "" : " (unverified)"}` : undefined,
+        resultState: seen ? `${seen}${verified ? "" : " (unverified)"}` : undefined,
       });
     };
     void verifyInBackground();

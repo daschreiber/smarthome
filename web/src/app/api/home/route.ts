@@ -140,14 +140,22 @@ export async function GET(req: NextRequest) {
         // what actually commands the units and reflects within ~1s, while the
         // Control4 zone entity mirrors it only after ~4s (lib/coolmaster) —
         // that lag made the app show "off" for seconds after the A/C was
-        // already running. A multi-unit zone is on if any unit runs; the
-        // Control4 zone entity remains the fallback when units are absent.
-        const unitStates = (d.coolmasterUnits ?? [])
-          .map((u) => states.get(coolmasterEntityId(u)))
-          .filter((u): u is HaState => !!u && u.state !== "unavailable" && u.state !== "unknown");
+        // already running. A multi-unit zone is on if any unit runs. But
+        // "off" is a claim about EVERY unit, so it's only made when every
+        // mapped unit reported a usable state — a partial read with the
+        // missing unit running would otherwise show the zone off while the
+        // Control4 entity correctly says on (Codex review, PR #89). Any
+        // shortfall falls back to the Control4 zone entity.
+        const unitReads = (d.coolmasterUnits ?? []).map((u) =>
+          states.get(coolmasterEntityId(u)),
+        );
+        const unitStates = unitReads.filter(
+          (u): u is HaState => !!u && u.state !== "unavailable" && u.state !== "unknown",
+        );
+        const running = unitStates.find((u) => u.state !== "off");
         const climateState =
           d.kind === "climate" && unitStates.length
-            ? unitStates.find((u) => u.state !== "off")?.state ?? "off"
+            ? running?.state ?? (unitStates.length === unitReads.length ? "off" : null)
             : null;
         return {
           id: d.id,

@@ -68,6 +68,93 @@ interface SendResult {
   error?: string;
 }
 
+/**
+ * Optimistic overlay: what a just-sent command promises the card will show.
+ * Applied the moment the user taps, held until the server proves it (`done`)
+ * or the deadline passes — Control4 state feedback lags ~4s behind reality,
+ * so a stale poll must not flip the card back in the meantime.
+ */
+interface PendingPatch {
+  patch: Partial<UiDevice>;
+  done: (d: UiDevice) => boolean;
+  until: number;
+}
+
+/** Overlay deadline: C4 feedback lag (~4s) + a poll cycle (3s) + margin. */
+const PENDING_MS = 12_000;
+
+/**
+ * The expected outcome of a command, per kind. Sauna, noise, and bed cards
+ * stay non-optimistic on purpose: the sauna is safety-tier (its card must
+ * only ever show verified heater state) and the other two can't be proven by
+ * entity state at all. Numeric echoes compare with a small tolerance — the
+ * server round-trips brightness through HA's 0-255 scale.
+ */
+function optimisticFor(kind: string, body: Record<string, unknown>): PendingPatch | null {
+  // Locks join the never-optimistic set: a door must only ever display its
+  // PROVEN bolt state (the lock route verifies synchronously for the same
+  // reason), and lock/unlock have no cases below anyway.
+  if (kind === "sauna" || kind === "noise" || kind === "bed" || kind === "lock") return null;
+  const until = Date.now() + PENDING_MS;
+  const near = (a: number | null | undefined, b: number) => a != null && Math.abs(a - b) <= 2;
+  const isOn = (d: UiDevice) =>
+    d.state !== "off" && d.state !== "unavailable" && d.state !== "unknown";
+  switch (body.command) {
+    case "turn_on":
+      // A climate zone lands in an hvac mode we can't predict; "on" keeps
+      // climateActive() and the card's hvacMode check true until truth lands.
+      if (kind === "climate")
+        return { patch: { state: "on", hvacMode: "on" }, done: isOn, until };
+      return {
+        patch: { state: "on" },
+        done: (d) => (kind === "media_player" ? isOn(d) : d.state === "on"),
+        until,
+      };
+    case "turn_off":
+      if (kind === "climate")
+        return { patch: { state: "off", hvacMode: "off" }, done: (d) => d.state === "off", until };
+      return { patch: { state: "off" }, done: (d) => d.state === "off", until };
+    case "set_brightness": {
+      const pct = body.brightnessPct as number;
+      return {
+        patch: { state: "on", brightnessPct: pct },
+        done: (d) => d.state === "on" && near(d.brightnessPct, pct),
+        until,
+      };
+    }
+    case "open":
+      return { patch: { state: "opening" }, done: (d) => d.state === "opening" || d.state === "open", until };
+    case "close":
+      return { patch: { state: "closing" }, done: (d) => d.state === "closing" || d.state === "closed", until };
+    case "set_temperature": {
+      const t = body.temperature as number;
+      return { patch: { targetTemperature: t }, done: (d) => d.targetTemperature === t, until };
+    }
+    case "set_fan_mode":
+      return { patch: { fanSpeed: body.fanMode as string }, done: (d) => d.fanSpeed === body.fanMode, until };
+    case "set_fan_speed":
+      return { patch: { fanSpeed: body.fanSpeed as string }, done: (d) => d.fanSpeed === body.fanSpeed, until };
+    case "select_source":
+      return { patch: { source: body.source as string }, done: (d) => d.source === body.source, until };
+    case "play":
+      return { patch: { state: "playing" }, done: (d) => d.state === "playing", until };
+    case "pause":
+      return { patch: { state: "paused" }, done: (d) => d.state === "paused", until };
+    case "start_cleaning":
+      return { patch: { state: "cleaning" }, done: (d) => d.state === "cleaning", until };
+    case "pause_cleaning":
+      return { patch: { state: "paused" }, done: (d) => d.state === "paused", until };
+    case "return_to_dock":
+      return { patch: { state: "returning" }, done: (d) => d.state === "returning" || d.state === "docked", until };
+    case "set_volume": {
+      const v = body.volumePct as number;
+      return { patch: { volumePct: v }, done: (d) => near(d.volumePct, v), until };
+    }
+    default:
+      return null;
+  }
+}
+
 interface CustomScene {
   id: string;
   name: string;
@@ -110,7 +197,9 @@ function climateActive(c: UiDevice | null): boolean {
 }
 
 export default function Page() {
-  const [devices, setDevices] = useState<UiDevice[]>([]);
+  const [serverDevices, setServerDevices] = useState<UiDevice[]>([]);
+  // Optimistic overlays by device id, merged over the server truth below.
+  const [pendingPatches, setPendingPatches] = useState<Record<string, PendingPatch>>({});
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>({ t: "home" });
   const [floor, setFloor] = useState<6 | 5>(6);
@@ -130,6 +219,32 @@ export default function Page() {
   const [coverTrust, setCoverTrust] = useState(false);
   const keyRef = useRef("");
   const canProgram = role !== "guest";
+
+  // What the cards render: server truth with any live optimistic overlays on
+  // top. An overlay stops applying the moment the server proves it (`done`);
+  // expired ones are pruned on each refresh.
+  const devices = useMemo(
+    () =>
+      serverDevices.map((d) => {
+        const pp = pendingPatches[d.id];
+        return pp && !pp.done(d) && Date.now() < pp.until ? { ...d, ...pp.patch } : d;
+      }),
+    [serverDevices, pendingPatches],
+  );
+  // send/sendSystem need device lookups without re-creating on every poll.
+  const devicesRef = useRef<UiDevice[]>([]);
+  useEffect(() => {
+    devicesRef.current = serverDevices;
+  }, [serverDevices]);
+
+  const clearPending = useCallback((ids: string[]) => {
+    setPendingPatches((m) => {
+      if (!ids.some((id) => id in m)) return m;
+      const n = { ...m };
+      for (const id of ids) delete n[id];
+      return n;
+    });
+  }, []);
 
   useEffect(() => {
     keyRef.current = localStorage.getItem("appKey") ?? "";
@@ -193,7 +308,19 @@ export default function Page() {
         floorModes?: Record<string, FloorModeInfo>;
         coverStateTrusted?: boolean;
       };
-      setDevices(out.devices);
+      setServerDevices(out.devices);
+      // Drop overlays the server has confirmed (or that timed out) so cards
+      // return to pure server truth.
+      setPendingPatches((m) => {
+        const now = Date.now();
+        const byId = new Map(out.devices.map((d) => [d.id, d]));
+        const n: Record<string, PendingPatch> = {};
+        for (const [id, pp] of Object.entries(m)) {
+          const d = byId.get(id);
+          if (now < pp.until && !(d && pp.done(d))) n[id] = pp;
+        }
+        return Object.keys(n).length === Object.keys(m).length ? m : n;
+      });
       if (out.role) setRole(out.role);
       setFloorHeating(out.floorHeatingRooms ?? []);
       setFloorModes(out.floorModes ?? {});
@@ -271,6 +398,11 @@ export default function Page() {
   const send = useCallback(
     async (id: string, body: Record<string, unknown>): Promise<SendResult> => {
       setBusy((b) => ({ ...b, [id]: true }));
+      // Flip the card now; the overlay holds until the poll proves it.
+      // Scene switches stay out — their "on" is momentary, not a state.
+      const d = devicesRef.current.find((x) => x.id === id);
+      const pp = d && d.category !== "scene_switch" ? optimisticFor(d.kind, body) : null;
+      if (pp) setPendingPatches((m) => ({ ...m, [id]: pp }));
       try {
         const res = await fetch(`/api/devices/${id}/command`, {
           method: "POST",
@@ -284,6 +416,7 @@ export default function Page() {
         setFlash((f) => ({ ...f, [id]: out.status === "confirmed" ? "ok" : "sent" }));
         return { ok: true, status: out.status, error: undefined };
       } catch (err) {
+        if (pp) clearPending([id]); // the promise was false — show truth again
         setFlash((f) => ({ ...f, [id]: "fail" }));
         return { ok: false, error: err instanceof Error ? err.message : "command failed" };
       } finally {
@@ -292,7 +425,7 @@ export default function Page() {
         refresh();
       }
     },
-    [headers, refresh],
+    [headers, refresh, clearPending],
   );
 
   // Floor heat/cool changeover: the server runs the ~13s Control4-derived
@@ -331,6 +464,25 @@ export default function Page() {
     async (system: string, command: string, room: string, extra?: Record<string, unknown>): Promise<SendResult> => {
       const key = `sys:${system}:${room}`;
       setBusy((b) => ({ ...b, [key]: true }));
+      // Optimistically flip every device the sweep will touch, mirroring the
+      // server's membership rules (lib/execute systemDevices): "lighting" is
+      // real lights only, and a group dim skips non-dimmable switches.
+      const kindFor: Record<string, string> = {
+        lighting: "light", climate: "climate", heating: "heating", shades: "cover",
+      };
+      const targets = devicesRef.current.filter(
+        (d) =>
+          d.room === room &&
+          d.kind === kindFor[system] &&
+          (system !== "lighting" || (d.group === "Lighting" && d.category !== "scene_switch")) &&
+          (command !== "set_brightness" || d.capabilities.includes("brightness")),
+      );
+      const patches = targets
+        .map((t) => [t.id, optimisticFor(t.kind, { command, ...extra })] as const)
+        .filter((e): e is readonly [string, PendingPatch] => e[1] != null);
+      if (patches.length) {
+        setPendingPatches((m) => ({ ...m, ...Object.fromEntries(patches) }));
+      }
       try {
         const res = await fetch("/api/systems/command", {
           method: "POST",
@@ -342,6 +494,7 @@ export default function Page() {
         setFlash((f) => ({ ...f, [key]: "sent" }));
         return { ok: true, status: "sent", error: undefined };
       } catch (err) {
+        if (patches.length) clearPending(patches.map(([id]) => id));
         setFlash((f) => ({ ...f, [key]: "fail" }));
         return { ok: false, error: err instanceof Error ? err.message : "command failed" };
       } finally {
@@ -350,7 +503,7 @@ export default function Page() {
         refresh();
       }
     },
-    [headers, refresh],
+    [headers, refresh, clearPending],
   );
 
   const scenes = useMemo(

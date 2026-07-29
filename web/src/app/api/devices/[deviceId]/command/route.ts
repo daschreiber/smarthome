@@ -274,74 +274,91 @@ export async function POST(
     const call = buildServiceCall(device, cmd);
     await callService(call.domain, call.service, call.data);
 
-    // Read back until the state matches the command's intent. KNX status
-    // feedback arrives via the Control4 integration's Director polling, so
-    // ~4s is normal (observed 3.7s in commissioning); poll up to 8s.
-    // "confirmed" is ONLY claimed when the observed state proves the command
-    // (PRODUCT_SPEC §6); otherwise the command is reported as "sent".
-    // Setpoints are the exception state can't prove: they verify against the
-    // CoolMaster unit's reported target temperature instead.
-    const wantedTemp = cmd.command === "set_temperature" ? cmd.temperature : null;
-    const setpointUnits = wantedTemp != null ? unitEntityIds(device) : null;
-    const readbackId = setpointUnits?.[0] ?? device.entityId;
-    const setpointReached = (s: { attributes: Record<string, unknown> } | null) =>
-      !!setpointUnits && !!s && s.attributes.temperature === wantedTemp;
-    // Fan speed and media source are the other attribute-verified commands:
-    // state alone can't prove them, but the entity echoes the accepted value.
-    const wantedFan = cmd.command === "set_fan_speed" ? cmd.fanSpeed : null;
-    const fanReached = (s: { attributes: Record<string, unknown> } | null) =>
-      wantedFan != null && !!s && s.attributes.fan_speed === wantedFan;
-    const wantedSource = cmd.command === "select_source" ? cmd.source : null;
-    const sourceReached = (s: { attributes: Record<string, unknown> } | null) =>
-      wantedSource != null && !!s && s.attributes.source === wantedSource;
-    const expected = expectedStates(cmd, device.kind);
-    const deadline = Date.now() + 8000;
-    let after = null;
-    for (;;) {
-      await new Promise((r) => setTimeout(r, 700));
-      after = await getState(readbackId);
-      if (setpointUnits) {
-        if (setpointReached(after)) break;
-        if (!after) break; // unit entity absent — integration not added yet
-      } else if (wantedFan != null) {
-        if (fanReached(after)) break;
-      } else if (wantedSource != null) {
-        if (sourceReached(after)) break;
-      } else if (!expected) break;
-      else if (after && expected.includes(after.state)) break;
-      if (Date.now() >= deadline) break;
+    // HA accepted the command — answer NOW ("sent") so the UI settles
+    // instantly, and verify in the background (the server is long-lived;
+    // same pattern as lib/changeover). Blocking the response on read-back
+    // held every tap for the ~4s the Control4 integration takes to poll KNX
+    // feedback from the Director (COMMISSIONING_LOG 2026-07-16 / 2026-07-29).
+    // The verified/unverified outcome still lands in the audit log: the
+    // read-back polls until the state proves the command's intent, and marks
+    // the result "(unverified)" when it never does.
+    // CoolMaster unit's reported target temperature instead — and climate
+    // on/off reads back from the unit too (the bridge reflects in ~1s; the
+    // Control4 zone entity lags ~4s behind it).
+    // Door locks are the one SYNCHRONOUS exception below: a security state
+    // must be proven before it's reported, so the lock card waits for the
+    // read-back instead of getting an instant "sent".
+    const verifyReadback = async () => {
+      const wantedTemp = cmd.command === "set_temperature" ? cmd.temperature : null;
+      const climateUnits = unitEntityIds(device);
+      const setpointUnits = wantedTemp != null ? climateUnits : null;
+      // A multi-unit zone's command targets EVERY unit, so verification must
+      // read them all: one unit off with another still running is not a
+      // proven zone-wide off (Codex review, PR #89).
+      const readbackIds = climateUnits?.length ? climateUnits : [device.entityId];
+      type Read = { state: string; attributes: Record<string, unknown> } | null;
+      const setpointReached = (ss: Read[]) =>
+        !!setpointUnits && ss.every((s) => !!s && s.attributes.temperature === wantedTemp);
+      // Fan speed and media source are the other attribute-verified commands:
+      // state alone can't prove them, but the entity echoes the accepted
+      // value. Both are single-entity commands (vacuum / media zone).
+      const wantedFan = cmd.command === "set_fan_speed" ? cmd.fanSpeed : null;
+      const fanReached = (ss: Read[]) =>
+        wantedFan != null && !!ss[0] && ss[0].attributes.fan_speed === wantedFan;
+      const wantedSource = cmd.command === "select_source" ? cmd.source : null;
+      const sourceReached = (ss: Read[]) =>
+        wantedSource != null && !!ss[0] && ss[0].attributes.source === wantedSource;
+      const expected = expectedStates(cmd, device.kind);
+      const stateReached = (ss: Read[]) =>
+        !!expected && ss.length > 0 && ss.every((s) => !!s && expected.includes(s.state));
+      const deadline = Date.now() + 8000;
+      let reads: Read[] = [];
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 700));
+        reads = await Promise.all(readbackIds.map((id) => getState(id).catch(() => null)));
+        if (setpointUnits) {
+          if (setpointReached(reads)) break;
+          if (reads.some((s) => !s)) break; // unit entity absent — integration not added yet
+        } else if (wantedFan != null) {
+          if (fanReached(reads)) break;
+        } else if (wantedSource != null) {
+          if (sourceReached(reads)) break;
+        } else if (!expected) break;
+        else if (stateReached(reads)) break;
+        if (Date.now() >= deadline) break;
+      }
+      const verified = setpointUnits
+        ? setpointReached(reads)
+        : wantedFan != null
+          ? fanReached(reads)
+          : wantedSource != null
+            ? sourceReached(reads)
+            : stateReached(reads);
+      const seen = [...new Set(reads.filter(Boolean).map((s) => s!.state))].join("/");
+      audit({
+        ts: new Date().toISOString(),
+        user: auth.user,
+        deviceId,
+        entityId: device.entityId,
+        command,
+        args,
+        ok: true,
+        durationMs: Date.now() - started,
+        resultState: seen ? `${seen}${verified ? "" : " (unverified)"}` : undefined,
+        ...(device.kind === "lock" ? { security: true } : {}),
+      });
+      return { verified, seen };
+    };
+    if (device.kind === "lock") {
+      const { verified, seen } = await verifyReadback();
+      return NextResponse.json({
+        status: verified ? "confirmed" : "sent",
+        state: seen || "unknown",
+        durationMs: Date.now() - started,
+      });
     }
-    const verified = setpointUnits
-      ? setpointReached(after)
-      : wantedFan != null
-        ? fanReached(after)
-        : wantedSource != null
-          ? sourceReached(after)
-          : !!expected && !!after && expected.includes(after.state);
-    const status = verified ? "confirmed" : "sent";
-
-    const durationMs = Date.now() - started;
-    audit({
-      ts: new Date().toISOString(),
-      user: auth.user,
-      deviceId,
-      entityId: device.entityId,
-      command,
-      args,
-      ok: true,
-      durationMs,
-      resultState: after ? `${after.state}${verified ? "" : " (unverified)"}` : undefined,
-      ...(device.kind === "lock" ? { security: true } : {}),
-    });
-    return NextResponse.json({
-      status,
-      state: after?.state ?? "unknown",
-      brightnessPct:
-        after && typeof after.attributes.brightness === "number"
-          ? Math.round(((after.attributes.brightness as number) / 255) * 100)
-          : null,
-      durationMs,
-    });
+    void verifyReadback();
+    return NextResponse.json({ status: "sent", state: "pending", durationMs: Date.now() - started });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     audit({

@@ -151,6 +151,12 @@ export function createScene(
   // it spans rooms.
   const existing = scenes.find((s) => s.name.toLowerCase() === clean.toLowerCase());
   if (existing) {
+    // Same-name compose is for building ONE multi-room scene, which only makes
+    // sense within a single owner. Capturing over a scene someone else created
+    // would silently mutate their record, so require ownership.
+    if (existing.createdBy !== createdBy) {
+      throw new Error(`a scene named "${existing.name}" already belongs to another user — pick a different name`);
+    }
     const captured = new Set(states.map((st) => st.deviceId));
     existing.states = [...existing.states.filter((st) => !captured.has(st.deviceId)), ...states];
     if (existing.room !== room) existing.room = null;

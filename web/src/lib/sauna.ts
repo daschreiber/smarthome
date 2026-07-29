@@ -149,6 +149,12 @@ export async function saunaStop(): Promise<SaunaCommandResult> {
 }
 
 export async function saunaSetTemperature(temp: number): Promise<void> {
+  // Last gate before the heater: refuse an out-of-range set-point outright
+  // rather than trusting callers. Callers should already have passed
+  // assertCommandAllowed, but this adapter must not forward an unsafe value.
+  if (!Number.isFinite(temp) || temp < 40 || temp > 100) {
+    throw new Error(`sauna temperature ${temp} out of safe range 40-100`);
+  }
   const b = await quick(
     "/api/quick/temperature",
     { temp: String(Math.round(temp)) },

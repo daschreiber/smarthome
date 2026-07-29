@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { authenticate } from "@/lib/auth";
 import { canOperateLocks } from "@/lib/permissions";
 import { getUser, verifyPassword } from "@/lib/users";
+import { throttleStatus, recordFailure, recordSuccess, clientIp } from "@/lib/loginThrottle";
 import { unitEntityIds } from "@/lib/coolmaster";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
 import { noiseStatusFresh, noiseTurnOff, noiseTurnOn, setNoiseVolume } from "@/lib/whitenoise";
@@ -63,8 +64,24 @@ export async function POST(
           { status: 403 },
         );
       }
+      // The unlock password re-check is another online guessing surface — a
+      // stolen, signed-in phone could hammer it — so it shares the sign-in
+      // lockout, keyed on the same account and IP.
+      const ip = clientIp(req);
+      const gate = throttleStatus(auth.user, ip);
+      if (gate.locked) {
+        audit({
+          ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
+          command, args, ok: false, durationMs: 0, security: true, error: "unlock locked out — too many attempts",
+        });
+        return NextResponse.json(
+          { error: "too many attempts — try again later" },
+          { status: 429, headers: { "Retry-After": String(Math.ceil(gate.retryAfterMs / 1000)) } },
+        );
+      }
       const password = (raw as { password?: unknown })?.password;
       if (typeof password !== "string" || !verifyPassword(password, record.passwordHash)) {
+        recordFailure(auth.user, ip);
         audit({
           ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
           command, args, ok: false, durationMs: 0, security: true, error: "password check failed",
@@ -74,6 +91,7 @@ export async function POST(
           { status: 403 },
         );
       }
+      recordSuccess(auth.user, ip);
     }
   }
 

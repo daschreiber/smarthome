@@ -26,26 +26,38 @@ Two verified constraints (from the Home Assistant core source):
 Architecture (as built):
 
 ```text
-Phone / browser PWA
-        |
+Phone / browser PWA  ·  Apple Home  ·  Alexa
+        |                  (via HA exposure)
         v
-Private application backend
+Private application backend (Railway)
         |
         v
 Home Assistant Green
         |
-        +--> Control4 Core 3 local API --> lights, shades, media, scenes
+        +--> Control4 Core 3 local API --> lights, media, scenes
+        |
+        +--> KNX bus (native HA integration, 10.0.0.70) --> the 13 shades
         |
         +--> CoolMaster bridge (10.0.0.90) --> all A/C commands
+        |
+        +--> own integrations --> Yamaha receivers, Roborocks, Eight Sleep,
+                                  white-noise add-on, sauna (own cloud API)
 ```
 
-**Climate is the exception to the Control4 path.** The Control4→CoolAutomation
-proxy silently drops setpoint reads and writes, so every A/C zone is mapped to
-its CoolMaster indoor unit(s) (`coolmaster_units` in `data/entity_map.json`)
-and all climate commands — on/off and setpoints — go through Home Assistant's
-native `coolmaster` integration straight to the bridge. Zone state is still
-read from the Control4 entities, which mirror the bridge within ~4s. Full
-investigation and unit mapping: `docs/COMMISSIONING_LOG.md` (2026-07-17).
+Two deliberate exceptions to the Control4 path:
+
+- **Climate.** The Control4→CoolAutomation proxy silently drops setpoint
+  reads and writes, so every A/C zone is mapped to its CoolMaster indoor
+  unit(s) (`coolmaster_units` in `data/entity_map.json`) and all climate
+  commands — on/off and setpoints — go through Home Assistant's native
+  `coolmaster` integration straight to the bridge. Zone state is still read
+  from the Control4 entities, which mirror the bridge within ~4s. Full
+  investigation: `docs/COMMISSIONING_LOG.md` (2026-07-17).
+- **Shades.** The Control4 cover entities had frozen position feedback and
+  dropped position writes, so the 13 shades were rebuilt as native HA KNX
+  covers driving the bus directly (2026-07-26), with real position state
+  (`COVER_STATE_TRUSTED=1`). The app, Apple Home, and the wall keypads now
+  agree. Full story: `knx/README.md`.
 
 ### Cloud-only investigation
 
@@ -59,50 +71,66 @@ The MVP will use Home Assistant as the only direct Control4 client. A custom bac
 
 Initial remote access should use Home Assistant Cloud or another outbound secure route, never direct router port-forwarding to Home Assistant.
 
+## What the app does today
+
+Deployed on Railway (branch `main` auto-deploys), installed as a PWA:
+
+- **Rooms & devices** — lights and dimmers, the 13 KNX shades with real
+  position sliders, per-zone climate (multi-unit zones write all units),
+  room media, per-room underfloor heating, per-floor A/C heat/cool
+  changeover. Instant optimistic taps with background verification.
+- **Scenes** — captured and applied server-side, with surgical per-device
+  editing.
+- **Automations & timers** — "If → then" rules and time switches, with a
+  minute scheduler; sauna follower and Sleep sense standing rules.
+- **Extras beyond Control4** — sauna (timer, watcher), Eight Sleep bed,
+  white-noise/"Sleep sound" streaming with a sleep watcher, two Roborocks
+  with per-room cleaning, Spotify on the Yamaha receivers, Away mode.
+- **Assistant** — "Ask the house" conversational control (Anthropic API),
+  which only proposes typed actions the command layer validates.
+- **Accounts & audit** — password + Google sign-in, `admin/member/guest`
+  roles, append-only audit log, password reset by email or admin link.
+- **Voice/ecosystem** — the same HA entities are exposed to Apple Home
+  (HomeKit Bridge + Apple TV hub) and Alexa (HA Cloud).
+
+Security-sensitive controls (alarm, locks, gates, garage) remain excluded
+by policy. The Yale locks are a future phase (implementation spec, Phase F).
+
 ## Documentation
 
-- [Product specification](docs/PRODUCT_SPEC.md)
-- [Implementation specification](docs/IMPLEMENTATION_SPEC.md)
-- [Application API contract](docs/API_CONTRACT.md)
-- [Installation and commissioning runbook](docs/INSTALLATION_RUNBOOK.md)
-- [Apple Home via HomeKit Bridge and Apple TV hub](docs/APPLE_HOME_SETUP.md)
-- [Eight Sleep bed — on-site setup runbook](docs/EIGHT_SLEEP_SETUP.md)
-- [Design and delivery loop](docs/DESIGN_AND_DELIVERY_LOOP.md)
-- [Test plan](docs/TEST_PLAN.md)
+Current references:
+
+- [Application API contract](docs/API_CONTRACT.md) — the real API surface
+- [Commissioning log](docs/COMMISSIONING_LOG.md) — the running as-built record
+- [Deploy to Railway](docs/DEPLOY_RAILWAY.md) — deployment + the env var table
+- [KNX shades](knx/README.md) — the shade migration, GA map, monitor tooling
 - [Security and operations](docs/SECURITY_AND_OPERATIONS.md)
-- [Plan review and corrections](docs/PLAN_REVIEW.md)
+- [Test plan](docs/TEST_PLAN.md)
+- [Apple Home setup](docs/APPLE_HOME_SETUP.md)
+- [Audio system & Spotify](docs/AUDIO_SYSTEM.md)
+- [Alexa "Sleep sound"](docs/ALEXA_WHITE_NOISE.md)
+- [Eight Sleep bed — on-site setup](docs/EIGHT_SLEEP_SETUP.md)
+- [Conversational layer & expansion](docs/CONVERSATIONAL_LAYER_AND_EXPANSION.md)
 
-## Likely MVP capabilities
+Design-era records (kept as history; see their status banners):
 
-- Lights and dimmers
-- Shades/covers
-- Climate set-points
-- Home Assistant scenes and scripts
-- Basic room media where reliably exposed
-- Favorites and rooms
-- Secure sign-in
-- Command confirmation and audit history
-- Installable iPhone/web PWA
+- [Product specification](docs/PRODUCT_SPEC.md) ·
+  [Implementation specification](docs/IMPLEMENTATION_SPEC.md) ·
+  [Plan review](docs/PLAN_REVIEW.md) ·
+  [Design direction](docs/DESIGN_DIRECTION.md) ·
+  [Design and delivery loop](docs/DESIGN_AND_DELIVERY_LOOP.md) ·
+  [Installation runbook](docs/INSTALLATION_RUNBOOK.md) (completed) ·
+  [inventory/](inventory/SUMMARY.md) (frozen snapshot) ·
+  [docs/archive/](docs/archive/README.md) (executed one-shot runbooks)
 
-Security-sensitive controls such as alarms, locks, gates, and garage doors are excluded from the initial release.
+## Where things live
 
-Post-MVP, non-Control4 devices join through their own Home Assistant integrations: the sauna (currently on its manufacturer's app) and the Yale door locks. See the implementation specification, Phase F.
-
-## Exact next step when Home Assistant Green arrives
-
-Follow [the installation runbook](docs/INSTALLATION_RUNBOOK.md). The first technical objective is a complete vertical slice:
-
-```text
-One browser button
-→ application backend
-→ Home Assistant REST API
-→ Control4
-→ one physical light
-→ confirmed state in the browser
-```
-
-Once that works locally and remotely, export the entity inventory, approve mappings, and generate the full MVP dashboard.
-
-## Resume prompt for another chat
-
-> Open `daschreiber/smarthome`, read the README and all files under `docs/`, and continue from the installation runbook. The goal is a private PWA controlling Control4 through Home Assistant Green. Do not expose Home Assistant or Control4 credentials in browser code or GitHub.
+- `web/` — the Next.js app (UI, API routes, `lib/` domain layer, tests)
+- `data/entity_map.json` — the hand-maintained device registry (append new
+  devices at the end; keep the `web/data/` copy identical — a test enforces
+  this)
+- `knx/` — shade GA map and the KNX bus monitor/diagnostic scripts
+- `ha/` — config blocks installed on the Green (the HK cover wrappers are
+  deprecated)
+- `tools/` — commissioning-era generators (`build_entity_map.py` is fenced
+  off; the map is hand-maintained now)

@@ -256,6 +256,22 @@ def classify(e):
     return f"other_{domain}"
 
 
+def find_battery_entity(lock, entities):
+    """Yale reports battery via a separate sensor entity, not as a lock
+    attribute. Associate it by name: the sensor whose id/name carries the
+    lock's base name plus 'battery' (e.g. lock.front_door ->
+    sensor.front_door_battery)."""
+    base = lock["entity_id"].split(".", 1)[1]
+    exact = f"sensor.{base}_battery"
+    candidates = [e for e in entities if e["domain"] == "sensor"
+                  and "battery" in (e["entity_id"] + e["name"].lower())
+                  and (base in e["entity_id"] or lock["name"].lower() in e["name"].lower())]
+    for e in candidates:
+        if e["entity_id"] == exact:
+            return exact
+    return candidates[0]["entity_id"] if candidates else None
+
+
 def main():
     with open(os.path.join(ROOT, "inventory", "entities.json")) as f:
         entities = json.load(f)
@@ -293,6 +309,10 @@ def main():
         }
         if e["entity_id"] in COOLMASTER_UNITS:
             row["coolmaster_units"] = COOLMASTER_UNITS[e["entity_id"]]
+        if category == "door_lock":
+            battery = find_battery_entity(e, entities)
+            if battery:
+                row["battery_entity"] = battery
         if e["entity_id"] in PINNED:
             row["pinned"] = True
         out.append(row)

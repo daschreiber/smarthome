@@ -133,6 +133,15 @@ export async function GET(req: NextRequest) {
         const unit = d.coolmasterUnits?.length
           ? states.get(coolmasterEntityId(d.coolmasterUnits[0]))
           : undefined;
+        // Yale reports battery via a separate sensor entity, not as a lock
+        // attribute; the map associates it (battery_entity). Fall back to a
+        // battery_level attribute for locks that do carry one.
+        const lockBatterySensor =
+          d.kind === "lock" && d.batteryEntity ? states.get(d.batteryEntity) : undefined;
+        const lockBattery =
+          lockBatterySensor && Number.isFinite(Number(lockBatterySensor.state))
+            ? Number(lockBatterySensor.state)
+            : null;
         const unitTarget =
           unit && typeof unit.attributes.temperature === "number"
             ? (unit.attributes.temperature as number)
@@ -154,7 +163,10 @@ export async function GET(req: NextRequest) {
           currentTemperature: attr("current_temperature"),
           targetTemperature: unitTarget ?? attr("temperature"),
           hvacMode: d.kind === "climate" ? s?.state ?? null : null,
-          batteryPct: d.kind === "vacuum" || d.kind === "lock" ? attr("battery_level") : null,
+          batteryPct:
+            d.kind === "vacuum" ? attr("battery_level")
+            : d.kind === "lock" ? lockBattery ?? attr("battery_level")
+            : null,
           // Fan strength: vacuums report their own; climate zones read the
           // CoolMaster unit (the Control4 proxy reports no fan data), falling
           // back to the zone entity if the unit isn't available.

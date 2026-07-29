@@ -71,9 +71,12 @@ python3 tools/build_entity_map.py
 ```
 
 `build_entity_map.py` already classifies `lock.*` entities as
-`door_lock` → group **Security**, and infers room **Entrance** from a
-"Front Door" friendly name. Check `data/MAPPING_REVIEW.md` shows exactly
-that, then commit the regenerated `data/entity_map.json` (and the `web/data`
+`door_lock` → group **Security**, infers room **Entrance** from a
+"Front Door" friendly name, and associates the lock's separate battery
+sensor (Yale reports battery there, not as a lock attribute) as
+`battery_entity` on the lock row — check the row carries it, or the card
+will show no battery. Check `data/MAPPING_REVIEW.md` shows exactly that,
+then commit the regenerated `data/entity_map.json` (and the `web/data`
 mirror) and redeploy. If the friendly name doesn't contain "front door",
 either rename the entity in HA (preferred) or add a `ROOM_OVERRIDES` entry.
 

@@ -39,6 +39,9 @@ export interface MapRow {
   coolmaster_units?: string[];
   /** Keeps its own card in the room view instead of collapsing into "Room lights". */
   pinned?: boolean;
+  /** Locks: the separate battery sensor entity (Yale reports battery there,
+   * not as a lock attribute); associated by build_entity_map.py. */
+  battery_entity?: string;
 }
 
 export interface Device {
@@ -58,6 +61,8 @@ export interface Device {
   coolmasterUnits?: string[];
   /** See MapRow.pinned. */
   pinned?: boolean;
+  /** See MapRow.battery_entity. */
+  batteryEntity?: string;
 }
 
 function slug(s: string): string {
@@ -149,6 +154,7 @@ export function buildDevices(rows: MapRow[]): Device[] {
       // every command confirms, regardless of what the map says.
       ...(row.domain === "lock" ? { requiresConfirmation: true } : {}),
       ...(row.coolmaster_units?.length ? { coolmasterUnits: row.coolmaster_units } : {}),
+      ...(row.battery_entity ? { batteryEntity: row.battery_entity } : {}),
       ...(row.pinned ? { pinned: true } : {}),
     };
   });

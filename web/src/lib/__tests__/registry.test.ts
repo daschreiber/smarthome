@@ -85,6 +85,12 @@ describe("buildDevices", () => {
     expect(devices[3].requiresConfirmation).toBe(true);
   });
 
+  it("carries the lock's battery sensor through to the device", () => {
+    const [lock] = buildDevices([{ ...rows[3], battery_entity: "sensor.front_door_battery" }]);
+    expect(lock.batteryEntity).toBe("sensor.front_door_battery");
+    expect(devices[3].batteryEntity).toBeUndefined();
+  });
+
   it("keeps hidden entities in the registry but flagged", () => {
     expect(devices[4].visible).toBe(false);
   });

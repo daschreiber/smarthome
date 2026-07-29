@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createStateToken, publicBaseUrl } from "./urls";
+import { writeJsonFile } from "./store";
 
 /**
  * Spotify Web API client (Authorization Code flow). The backend acts as the
@@ -61,8 +62,7 @@ export function spotifyLinked(): boolean {
 }
 
 function saveRefreshToken(refreshToken: string): void {
-  fs.mkdirSync(path.dirname(tokenPath()), { recursive: true });
-  fs.writeFileSync(tokenPath(), JSON.stringify({ refresh_token: refreshToken }, null, 2));
+  writeJsonFile(tokenPath(), { refresh_token: refreshToken });
 }
 
 function basicAuth(): string {

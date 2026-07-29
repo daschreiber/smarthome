@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import path from "node:path";
+import { readJsonFile, writeJsonFile } from "./store";
 import { z } from "zod";
 import { wallClock } from "./houseclock";
 import { slug } from "./registry";
@@ -87,9 +87,7 @@ function storePath(): string {
 
 function load(): Automation[] {
   try {
-    const items = JSON.parse(fs.readFileSync(storePath(), "utf8")) as Array<
-      Automation & { awayBehavior?: "pause" | "run" }
-    >;
+    const items = readJsonFile<Array<Automation & { awayBehavior?: "pause" | "run" }>>(storePath(), []);
     // Legacy Away-mode field (lived one day, 2026-07-25): an explicit
     // "pause" was a choice to stop while away → "home"; anything else
     // takes the new default ("always", by absence). Normalized in memory;
@@ -105,7 +103,7 @@ function load(): Automation[] {
 }
 
 function save(items: Automation[]): void {
-  fs.writeFileSync(storePath(), JSON.stringify(items, null, 2));
+  writeJsonFile(storePath(), items);
 }
 
 export function listAutomations(): Automation[] {

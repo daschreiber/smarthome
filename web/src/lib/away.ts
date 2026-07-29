@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { writeJsonFile } from "./store";
 import path from "node:path";
 
 /**
@@ -54,7 +55,7 @@ export function isAway(): boolean {
 
 export function setAway(away: boolean, user: string): AwayState {
   const st: AwayState = { away, since: new Date().toISOString(), setBy: user };
-  fs.writeFileSync(storePath(), JSON.stringify(st, null, 2));
+  writeJsonFile(storePath(), st);
   return st;
 }
 

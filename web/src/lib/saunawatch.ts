@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { writeJsonFile } from "./store";
 import path from "node:path";
 import { audit } from "./audit";
 import { executeOnDevice } from "./execute";
@@ -53,7 +54,7 @@ export function loadSaunawatch(): SaunawatchState {
 }
 
 export function saveSaunawatch(st: SaunawatchState): void {
-  fs.writeFileSync(storePath(), JSON.stringify(st, null, 2));
+  writeJsonFile(storePath(), st);
 }
 
 /** The Sauna room's A/C zone(s), derived from the registry — a renamed or

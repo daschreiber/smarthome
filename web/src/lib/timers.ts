@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
 import path from "node:path";
+import { readJsonFile, writeJsonFile } from "./store";
 import { getDevice, registry, type Device } from "./registry";
 import type { HaState } from "./ha";
 
@@ -27,15 +27,11 @@ function timersPath(): string {
 }
 
 function load(): TimerRule[] {
-  try {
-    return JSON.parse(fs.readFileSync(timersPath(), "utf8")) as TimerRule[];
-  } catch {
-    return [];
-  }
+  return readJsonFile<TimerRule[]>(timersPath(), []);
 }
 
 function save(rules: TimerRule[]): void {
-  fs.writeFileSync(timersPath(), JSON.stringify(rules, null, 2));
+  writeJsonFile(timersPath(), rules);
 }
 
 export function listTimers(): TimerRule[] {

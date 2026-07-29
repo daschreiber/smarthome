@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import path from "node:path";
+import { readJsonFile, writeJsonFile } from "./store";
 import { slug, type Device } from "./registry";
 import type { HaState } from "./ha";
 
@@ -34,15 +34,11 @@ function scenesPath(): string {
 }
 
 function load(): Scene[] {
-  try {
-    return JSON.parse(fs.readFileSync(scenesPath(), "utf8")) as Scene[];
-  } catch {
-    return [];
-  }
+  return readJsonFile<Scene[]>(scenesPath(), []);
 }
 
 function save(scenes: Scene[]): void {
-  fs.writeFileSync(scenesPath(), JSON.stringify(scenes, null, 2));
+  writeJsonFile(scenesPath(), scenes);
 }
 
 export function listScenes(): Scene[] {

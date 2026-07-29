@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { writeJsonFile } from "./store";
 import path from "node:path";
 import { nowParts } from "./automations";
 import { isAway } from "./away";
@@ -123,7 +124,7 @@ export function loadSleepwatch(): SleepwatchState {
 }
 
 export function saveSleepwatch(st: SleepwatchState): void {
-  fs.writeFileSync(storePath(), JSON.stringify(st, null, 2));
+  writeJsonFile(storePath(), st);
 }
 
 export function inWindow(hhmm: string): boolean {

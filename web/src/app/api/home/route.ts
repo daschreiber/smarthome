@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStates, type HaState } from "@/lib/ha";
 import { registry } from "@/lib/registry";
 import { authenticate } from "@/lib/auth";
+import { canOperateLocks } from "@/lib/permissions";
 import { coolmasterEntityId } from "@/lib/coolmaster";
 import { changeoverStatus, modeFromRelayState, relayEntityId } from "@/lib/changeover";
 import { saunaConfigured, saunaScheduleStatus, saunaStatus } from "@/lib/sauna";
@@ -132,6 +133,15 @@ export async function GET(req: NextRequest) {
         const unit = d.coolmasterUnits?.length
           ? states.get(coolmasterEntityId(d.coolmasterUnits[0]))
           : undefined;
+        // Yale reports battery via a separate sensor entity, not as a lock
+        // attribute; the map associates it (battery_entity). Fall back to a
+        // battery_level attribute for locks that do carry one.
+        const lockBatterySensor =
+          d.kind === "lock" && d.batteryEntity ? states.get(d.batteryEntity) : undefined;
+        const lockBattery =
+          lockBatterySensor && Number.isFinite(Number(lockBatterySensor.state))
+            ? Number(lockBatterySensor.state)
+            : null;
         const unitTarget =
           unit && typeof unit.attributes.temperature === "number"
             ? (unit.attributes.temperature as number)
@@ -175,7 +185,10 @@ export async function GET(req: NextRequest) {
           currentTemperature: attr("current_temperature"),
           targetTemperature: unitTarget ?? attr("temperature"),
           hvacMode: d.kind === "climate" ? climateState ?? s?.state ?? null : null,
-          batteryPct: d.kind === "vacuum" ? attr("battery_level") : null,
+          batteryPct:
+            d.kind === "vacuum" ? attr("battery_level")
+            : d.kind === "lock" ? lockBattery ?? attr("battery_level")
+            : null,
           // Fan strength: vacuums report their own; climate zones read the
           // CoolMaster unit (the Control4 proxy reports no fan data), falling
           // back to the zone entity if the unit isn't available.
@@ -210,6 +223,10 @@ export async function GET(req: NextRequest) {
             d.kind !== "media_player" || ((attr("supported_features") ?? 0) & 128) !== 0,
           lastUpdated: s?.last_updated ?? null,
           note: null as string | null,
+          // The security tier travels with the device: guests see the lock's
+          // state but get no controls. Enforcement lives in the command
+          // route (lib/permissions); this only drives the UI.
+          ...(d.kind === "lock" ? { lockAllowed: canOperateLocks(auth.role) } : {}),
           ...(d.pinned ? { pinned: true } : {}),
         };
       });
@@ -306,6 +323,41 @@ export async function GET(req: NextRequest) {
           note: "waiting for the Roborock integration in Home Assistant",
         });
       }
+    }
+
+    // Same pattern for the Yale front-door lock: a display-only card at the
+    // Entrance until the Yale Home integration lands on the Green and the
+    // entity map is re-exported (docs/YALE_LOCK_SETUP.md). It becomes the
+    // real lock card the moment a lock.* row lands in the entity map.
+    if (!registry().devices.some((d) => d.kind === "lock")) {
+      devices.push({
+        id: "entrance__front_door_lock",
+        label: "Front door",
+        room: "Entrance",
+        floor: 6,
+        group: "Security",
+        kind: "lock",
+        category: "door_lock",
+        capabilities: [],
+        requiresConfirmation: true,
+        state: "unknown",
+        available: false,
+        brightnessPct: null,
+        currentTemperature: null,
+        targetTemperature: null,
+        hvacMode: null,
+        batteryPct: null,
+        fanSpeed: null,
+        fanSpeedList: null,
+        source: null,
+        sourceList: null,
+        mediaTitle: null,
+        volumePct: null,
+        canTurnOn: true,
+        lastUpdated: null,
+        note: "waiting for the Yale Home integration in Home Assistant",
+        lockAllowed: false,
+      });
     }
 
     // The underfloor-heating valve relays are hidden as CONTROLS (plumbing,

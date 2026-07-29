@@ -70,6 +70,11 @@ export const CommandSchema = z.discriminatedUnion("command", [
     command: z.literal("set_bed_level"),
     level: z.number().int().min(-100).max(100),
   }),
+  // Door locks (Yale, Phase F). Interactive-only: the command route enforces
+  // the security tier (role + confirm + password on unlock) and lib/execute
+  // refuses locks outright, keeping them out of scenes/automations/assistant.
+  z.object({ command: z.literal("lock") }),
+  z.object({ command: z.literal("unlock") }),
 ]);
 
 export type Command = z.infer<typeof CommandSchema>;
@@ -99,6 +104,8 @@ const CAPABILITY_FOR_COMMAND: Record<Command["command"], string> = {
   set_fan_speed: "vacuum_control",
   set_fan_mode: "fan_mode",
   set_bed_level: "bed_level",
+  lock: "lock_unlock",
+  unlock: "lock_unlock",
 };
 
 /** Per-kind safe set-point ranges (°C), enforced server-side. */
@@ -169,6 +176,12 @@ export function expectedStates(cmd: Command, kind?: Device["kind"]): string[] | 
       return ["playing"];
     case "pause":
       return ["paused"];
+    // Locks verify on the FINAL state only: "locking"/"unlocking" don't prove
+    // the bolt moved, and a door must never be reported secured on intent.
+    case "lock":
+      return ["locked"];
+    case "unlock":
+      return ["unlocked"];
     // select_source verifies by the entity echoing the source attribute
     // (like set_fan_speed), not by state — the zone may land in playing,
     // idle, or on depending on what the source is doing.
@@ -279,5 +292,9 @@ export function buildServiceCall(device: Device, cmd: Command): ServiceCall {
     case "set_bed_level":
       // Only kind "bed" carries bed_level, and bed threw above — unreachable.
       throw new Error("set_bed_level is a bed command");
+    case "lock":
+      return { domain: "lock", service: "lock", data: target };
+    case "unlock":
+      return { domain: "lock", service: "unlock", data: target };
   }
 }

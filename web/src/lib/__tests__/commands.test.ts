@@ -167,6 +167,52 @@ describe("vacuum commands", () => {
   });
 });
 
+describe("door lock commands (Yale, Phase F security tier)", () => {
+  const lock: Device = {
+    id: "entrance__front_door",
+    entityId: "lock.front_door",
+    kind: "lock",
+    label: "Front door",
+    room: "Entrance",
+    floor: 6,
+    group: "Security",
+    category: "door_lock",
+    visible: true,
+    capabilities: ["lock_unlock"],
+    requiresConfirmation: true,
+  };
+
+  it("maps lock/unlock to the lock domain services", () => {
+    expect(buildServiceCall(lock, { command: "lock" })).toEqual({
+      domain: "lock", service: "lock", data: { entity_id: lock.entityId },
+    });
+    expect(buildServiceCall(lock, { command: "unlock" })).toEqual({
+      domain: "lock", service: "unlock", data: { entity_id: lock.entityId },
+    });
+  });
+
+  it("refuses lock commands elsewhere and non-lock commands on the lock", () => {
+    expect(() => buildServiceCall(dimmer, { command: "lock" })).toThrow(/does not support/);
+    expect(() => buildServiceCall(shade, { command: "unlock" })).toThrow(/does not support/);
+    expect(() => buildServiceCall(lock, { command: "turn_on" })).toThrow(/does not support/);
+    expect(() => buildServiceCall(lock, { command: "open" })).toThrow(/does not support/);
+  });
+
+  it("verifies on the final bolt state only — locking/unlocking prove nothing", () => {
+    expect(expectedStates({ command: "lock" })).toEqual(["locked"]);
+    expect(expectedStates({ command: "unlock" })).toEqual(["unlocked"]);
+  });
+
+  it("schema accepts lock/unlock and passes no arguments through", () => {
+    expect(CommandSchema.safeParse({ command: "lock" }).success).toBe(true);
+    const parsed = CommandSchema.safeParse({ command: "unlock", password: "hunter22" });
+    expect(parsed.success).toBe(true);
+    // The account password rides OUTSIDE the command schema (route-only), so
+    // it must never survive parsing into stored scenes/automations or audit.
+    expect(parsed.success && "password" in parsed.data).toBe(false);
+  });
+});
+
 describe("media zone commands (Control4 matrix rooms)", () => {
   const zone: Device = {
     id: "den__den",

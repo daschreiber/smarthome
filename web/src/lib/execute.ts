@@ -15,6 +15,13 @@ import type { Action, Step } from "./automations";
  */
 
 export async function executeOnDevice(device: Device, cmd: Command): Promise<void> {
+  // Door locks are interactive-only (Phase F security tier): never driven by
+  // scenes, automations, or the assistant — all of which execute through
+  // here. The command route calls buildServiceCall directly after its role /
+  // confirm / password checks, so this refusal costs the lock card nothing.
+  if (device.kind === "lock") {
+    throw new Error("door locks are operated only from the lock card, never by scenes or automations");
+  }
   if (device.kind === "sauna") {
     if (cmd.command === "turn_on") await saunaStart();
     else if (cmd.command === "turn_off") await saunaStop();

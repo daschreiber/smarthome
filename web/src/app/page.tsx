@@ -48,10 +48,12 @@ interface UiDevice {
    * when that reading last changed (it's cloud-derived and often stale). */
   bedPresence?: boolean | null;
   bedPresenceSince?: string | null;
-  /** Vacuums only. */
+  /** Vacuums and door locks. */
   batteryPct?: number | null;
   fanSpeed?: string | null;
   fanSpeedList?: string[] | null;
+  /** Door locks only: false hides the controls (guest accounts). */
+  lockAllowed?: boolean;
   /** Lights only: keeps its own card instead of collapsing into "Room lights". */
   pinned?: boolean;
 }
@@ -89,7 +91,10 @@ const PENDING_MS = 12_000;
  * server round-trips brightness through HA's 0-255 scale.
  */
 function optimisticFor(kind: string, body: Record<string, unknown>): PendingPatch | null {
-  if (kind === "sauna" || kind === "noise" || kind === "bed") return null;
+  // Locks join the never-optimistic set: a door must only ever display its
+  // PROVEN bolt state (the lock route verifies synchronously for the same
+  // reason), and lock/unlock have no cases below anyway.
+  if (kind === "sauna" || kind === "noise" || kind === "bed" || kind === "lock") return null;
   const until = Date.now() + PENDING_MS;
   const near = (a: number | null | undefined, b: number) => a != null && Math.abs(a - b) <= 2;
   const isOn = (d: UiDevice) =>
@@ -178,7 +183,7 @@ interface FloorModeInfo {
   error: string | null;
 }
 
-const GROUP_ORDER = ["Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
+const GROUP_ORDER = ["Security", "Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
 /** Display names for groups whose entity-map name reads wrong in the UI.
  * "Media" is owner-renamed to "Music" — the section is the room's sound,
  * not a device category. The map keeps "Media" (ids/groups are data). */
@@ -1246,6 +1251,7 @@ function Device({
 }) {
   const star = onFav ? <Star on={!!fav} onClick={() => onFav(d.id)} label={d.label} /> : null;
   if (d.kind === "sauna") return <SaunaCard d={d} busy={busy} send={send} />;
+  if (d.kind === "lock") return <LockCard d={d} busy={busy} send={send} />;
   if (d.kind === "noise") return <NoiseCard d={d} busy={busy} send={send} />;
   if (d.kind === "bed") return <BedCard d={d} busy={busy} send={send} star={star} />;
   if (d.kind === "climate") return <ClimateCard d={d} flash={flash} busy={busy} send={send} star={star} />;
@@ -2336,6 +2342,129 @@ function SaunaCard({
           </span>
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Front-door lock (Yale, Phase F). The security tier shapes everything here:
+ * commands need a deliberate press-and-hold (same physical-intent gesture as
+ * the sauna), unlocking additionally asks for the account password (the
+ * server verifies it — a stolen unlocked phone must not open the door), and
+ * guests get honest state with no controls at all. "locked"/"unlocked" is
+ * only shown from confirmed Home Assistant state.
+ */
+function LockCard({
+  d, busy, send,
+}: {
+  d: UiDevice;
+  busy: boolean;
+  send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
+}) {
+  const [fill, setFill] = useState(0);
+  const [label, setLabel] = useState<string | null>(null);
+  const [askPassword, setAskPassword] = useState(false);
+  const [password, setPassword] = useState("");
+  const raf = useRef<number | null>(null);
+  const start = useRef(0);
+  const HOLD_MS = 1100;
+  const locked = d.state === "locked";
+  const stateText = !d.available
+    ? `unavailable${d.note ? ` — ${d.note}` : ""}`
+    : `${d.state}${d.batteryPct != null ? ` · battery ${d.batteryPct}%` : ""}`;
+
+  const finish = (r: SendResult, verb: string) => {
+    // A lock must never pretend: "sent" means HA accepted the command but the
+    // bolt didn't confirm within the read-back window — say so, loudly.
+    if (!r.ok) setLabel(r.error ?? `${verb} failed`);
+    else if (r.status !== "confirmed") setLabel(`${verb} sent — not confirmed yet, check the door`);
+    else setLabel(null);
+    if (!r.ok || r.status !== "confirmed") setTimeout(() => setLabel(null), 8000);
+  };
+
+  const tick = useCallback(() => {
+    const p = Math.min(1, (Date.now() - start.current) / HOLD_MS);
+    setFill(p);
+    if (p >= 1) {
+      setFill(0);
+      if (locked) {
+        // Unlock is two-step: the hold proves intent, the password proves it's you.
+        setAskPassword(true);
+      } else {
+        setLabel("Locking — verifying…");
+        send(d.id, { command: "lock", confirm: true }).then((r) => finish(r, "lock"));
+      }
+      return;
+    }
+    raf.current = requestAnimationFrame(tick);
+  }, [locked, d.id, send]);
+
+  const press = () => {
+    if (busy || askPassword) return;
+    start.current = Date.now();
+    raf.current = requestAnimationFrame(tick);
+  };
+  const release = () => {
+    if (raf.current) cancelAnimationFrame(raf.current);
+    setFill(0);
+  };
+
+  const submitUnlock = () => {
+    if (!password) return;
+    setAskPassword(false);
+    setLabel("Unlocking — verifying…");
+    send(d.id, { command: "unlock", confirm: true, password }).then((r) => finish(r, "unlock"));
+    setPassword("");
+  };
+
+  return (
+    <div className="dev-block hero">
+      <div className={`dev ${locked ? "on" : ""} ${d.available ? "" : "unavailable"}`}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <LockIcon />
+          <div>
+            <div className="nm">{d.label}</div>
+            <div className="st">{busy ? "…" : stateText}</div>
+          </div>
+        </div>
+      </div>
+      {d.lockAllowed === false ? (
+        d.available && (
+          <div className="slider-row">
+            <span className="st">lock controls are not available on guest accounts</span>
+          </div>
+        )
+      ) : askPassword ? (
+        <div className="slider-row" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input
+            type="password"
+            autoFocus
+            placeholder="Account password to unlock"
+            aria-label="Account password to unlock"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitUnlock()}
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <button className="mini-btn" disabled={!password} onClick={submitUnlock}>Unlock</button>
+          <button className="mini-btn" onClick={() => { setAskPassword(false); setPassword(""); }}>Cancel</button>
+        </div>
+      ) : (
+        <div className="slider-row">
+          <button
+            className={`hold-btn ${locked ? "armed" : ""}`}
+            disabled={busy || !d.available}
+            onPointerDown={press}
+            onPointerUp={release}
+            onPointerLeave={release}
+          >
+            <span className="fill" style={{ width: `${fill * 100}%` }} />
+            <span className="tx">
+              {label ?? (busy ? "Working…" : locked ? "Hold to unlock" : "Hold to lock")}
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

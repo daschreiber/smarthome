@@ -172,6 +172,18 @@
   ]
  },
  {
+  "entity_id": "lock.5th_floor_5th_floor",
+  "domain": "lock",
+  "original_name": "5th Floor",
+  "display_name": "5th Floor",
+  "room": "Daniella's Study",
+  "floor": 5,
+  "category": "door_lock",
+  "group": "Security",
+  "visible": true,
+  "battery_entity": "sensor.5th_floor_5th_floor_battery"
+ },
+ {
   "entity_id": "light.knx_switch_5th_fh_daniella_s_study",
   "domain": "light",
   "original_name": "KNX Switch 5th - FH - Daniella's Study",
@@ -503,6 +515,18 @@
   "category": "ventilation",
   "group": "Climate & Comfort",
   "visible": true
+ },
+ {
+  "entity_id": "lock.front_front_door",
+  "domain": "lock",
+  "original_name": "Front door",
+  "display_name": "Front door",
+  "room": "Entrance",
+  "floor": 6,
+  "category": "door_lock",
+  "group": "Security",
+  "visible": true,
+  "battery_entity": "sensor.front_front_door_battery"
  },
  {
   "entity_id": "light.knx_switch_6th_fh_entrance_kitchen",

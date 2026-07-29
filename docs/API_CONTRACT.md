@@ -11,6 +11,9 @@ commands; entity mapping is server-controlled (`data/entity_map.json`).
 
 - JSON in/out. Success is `{ ok: true, ... }` or a plain data object;
   errors are `{ error: string }` (sometimes `+ detail` with Zod issues).
+  Two deviations to be aware of: device commands report failures as
+  `{ status: "failed", error }`, and the vacuum segment read returns 200
+  with an `error` field when the map fetch degrades.
 - **Auth**: every route requires a signed-in caller except `/api/auth/*`
   and `/api/spotify/callback`. Two mechanisms, checked in order:
   1. `session` cookie (httpOnly, 90 days) — issued by password or Google

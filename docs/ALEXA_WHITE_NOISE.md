@@ -1,14 +1,22 @@
-# Alexa: "turn on white noise" (runbook)
+# Alexa: "turn on sleep sound" (runbook)
 
-Goal: **"Alexa, turn on white noise"** / **"Alexa, turn off white noise"**
+> **Naming update (2026-07-27):** the exposed switch was renamed
+> **"Sleep sound"** (entity id still `switch.white_noise`) because even
+> "turn on white noise" was being hijacked by Amazon's built-in Ambient
+> Sounds on the Echo. The wake phrase is now **"Alexa, turn on/off sleep
+> sound"**, and the app card carries the same label (see
+> `web/src/lib/registry.ts`). The setup below is otherwise as executed;
+> read "White Noise" as the switch's original name.
+
+Goal: **"Alexa, turn on sleep sound"** / **"Alexa, turn off sleep sound"**
 starts/stops the stream on the Master Bedroom speakers (the Yamaha's main
-zone). The sound and volume are whatever the app's White noise card is set
+zone). The sound and volume are whatever the app's Sleep sound card is set
 to — noise type and volume are the stream's own persistent state on the
 add-on, so a voice start plays exactly what the card shows. No custom
 skill, no new services: Home Assistant Cloud (already subscribed for the
 Railway backend) includes the Alexa integration.
 
-Deliberately NOT "Alexa, play white noise": "play …" routes into Alexa's
+Deliberately NOT "Alexa, play …": "play …" routes into Alexa's
 music domain, and Amazon's built-in ambient sounds would answer it on the
 Echo itself instead of the room speakers. "Turn on/off" is the smart-home
 verb and goes to us. (If a custom phrase is ever wanted, an Alexa Routine
@@ -23,7 +31,9 @@ COMMISSIONING_LOG 2026-07-22), then reload Template entities (Developer tools �
 
 ```yaml
 template:
-  # Append to the EXISTING `template:` list (the HK covers). Modern format
+  # Append to the EXISTING `template:` list if one is present (the HK cover
+  # wrappers lived there until deprecated 2026-07-26 — if that block has
+  # since been removed from configuration.yaml, this starts the list). Modern format
   # only: a legacy `switch: - platform: template` block loads but never
   # sets up on current HA (2026.7, same as the covers — see the config's
   # comments). Verified live 2026-07-22.

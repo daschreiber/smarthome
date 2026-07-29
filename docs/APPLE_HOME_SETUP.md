@@ -20,7 +20,8 @@ Apple TV = home hub (on the home LAN)
         v  (HomeKit Accessory Protocol, local)
 Home Assistant Green — "HomeKit Bridge" integration
         |
-        +--> Control4 Core 3 --> lights, shades
+        +--> Control4 Core 3 --> lights
+        +--> KNX bus (native HA integration) --> shades
         +--> CoolMaster bridge --> climate
 ```
 
@@ -45,14 +46,14 @@ straight to the Green.
 ## What to expose — decisions that matter
 
 **HomeKit allows at most ~150 accessories per bridge** and Home Assistant
-warns as you approach it. The entity map currently has 156 visible
-controllable entities, so "expose everything" will not fit. Recommended
-first bridge, ~130 accessories:
+warns as you approach it. The entity map has ~154 visible controllable
+entities, so "expose everything" will not fit. Recommended first bridge,
+~130 accessories:
 
 | Domain | Expose | Notes |
 | --- | --- | --- |
 | `light` | Yes (the ~97 Lighting-group entities) | Exclude the KNX relays grouped under Utilities/Appliances and everything `visible:false` in `data/entity_map.json`. |
-| `cover` | Yes (13 shades) | Work end-to-end (proven in Stage 3). |
+| `cover` | Yes (the 13 native `cover.*_blinds_knx` shades) | Real position state and sliders since the 2026-07-26 KNX repoint (`knx/README.md` item 9). |
 | `climate` | **Only the CoolMaster units `climate.l1_101`–`l1_202`** | See below. |
 | Scenes | Yes (the 6 KNX scene group-switches) | They arrive as switch-like entities; Morning/Night/Exit/Welcome become tappable in Home and Siri-able. |
 | `media_player` | Not on the first bridge | HomeKit requires TVs in accessory mode (one pairing each), and media is the flakiest domain. Add later as separate accessories if wanted. |
@@ -115,25 +116,23 @@ instead of buying a Connect ZBT-1 dongle. This does *not* put the lock in
 Apple Home via HA; it can be commissioned to Apple Home directly and/or to
 HA's Matter server via multi-admin — a Phase F decision.
 
-## Covers: position commands are broken — use the template wrappers
+## Covers: resolved — native KNX entities (historical note)
 
-Discovered live (2026-07-21): Apple Home closes blinds but cannot raise
-them. Cause: the Control4 cover entities claim position support, but
-`cover.set_cover_position` is silently dropped by the Control4→KNX chain
-(the climate-setpoint bug's sibling) and reported position is stuck near
-1%. HomeKit drives covers by target position, so "open" (target 100) does
-nothing; "close" (target 0) matches the bogus ~1% report and works. The
-`open_cover`/`close_cover`/`stop_cover` services work fine (PWA-proven).
+Two generations of workaround preceded the current state, kept here so old
+references make sense:
 
-Fix: `ha/homekit_covers.yaml` defines 13 optimistic template covers
-("HK …") that expose only open/close/stop. Install by copying the block
-into `configuration.yaml` on the Green and restarting. Then in the HomeKit
-Bridge options, exclude the 13 original `cover.*` Control4 entities; the
-HK wrappers join the bridge automatically (cover domain), appear in the
-bridge's room, and get moved/renamed per the manifest — same final names
-("Blinds", "Left Blinds", …), the "HK <Room> …" prefix tells you which is
-which. The PWA keeps using the original Control4 entities directly and is
-unaffected.
+1. **2026-07-21**: Apple Home could close blinds but not raise them — the
+   Control4 cover entities claimed position support, but
+   `cover.set_cover_position` was silently dropped by the Control4→KNX
+   chain and reported position was stuck near 1%. Workaround: 13
+   optimistic open/close/stop template wrappers ("HK …",
+   `ha/homekit_covers.yaml` — now deprecated).
+2. **2026-07-26**: the shades were rebuilt as native HA KNX covers
+   (`cover.*_blinds_knx`) driving the bus directly, with real position
+   feedback. The wrappers were dropped from the bridge, the native covers
+   exposed in their place, and both Apple Home and the PWA now use the
+   same 13 entities with working sliders. Details: `knx/README.md`
+   items 8–9.
 
 ## Failure modes seen elsewhere / to expect here
 

@@ -1,5 +1,15 @@
 # Implementation Specification
 
+> **Status: pre-build design document (2026-07), kept as the design record.**
+> The app as built deviates in known ways — where this spec and reality
+> disagree, reality is documented in `docs/API_CONTRACT.md` (the real API
+> surface; §8 below was never built as written), `docs/COMMISSIONING_LOG.md`
+> (the as-built system), and the root `README.md`. Largest deviations:
+> persistence is JSON files on a Railway volume, not SQLite (§3); shades are
+> native HA KNX covers, not Control4 (§1/§7); all climate commands go through
+> the CoolMaster bridge, not Control4 (§7); and several post-MVP items
+> (sauna, assistant, automations, Spotify, vacuums, Eight Sleep) shipped.
+
 ## 1. Recommended architecture
 
 ```text

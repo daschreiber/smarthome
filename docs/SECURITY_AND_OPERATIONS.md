@@ -42,7 +42,7 @@ Use short-lived application sessions. Do not make the Home Assistant token the u
 Roles:
 
 - `admin`: mappings, users, diagnostics, all approved controls
-- `household`: normal approved controls
+- `member`: normal approved controls (named `household` in early drafts)
 - `guest`: optional, limited rooms/scenes
 
 Security-sensitive domains remain disabled by default.

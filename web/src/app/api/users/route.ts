@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { addUser, createResetToken, listUsers, removeUser, setRole, type Role } from "@/lib/users";
+import { canManageUsers } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
 
 function admin(req: NextRequest) {
   const auth = authenticate(req);
   if (!auth.ok) return { err: NextResponse.json({ error: "unauthorized" }, { status: 401 }), auth };
-  if (auth.role !== "admin") return { err: NextResponse.json({ error: "admins only" }, { status: 403 }), auth };
+  if (!canManageUsers(auth.role)) return { err: NextResponse.json({ error: "admins only" }, { status: 403 }), auth };
   return { err: null, auth };
 }
 

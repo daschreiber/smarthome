@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  bedCallFor, bedConfigured, bedDeviceId, bedPresenceEntities, bedSideForDeviceId, bedSides,
+  bedCallFor, bedConfigured, bedDeviceId, bedSideForDeviceId, bedSides,
 } from "../eightsleep";
 import { CommandSchema, assertCommandAllowed, buildServiceCall, expectedStates } from "../commands";
 import type { Device } from "../registry";
@@ -31,7 +31,6 @@ describe("configuration", () => {
   it("is absent until the envs exist — no phantom bed in the registry path", () => {
     expect(bedConfigured()).toBe(false);
     expect(bedSides()).toEqual([]);
-    expect(bedPresenceEntities()).toEqual([]);
   });
 
   it("one side alone works (a single-sleeper setup)", () => {
@@ -49,7 +48,6 @@ describe("configuration", () => {
     const [right] = bedSides();
     expect(right.label).toBe("Bed — right side");
     expect(right.presenceEntity).toBeUndefined();
-    expect(bedPresenceEntities()).toEqual([]);
     expect(bedDeviceId("right")).toBe("master_bedroom__bed_right");
     expect(bedSideForDeviceId("master_bedroom__bed_right")?.side).toBe("right");
     expect(bedSideForDeviceId("master_bedroom__bed_left")).toBeUndefined();

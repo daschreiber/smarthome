@@ -75,10 +75,6 @@ export const SignOutIcon = ({ size }: { size?: number }) => (
   <I size={size} d={<><path d="M14 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H14" /><path d="M10 12h10M17 8.5l3.5 3.5-3.5 3.5" /></>} />
 );
 
-export const BackIcon = ({ size }: { size?: number }) => (
-  <I size={size} d={<path d="M14.5 5.5 8 12l6.5 6.5" />} />
-);
-
 export const FlameIcon = ({ size }: { size?: number }) => (
   <I size={size} d={<path d="M12 21c3.9 0 6.5-2.4 6.5-6 0-2.5-1.4-4.3-2.7-5.9-.5-.6-1.3-.3-1.4.4-.1.8-.4 1.5-.9 2-.2-2.6-1.5-5.6-3.9-7.3-.5-.4-1.2 0-1.2.6.1 1.9-.6 3.3-1.6 4.7-1 1.5-2.3 3-2.3 5.5 0 3.6 2.6 6 7.5 6Z" />} />
 );

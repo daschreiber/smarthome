@@ -96,13 +96,6 @@ export function bedSideForDeviceId(deviceId: string): BedSide | undefined {
   return bedSides().find((s) => bedDeviceId(s.side) === deviceId);
 }
 
-/** Presence entities across configured sides — the Sleep sense inputs. */
-export function bedPresenceEntities(): string[] {
-  return bedSides()
-    .map((s) => s.presenceEntity)
-    .filter((e): e is string => !!e);
-}
-
 export interface BedCall {
   domain: string;
   service: string;

@@ -91,7 +91,10 @@ const PENDING_MS = 12_000;
  * server round-trips brightness through HA's 0-255 scale.
  */
 function optimisticFor(kind: string, body: Record<string, unknown>): PendingPatch | null {
-  if (kind === "sauna" || kind === "noise" || kind === "bed") return null;
+  // Locks join the never-optimistic set: a door must only ever display its
+  // PROVEN bolt state (the lock route verifies synchronously for the same
+  // reason), and lock/unlock have no cases below anyway.
+  if (kind === "sauna" || kind === "noise" || kind === "bed" || kind === "lock") return null;
   const until = Date.now() + PENDING_MS;
   const near = (a: number | null | undefined, b: number) => a != null && Math.abs(a - b) <= 2;
   const isOn = (d: UiDevice) =>

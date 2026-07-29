@@ -274,15 +274,21 @@ export async function POST(
     const call = buildServiceCall(device, cmd);
     await callService(call.domain, call.service, call.data);
 
-    // HA accepted the command. Ordinary devices answer NOW ("sent") so the
-    // UI settles instantly, then verify in the background. Door locks are the
-    // deliberate exception: the security card must wait for confirmed bolt
-    // state before it tells the user that a lock/unlock succeeded.
-    //
-    // Setpoints verify against the CoolMaster target temperature, and climate
-    // on/off reads back from every mapped unit (the bridge reflects in ~1s;
-    // the Control4 zone entity lags ~4s behind it).
-    const verifyCommand = async () => {
+    // HA accepted the command — answer NOW ("sent") so the UI settles
+    // instantly, and verify in the background (the server is long-lived;
+    // same pattern as lib/changeover). Blocking the response on read-back
+    // held every tap for the ~4s the Control4 integration takes to poll KNX
+    // feedback from the Director (COMMISSIONING_LOG 2026-07-16 / 2026-07-29).
+    // The verified/unverified outcome still lands in the audit log: the
+    // read-back polls until the state proves the command's intent, and marks
+    // the result "(unverified)" when it never does.
+    // CoolMaster unit's reported target temperature instead — and climate
+    // on/off reads back from the unit too (the bridge reflects in ~1s; the
+    // Control4 zone entity lags ~4s behind it).
+    // Door locks are the one SYNCHRONOUS exception below: a security state
+    // must be proven before it's reported, so the lock card waits for the
+    // read-back instead of getting an instant "sent".
+    const verifyReadback = async () => {
       const wantedTemp = cmd.command === "set_temperature" ? cmd.temperature : null;
       const climateUnits = unitEntityIds(device);
       const setpointUnits = wantedTemp != null ? climateUnits : null;
@@ -341,21 +347,17 @@ export async function POST(
         resultState: seen ? `${seen}${verified ? "" : " (unverified)"}` : undefined,
         ...(device.kind === "lock" ? { security: true } : {}),
       });
-      return { verified, reads };
+      return { verified, seen };
     };
-
     if (device.kind === "lock") {
-      const { verified, reads } = await verifyCommand();
-      const after = reads[0];
+      const { verified, seen } = await verifyReadback();
       return NextResponse.json({
         status: verified ? "confirmed" : "sent",
-        state: after?.state ?? "unknown",
-        brightnessPct: null,
+        state: seen || "unknown",
         durationMs: Date.now() - started,
       });
     }
-
-    void verifyCommand();
+    void verifyReadback();
     return NextResponse.json({ status: "sent", state: "pending", durationMs: Date.now() - started });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

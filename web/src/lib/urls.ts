@@ -20,27 +20,37 @@ export function publicBaseUrl(requestOrigin?: string): string {
   return base.replace(/\/+$/, "");
 }
 
+/** The flows that mint OAuth state. Part of each token's HMAC key. */
+export type OAuthStatePurpose = "google-signin" | "spotify-link";
+
 /**
  * HMAC-signed OAuth state: a random nonce + expiry, signed with the app
  * session secret, so a callback can verify we minted the state without any
  * server-side storage — it survives restarts and works across instances.
- * Shared by the Google sign-in and Spotify link flows.
+ *
+ * The PURPOSE is part of the key, never optional: the Google sign-in route
+ * that mints its state is unauthenticated (it's a sign-in button), while
+ * the Spotify link mint is admin-gated. With a shared key, a state fished
+ * out of the Google redirect would verify in the Spotify callback and let
+ * anyone overwrite the household's Spotify link (Codex review, PR #91).
+ * Purpose-scoped keys keep each callback accepting only its own flow's
+ * states.
  */
-export function createStateToken(nowMs = Date.now()): string {
+export function createStateToken(purpose: OAuthStatePurpose, nowMs = Date.now()): string {
   const secret = process.env.APP_SESSION_SECRET;
   if (!secret) throw new Error("APP_SESSION_SECRET is not set");
   const payload = Buffer.from(`${crypto.randomBytes(12).toString("hex")}|${nowMs + 10 * 60_000}`).toString("base64url");
-  const sig = crypto.createHmac("sha256", secret + "|oauth-state").update(payload).digest("base64url");
+  const sig = crypto.createHmac("sha256", `${secret}|oauth-state|${purpose}`).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
 
-export function verifyStateToken(state: string, nowMs = Date.now()): boolean {
+export function verifyStateToken(purpose: OAuthStatePurpose, state: string, nowMs = Date.now()): boolean {
   const secret = process.env.APP_SESSION_SECRET;
   if (!secret) return false;
   const dot = state.lastIndexOf(".");
   if (dot < 1) return false;
   const payload = state.slice(0, dot);
-  const expect = crypto.createHmac("sha256", secret + "|oauth-state").update(payload).digest("base64url");
+  const expect = crypto.createHmac("sha256", `${secret}|oauth-state|${purpose}`).update(payload).digest("base64url");
   const a = Buffer.from(state.slice(dot + 1));
   const b = Buffer.from(expect);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;

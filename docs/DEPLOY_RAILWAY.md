@@ -76,7 +76,7 @@ network-scoped, only the login restriction was.
    | `EIGHTSLEEP_LEFT_TARGET_ENTITY` / `EIGHTSLEEP_RIGHT_TARGET_ENTITY` | Eight Sleep per-side temperature `number.*` entities — a side configured = a bed card side in the app (`docs/EIGHT_SLEEP_SETUP.md`) |
    | `EIGHTSLEEP_LEFT_PRESENCE_ENTITY` / `EIGHTSLEEP_RIGHT_PRESENCE_ENTITY` | optional — per-side presence `binary_sensor.*` entities (display-only) |
    | `EIGHTSLEEP_LEFT_LABEL` / `EIGHTSLEEP_RIGHT_LABEL` | optional — card labels (default "Bed — left/right side") |
-   | `EIGHTSLEEP_HEAT_DURATION_SECONDS` | optional — heat-level hold duration (default 7200) |
+   | `EIGHTSLEEP_HEAT_DURATION_SECONDS` | optional — heat-level hold duration (default 28800 = a full 8-hour night, per `docs/EIGHT_SLEEP_SETUP.md`) |
    | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | optional — enables the Spotify link flow (More → Spotify, admin-only) and the music controls on receiver cards |
    | `SPOTIFY_TOKEN_PATH` | `/data/spotify_token.json` — where the linked account's refresh token lives |
    | `SPOTIFY_DEFAULT_CONTEXT` | optional — playlist/album URI Play falls back to when nothing is paused |

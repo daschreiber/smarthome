@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const state = req.nextUrl.searchParams.get("state");
   const denied = req.nextUrl.searchParams.get("error");
   if (denied) return NextResponse.redirect(`${publicBaseUrl()}/more?spotify=denied`);
-  if (!code || !state || !verifyStateToken(state)) {
+  if (!code || !state || !verifyStateToken("spotify-link", state)) {
     return NextResponse.json({ error: "invalid or expired link attempt — start again from More" }, { status: 400 });
   }
   try {

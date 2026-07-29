@@ -81,7 +81,7 @@ export function authUrl(redirectUri: string): string {
     client_id: process.env.SPOTIFY_CLIENT_ID!,
     scope: "user-read-playback-state user-modify-playback-state",
     redirect_uri: redirectUri,
-    state: createStateToken(),
+    state: createStateToken("spotify-link"),
   });
   return `${ACCOUNTS}/authorize?${q}`;
 }

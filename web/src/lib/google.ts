@@ -17,10 +17,19 @@ export function googleConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-/** Public base URL + HMAC OAuth state live in lib/urls.ts (shared with the
- *  Spotify link flow); re-exported here for the auth routes and tests. */
-export { publicBaseUrl as appBaseUrl, createStateToken, verifyStateToken } from "./urls";
-import { publicBaseUrl } from "./urls";
+/** Public base URL + HMAC OAuth state live in lib/urls.ts; the state is
+ *  purpose-scoped so a Google sign-in state can never pass another flow's
+ *  callback (and vice versa). */
+export { publicBaseUrl as appBaseUrl } from "./urls";
+import { createStateToken as mintState, verifyStateToken as checkState, publicBaseUrl } from "./urls";
+
+export function createStateToken(nowMs?: number): string {
+  return nowMs === undefined ? mintState("google-signin") : mintState("google-signin", nowMs);
+}
+
+export function verifyStateToken(state: string, nowMs?: number): boolean {
+  return nowMs === undefined ? checkState("google-signin", state) : checkState("google-signin", state, nowMs);
+}
 
 export function redirectUri(requestOrigin: string): string {
   return `${publicBaseUrl(requestOrigin)}/api/auth/google/callback`;

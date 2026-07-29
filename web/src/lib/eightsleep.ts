@@ -31,8 +31,8 @@ import { callService } from "./ha";
  * (warmest) — deliberately NOT mapped to °C; the app shows it as warmth.
  */
 
-export const EIGHT_DOMAIN = "eight_sleep";
-export const SVC_HEAT_SET = "heat_set";
+const EIGHT_DOMAIN = "eight_sleep";
+const SVC_HEAT_SET = "heat_set";
 /**
  * heat_set REQUIRES a duration (seconds) — how long the level holds before
  * the Pod's own schedule/Autopilot takes back over (confirmed on-site
@@ -42,16 +42,16 @@ export const SVC_HEAT_SET = "heat_set";
  * the app holds a level, it never permanently reprograms the Pod.
  * Override with EIGHTSLEEP_HEAT_DURATION_SECONDS.
  */
-export const DEFAULT_HEAT_DURATION_S = 8 * 3600;
+const DEFAULT_HEAT_DURATION_S = 8 * 3600;
 
-export function heatDurationSeconds(): number {
+function heatDurationSeconds(): number {
   const raw = Number(process.env.EIGHTSLEEP_HEAT_DURATION_SECONDS);
   return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : DEFAULT_HEAT_DURATION_S;
 }
-export const SVC_SIDE_ON = "side_on";
-export const SVC_SIDE_OFF = "side_off";
-export const SVC_AWAY_START = "away_mode_start";
-export const SVC_AWAY_STOP = "away_mode_stop";
+const SVC_SIDE_ON = "side_on";
+const SVC_SIDE_OFF = "side_off";
+const SVC_AWAY_START = "away_mode_start";
+const SVC_AWAY_STOP = "away_mode_stop";
 
 export type BedSideName = "left" | "right";
 

@@ -21,17 +21,14 @@ import { noiseConfigured, noiseStatusFresh, noiseTurnOff, noiseTurnOn } from "./
  * across restarts.
  *
  * Shades are deliberately NOT an arming condition (learned the hard way on
- * 2026-07-22's first real night): the Control4 covers' position feedback is
- * stuck near 1%, so the entities report "open" forever — even shut tight.
- * "All shades closed" could never be true and the watcher never armed. A
- * condition that reality can't satisfy isn't a condition, it's an off
- * switch. For STOPPING, the same brokenness dictates an EDGE, not a level:
- * "any shade open" would be true every second of every night, but "a
- * shade's reported state/position CHANGED toward open since the last tick"
- * only fires on movement the integration actually reports. While the
- * feedback stays frozen this trigger is simply inert — lights remain the
- * working wake signal — and it starts working the day the feedback is
- * fixed, with no code change.
+ * 2026-07-22's first real night, when the then-Control4 covers' frozen
+ * position feedback meant "all shades closed" could never be true and the
+ * watcher never armed). Since the 2026-07-26 KNX repoint positions are
+ * real, but the edge-not-level design for STOPPING is kept on its own
+ * merits: "any shade open" is a level that would be true before bed ever
+ * started, while "a shade CHANGED toward open since the last tick" fires
+ * exactly on the morning movement — a keypad press, a hand pull, an
+ * automation — and only then.
  *
  * Deliberate semantics, so the watcher never fights a human:
  * - If noise is already playing when conditions are met, the watcher ADOPTS
@@ -41,10 +38,13 @@ import { noiseConfigured, noiseStatusFresh, noiseTurnOff, noiseTurnOn } from "./
  *   the night instead of re-firing 30s later. The latch clears when a
  *   cancel condition appears — a light on / a shade opening resets the
  *   night, and the next fully-met bedtime arms fresh.
- * - EXCEPT within the first 3 minutes of a watcher-started stream: the
- *   same night the shades bug surfaced, the Control4 goodnight sweep
- *   turned the Yamaha off twice ~40s after the stream started. A death
- *   that early is interference, not intent — retry (twice, then latch).
+ * - EXCEPT within the first 3 minutes of a watcher-started stream: on
+ *   2026-07-22 something turned the Yamaha off twice ~40s after the stream
+ *   started. (It was blamed on a Control4 goodnight sweep at the time; the
+ *   2026-07-26 c4p audit found no such sweep exists, so the true culprit —
+ *   possibly the receiver itself — is unknown.) Either way the policy
+ *   stands: a death that early is interference, not intent — retry (twice,
+ *   then latch).
  * - The TV lift going down does NOT stop the noise (it only gates arming):
  *   late-night TV with noise running is the couple's call, not ours.
  *
@@ -77,7 +77,7 @@ export const CLOSET_LIGHTS = new Set([
 export const TV_LIFT_ENTITY = "light.knx_switch_mbr_tv_lift";
 /** Relay state that means "lift stowed for sleep" ("up" per the household).
  *  If the polarity turns out inverted, set SLEEPWATCH_LIFT_STATE=on. */
-export function liftSleepState(): string {
+function liftSleepState(): string {
   return process.env.SLEEPWATCH_LIFT_STATE || "off";
 }
 
@@ -105,8 +105,8 @@ export interface SleepwatchState {
 
 const DEFAULT_STATE: SleepwatchState = { enabled: true, active: false, latched: false };
 
-/** A watcher-started stream dying this soon is interference (the C4
- *  goodnight sweep), not a human choice. */
+/** A watcher-started stream dying this soon is interference (see the
+ *  header — cause never identified), not a human choice. */
 export const RETRY_WINDOW_MS = 3 * 60_000;
 export const MAX_RETRIES = 2;
 
@@ -159,7 +159,7 @@ export function coverEntities(): string[] {
 }
 
 /** Position must move at least this much toward open to count as movement —
- *  the C4 feedback jitters near 1% and jitter is not a wake-up. */
+ *  feedback jitter is not a wake-up. */
 const OPEN_DELTA = 3;
 
 /** True when a cover's report moved toward OPEN since the last snapshot.

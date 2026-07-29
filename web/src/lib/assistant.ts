@@ -30,7 +30,7 @@ const DEVICE_COMMANDS = [
 ] as const;
 
 // Structured-outputs-safe schema (no records, no optionals — nullable instead).
-export const LlmActionSchema = z.discriminatedUnion("type", [
+const LlmActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("scene"), sceneId: z.string() }),
   z.object({
     type: z.literal("room"),
@@ -45,7 +45,7 @@ export const LlmActionSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const LlmStepSchema = z.object({
+const LlmStepSchema = z.object({
   // Exactly one trigger: a clock time OR a sun event. Null out the one you
   // aren't using (structured outputs disallow optionals).
   time: z.string().nullable(), // HH:MM 24h, or null when sun is set

@@ -17,7 +17,7 @@ import { slug } from "./registry";
  * documented behavior.
  */
 
-export const ActionSchema = z.union([
+const ActionSchema = z.union([
   z.object({ type: z.literal("scene"), sceneId: z.string().min(1) }),
   z.object({
     type: z.literal("room"),
@@ -31,7 +31,7 @@ export const ActionSchema = z.union([
   }),
 ]);
 
-export const StepSchema = z
+const StepSchema = z
   .object({
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "time must be HH:MM").optional(),
     sun: z.enum(["sunset", "sunrise"]).optional(),

@@ -105,10 +105,13 @@ export function buildSceneStates(
         out.push({ deviceId: d.id, command: { command: "turn_off" } });
       }
     } else if (d.kind === "cover") {
-      // Covers are NOT captured from state: C4 position feedback is stuck
-      // (~1%, every cover reads "open" forever), so a blinds-down capture
-      // would store "open" and replay by raising them. Shades enter a scene
-      // only by explicit choice at capture time (the route appends them).
+      // Covers are NOT captured from state — originally because the C4
+      // position feedback was frozen; positions are real since the KNX
+      // repoint (COVER_STATE_TRUSTED), but the explicit-choice design is
+      // kept: the capturer declares shades open/closed at capture time
+      // (the route appends them), which reads intent rather than whatever
+      // position the shades happened to be in. Revisit if position-true
+      // scene capture is ever wanted.
       continue;
     } else if (d.kind === "climate") {
       // Capture the power state too: a scene that only sets 16° on a unit

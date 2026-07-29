@@ -63,7 +63,11 @@ export default function ClimateCard({
     }, 900);
   };
 
-  const active = d.hvacMode != null && d.hvacMode !== "off";
+  // "unavailable"/"unknown" ride through hvacMode verbatim when the entity
+  // is down (/api/home passes the raw state) — that's absence, not running.
+  const active =
+    d.available && d.hvacMode != null &&
+    d.hvacMode !== "off" && d.hvacMode !== "unavailable" && d.hvacMode !== "unknown";
   const pretty = (s: string) => (s.charAt(0).toUpperCase() + s.slice(1)).replace(/_/g, " ");
   // The card answers "how warm is it / what did I ask for": both numbers are
   // labelled, and the setpoint row only exists while the zone runs — when it's

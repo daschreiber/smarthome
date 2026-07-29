@@ -14,6 +14,9 @@ export interface AuditEvent {
   durationMs: number;
   error?: string;
   resultState?: string;
+  /** Security-tier device (door locks): flagged so the activity view can
+   * surface these events distinctly (IMPLEMENTATION_SPEC Phase F). */
+  security?: boolean;
 }
 
 function logPath(): string {

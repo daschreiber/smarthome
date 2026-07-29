@@ -67,6 +67,7 @@ Initial remote access should use Home Assistant Cloud or another outbound secure
 - [Installation and commissioning runbook](docs/INSTALLATION_RUNBOOK.md)
 - [Apple Home via HomeKit Bridge and Apple TV hub](docs/APPLE_HOME_SETUP.md)
 - [Eight Sleep bed — on-site setup runbook](docs/EIGHT_SLEEP_SETUP.md)
+- [Yale front-door lock — on-site setup runbook](docs/YALE_LOCK_SETUP.md)
 - [Design and delivery loop](docs/DESIGN_AND_DELIVERY_LOOP.md)
 - [Test plan](docs/TEST_PLAN.md)
 - [Security and operations](docs/SECURITY_AND_OPERATIONS.md)
@@ -86,7 +87,7 @@ Initial remote access should use Home Assistant Cloud or another outbound secure
 
 Security-sensitive controls such as alarms, locks, gates, and garage doors are excluded from the initial release.
 
-Post-MVP, non-Control4 devices join through their own Home Assistant integrations: the sauna (currently on its manufacturer's app) and the Yale door locks. See the implementation specification, Phase F.
+Post-MVP, non-Control4 devices join through their own Home Assistant integrations: the sauna (currently on its manufacturer's app) and the Yale door locks. See the implementation specification, Phase F. App-side support for the Yale front-door lock (security tier: hold + confirm + password on unlock + flagged audit, excluded from scenes/automations/assistant) landed 2026-07-29; commissioning follows [the Yale lock runbook](docs/YALE_LOCK_SETUP.md).
 
 ## Exact next step when Home Assistant Green arrives
 

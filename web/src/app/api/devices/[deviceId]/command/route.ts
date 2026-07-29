@@ -4,6 +4,8 @@ import { callService, getState } from "@/lib/ha";
 import { getDevice } from "@/lib/registry";
 import { audit } from "@/lib/audit";
 import { authenticate } from "@/lib/auth";
+import { canOperateLocks } from "@/lib/permissions";
+import { getUser, verifyPassword } from "@/lib/users";
 import { unitEntityIds } from "@/lib/coolmaster";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
 import { noiseStatusFresh, noiseTurnOff, noiseTurnOn, setNoiseVolume } from "@/lib/whitenoise";
@@ -36,13 +38,43 @@ export async function POST(
   const cmd = parsed.data;
   const { command, ...args } = cmd;
 
-  // Safety-sensitive devices (the sauna heater) demand explicit confirmation
-  // on every command — IMPLEMENTATION_SPEC Phase F.
+  // Safety-sensitive devices (the sauna heater, door locks) demand explicit
+  // confirmation on every command — IMPLEMENTATION_SPEC Phase F.
   if (device.requiresConfirmation && (raw as { confirm?: unknown })?.confirm !== true) {
     return NextResponse.json(
       { error: "confirmation required", detail: `re-send with "confirm": true to command ${device.label}` },
       { status: 428 },
     );
+  }
+
+  // Door locks: the security tier on top of the confirm above. Guests can't
+  // operate locks at all, and unlocking re-verifies the caller's account
+  // password — a stolen unlocked phone must not open the front door. That
+  // rules out the password-less principals too (dev fallback, x-app-key).
+  if (device.kind === "lock") {
+    if (!canOperateLocks(auth.role)) {
+      return NextResponse.json({ error: "locks are not available to guests" }, { status: 403 });
+    }
+    if (cmd.command === "unlock") {
+      const record = getUser(auth.user);
+      if (!record) {
+        return NextResponse.json(
+          { error: "unlocking requires a signed-in user account" },
+          { status: 403 },
+        );
+      }
+      const password = (raw as { password?: unknown })?.password;
+      if (typeof password !== "string" || !verifyPassword(password, record.passwordHash)) {
+        audit({
+          ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
+          command, args, ok: false, durationMs: 0, security: true, error: "password check failed",
+        });
+        return NextResponse.json(
+          { error: "unlock requires your account password", detail: `re-send with "password" to unlock ${device.label}` },
+          { status: 403 },
+        );
+      }
+    }
   }
 
   const started = Date.now();
@@ -299,6 +331,7 @@ export async function POST(
       ok: true,
       durationMs,
       resultState: after ? `${after.state}${verified ? "" : " (unverified)"}` : undefined,
+      ...(device.kind === "lock" ? { security: true } : {}),
     });
     return NextResponse.json({
       status,
@@ -321,6 +354,7 @@ export async function POST(
       ok: false,
       durationMs: Date.now() - started,
       error: message,
+      ...(device.kind === "lock" ? { security: true } : {}),
     });
     const clientError = /does not support|out of range/.test(message);
     return NextResponse.json(

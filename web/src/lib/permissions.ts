@@ -25,6 +25,15 @@ export function canViewActivity(role: Role): boolean {
 }
 
 /**
+ * Operate door locks — the security tier (IMPLEMENTATION_SPEC Phase F).
+ * Guests are excluded outright; on top of this, every lock command confirms
+ * and unlocking re-verifies the caller's account password in the route.
+ */
+export function canOperateLocks(role: Role): boolean {
+  return role === "admin" || role === "member";
+}
+
+/**
  * Delete a scene/automation/timer: admins anything, everyone else only what
  * they created. Records from before user accounts (createdBy "dev" or
  * "app-key") therefore count as admin-owned.

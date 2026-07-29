@@ -42,6 +42,7 @@ ROOMS = [
     ("sauna", "Sauna"), ("utility", "Utility Room"), ("entrance", "Entrance"),
     ("landing", "Stairs & Landing"), ("stairs", "Stairs & Landing"),
     ("hall", "Entrance"),
+    ("front door", "Entrance"),
     ("terrace", "Terrace"), ("bbq", "Terrace"),
     ("5th balcony", "Balcony (5th)"), ("6th balcony", "Balcony (6th)"),
     ("balcony", "Balcony (6th)"),
@@ -124,6 +125,7 @@ GROUPS = {
     "infrastructure_climate": "Utilities",
     "media": "Media", "scene_switch": "Scenes",
     "kitchen_appliance": "Appliances", "vacuum": "Appliances",
+    "door_lock": "Security",
     "infrastructure": "Utilities", "controlled_socket": "Utilities",
     "motorized_furniture": "Utilities",
 }
@@ -241,6 +243,11 @@ def classify(e):
         # "Floor 5 Roborock" both work (see vacuum_room below); anything else
         # needs a ROOM_OVERRIDES entry.
         return "vacuum"
+    if domain == "lock":
+        # The Yale Linus L2 on the front door (Yale Home integration, doorbell
+        # as bridge — docs/YALE_LOCK_SETUP.md). The app forces the security
+        # tier on every lock row regardless of this map (web lib/registry).
+        return "door_lock"
     if domain == "light":
         for pattern, category in LIGHT_RULES:
             if re.search(pattern, low):
@@ -255,7 +262,7 @@ def main():
 
     out, categories = [], {}
     for e in entities:
-        if e["domain"] not in ("light", "cover", "climate", "media_player", "vacuum"):
+        if e["domain"] not in ("light", "cover", "climate", "media_player", "vacuum", "lock"):
             continue
         category = classify(e)
         room = (ROOM_OVERRIDES.get(e["entity_id"])

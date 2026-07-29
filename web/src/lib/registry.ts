@@ -22,11 +22,12 @@ export type Capability =
   | "select_source"
   | "transport"
   | "vacuum_control"
-  | "bed_level";
+  | "bed_level"
+  | "lock_unlock";
 
 export interface MapRow {
   entity_id: string;
-  domain: "light" | "cover" | "climate" | "media_player" | "vacuum";
+  domain: "light" | "cover" | "climate" | "media_player" | "vacuum" | "lock";
   original_name: string;
   display_name: string;
   room: string;
@@ -88,6 +89,8 @@ function capabilitiesFor(row: MapRow): Capability[] {
       return ["on_off", "volume", "select_source", "transport"];
     case "vacuum":
       return ["vacuum_control"];
+    case "lock":
+      return ["lock_unlock"];
   }
 }
 
@@ -142,6 +145,9 @@ export function buildDevices(rows: MapRow[]): Device[] {
       category: row.category,
       visible: row.visible,
       capabilities: capabilitiesFor(row),
+      // Door locks are security-tier by policy (IMPLEMENTATION_SPEC Phase F):
+      // every command confirms, regardless of what the map says.
+      ...(row.domain === "lock" ? { requiresConfirmation: true } : {}),
       ...(row.coolmaster_units?.length ? { coolmasterUnits: row.coolmaster_units } : {}),
       ...(row.pinned ? { pinned: true } : {}),
     };

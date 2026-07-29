@@ -93,8 +93,14 @@ Deployed on Railway (branch `main` auto-deploys), installed as a PWA:
 - **Voice/ecosystem** — the same HA entities are exposed to Apple Home
   (HomeKit Bridge + Apple TV hub) and Alexa (HA Cloud).
 
-Security-sensitive controls (alarm, locks, gates, garage) remain excluded
-by policy. The Yale locks are a future phase (implementation spec, Phase F).
+- **Security tier** — the Yale front-door lock (landed 2026-07-29):
+  honest-state Front door card, press-and-hold plus explicit confirm on
+  every command, account-password re-verification on unlock, flagged
+  audit; excluded from scenes, automations, and the assistant.
+  Commissioning: [the Yale lock runbook](docs/YALE_LOCK_SETUP.md).
+
+Other security-sensitive controls (alarm, gates, garage) remain excluded
+by policy.
 
 ## Documentation
 
@@ -104,6 +110,7 @@ Current references:
 - [Commissioning log](docs/COMMISSIONING_LOG.md) — the running as-built record
 - [Deploy to Railway](docs/DEPLOY_RAILWAY.md) — deployment + the env var table
 - [KNX shades](knx/README.md) — the shade migration, GA map, monitor tooling
+- [Yale front-door lock — on-site setup](docs/YALE_LOCK_SETUP.md)
 - [Security and operations](docs/SECURITY_AND_OPERATIONS.md)
 - [Test plan](docs/TEST_PLAN.md)
 - [Apple Home setup](docs/APPLE_HOME_SETUP.md)

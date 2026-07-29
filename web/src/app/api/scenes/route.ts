@@ -106,6 +106,12 @@ export async function POST(req: NextRequest) {
       }
       const device = getDevice(body.deviceId);
       if (!device) return NextResponse.json({ error: "unknown device" }, { status: 404 });
+      // Locks pass capability validation (lock_unlock) but can never replay —
+      // lib/execute refuses them — so storing one would create a scene that
+      // fails on every apply. Refuse at the door instead (Phase F policy).
+      if (device.kind === "lock") {
+        return NextResponse.json({ error: "door locks can't be stored in scenes" }, { status: 400 });
+      }
       const commands: Array<Record<string, unknown>> = [];
       for (const raw of body.commands) {
         const parsed = CommandSchema.safeParse(raw);

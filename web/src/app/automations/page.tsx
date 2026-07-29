@@ -270,7 +270,9 @@ export default function Automations() {
 
       setTargets(
         devs
-          .filter((d) => d.category !== "scene_switch")
+          // Locks never appear as automation targets: the server refuses lock
+          // commands from the scheduler anyway (lib/execute, Phase F policy).
+          .filter((d) => d.category !== "scene_switch" && d.kind !== "lock")
           .map((d) => ({ id: d.id, label: d.label, room: d.room, kind: d.kind, category: d.category, capabilities: d.capabilities ?? [] }))
           .sort((a, b) => `${a.room} ${a.label}`.localeCompare(`${b.room} ${b.label}`)),
       );

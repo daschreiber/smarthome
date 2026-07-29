@@ -14,6 +14,8 @@ interface Ev {
   durationMs: number;
   error?: string;
   resultState?: string;
+  /** Security-tier device (door locks) — rendered with a distinct badge. */
+  security?: boolean;
 }
 
 export default function Activity() {
@@ -43,6 +45,9 @@ export default function Activity() {
         <div key={i} className="dev" style={{ alignItems: "flex-start" }}>
           <div>
             <div className="nm">
+              {e.security && (
+                <span style={{ color: "var(--danger)", fontWeight: 700, marginRight: 6 }}>SECURITY</span>
+              )}
               {e.command.replace(/_/g, " ")} · {e.deviceId.split("__").pop()?.replace(/_/g, " ")}
             </div>
             <div className="st" style={{ fontVariantNumeric: "tabular-nums" }}>

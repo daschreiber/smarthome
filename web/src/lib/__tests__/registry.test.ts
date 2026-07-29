@@ -36,6 +36,17 @@ const rows: MapRow[] = [
     visible: true,
   },
   {
+    entity_id: "lock.front_door",
+    domain: "lock",
+    original_name: "Front Door",
+    display_name: "Front door",
+    room: "Entrance",
+    floor: 6,
+    category: "door_lock",
+    group: "Security",
+    visible: true,
+  },
+  {
     entity_id: "light.knx_switch_boiler_roof",
     domain: "light",
     original_name: "KNX Switch Boiler Roof",
@@ -68,8 +79,20 @@ describe("buildDevices", () => {
     expect(devices[2].floor).toBe(6);
   });
 
+  it("forces the security tier onto lock rows regardless of the map", () => {
+    expect(devices[3].kind).toBe("lock");
+    expect(devices[3].capabilities).toEqual(["lock_unlock"]);
+    expect(devices[3].requiresConfirmation).toBe(true);
+  });
+
+  it("carries the lock's battery sensor through to the device", () => {
+    const [lock] = buildDevices([{ ...rows[3], battery_entity: "sensor.front_door_battery" }]);
+    expect(lock.batteryEntity).toBe("sensor.front_door_battery");
+    expect(devices[3].batteryEntity).toBeUndefined();
+  });
+
   it("keeps hidden entities in the registry but flagged", () => {
-    expect(devices[3].visible).toBe(false);
+    expect(devices[4].visible).toBe(false);
   });
 
   it("de-duplicates colliding ids deterministically", () => {

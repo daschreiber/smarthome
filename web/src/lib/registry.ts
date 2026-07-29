@@ -22,11 +22,12 @@ export type Capability =
   | "select_source"
   | "transport"
   | "vacuum_control"
-  | "bed_level";
+  | "bed_level"
+  | "lock_unlock";
 
 export interface MapRow {
   entity_id: string;
-  domain: "light" | "cover" | "climate" | "media_player" | "vacuum";
+  domain: "light" | "cover" | "climate" | "media_player" | "vacuum" | "lock";
   original_name: string;
   display_name: string;
   room: string;
@@ -38,6 +39,9 @@ export interface MapRow {
   coolmaster_units?: string[];
   /** Keeps its own card in the room view instead of collapsing into "Room lights". */
   pinned?: boolean;
+  /** Locks: the separate battery sensor entity (Yale reports battery there,
+   * not as a lock attribute); associated by build_entity_map.py. */
+  battery_entity?: string;
 }
 
 export interface Device {
@@ -57,6 +61,8 @@ export interface Device {
   coolmasterUnits?: string[];
   /** See MapRow.pinned. */
   pinned?: boolean;
+  /** See MapRow.battery_entity. */
+  batteryEntity?: string;
 }
 
 /** Shared app-wide slug: scene and automation ids use the same rules as
@@ -89,6 +95,8 @@ function capabilitiesFor(row: MapRow): Capability[] {
       return ["on_off", "volume", "select_source", "transport"];
     case "vacuum":
       return ["vacuum_control"];
+    case "lock":
+      return ["lock_unlock"];
   }
 }
 
@@ -143,7 +151,11 @@ export function buildDevices(rows: MapRow[]): Device[] {
       category: row.category,
       visible: row.visible,
       capabilities: capabilitiesFor(row),
+      // Door locks are security-tier by policy (IMPLEMENTATION_SPEC Phase F):
+      // every command confirms, regardless of what the map says.
+      ...(row.domain === "lock" ? { requiresConfirmation: true } : {}),
       ...(row.coolmaster_units?.length ? { coolmasterUnits: row.coolmaster_units } : {}),
+      ...(row.battery_entity ? { batteryEntity: row.battery_entity } : {}),
       ...(row.pinned ? { pinned: true } : {}),
     };
   });

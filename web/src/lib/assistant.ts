@@ -194,8 +194,11 @@ function loadAliases(): Record<string, string[]> {
  * Anything volatile (current time, the user's words) goes in messages.
  */
 export function buildSystemPrompt(): string {
+  // Door locks are excluded from the conversational layer entirely
+  // (CONVERSATIONAL_LAYER doc: security tier, "excluded from conversation
+  // initially") — not even in the vocabulary, so no proposal can name them.
   const devices = registry()
-    .devices.filter((d) => d.visible)
+    .devices.filter((d) => d.visible && d.kind !== "lock")
     .map((d) =>
       `- ${d.id} | ${d.label} | room: ${d.room || "—"} | kind: ${d.kind} | capabilities: ${d.capabilities.join(",")}` +
       (d.requiresConfirmation ? " | SAFETY: requires explicit user confirmation" : ""),

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import NavBar from "../NavBar";
+import { appKeyHeaders } from "@/lib/appKey";
 import { KeyIcon, PulseIcon, SignOutIcon, UsersIcon } from "../icons";
 
 /** Everything that isn't day-to-day control: audit trail, users, session. */
@@ -11,7 +12,6 @@ export default function More() {
   const [appKey, setAppKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [spotifyNote, setSpotifyNote] = useState<string | null>(null);
-  const keyRef = useRef("");
 
   // The OAuth callback bounces back here with ?spotify=linked|denied.
   useEffect(() => {
@@ -22,16 +22,12 @@ export default function More() {
   }, []);
 
   useEffect(() => {
-    const k = localStorage.getItem("appKey") ?? "";
-    setAppKey(k);
-    keyRef.current = k;
+    setAppKey(localStorage.getItem("appKey") ?? "");
   }, []);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/home", {
-        headers: keyRef.current ? { "x-app-key": keyRef.current } : {},
-      });
+      const res = await fetch("/api/home", { headers: appKeyHeaders() });
       if (res.status === 401) { location.href = "/"; return; }
       if (res.ok) setRole(((await res.json()) as { role?: string }).role ?? null);
     } catch { /* non-critical */ }

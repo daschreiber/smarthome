@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import NavBar from "../NavBar";
+import { appKeyHeaders } from "@/lib/appKey";
 
 /**
  * "Ask the house": chat that produces reviewable proposal cards.
@@ -47,7 +48,7 @@ export default function Assistant() {
         .map((t) => ({ role: t.role, content: t.content }));
       const res = await fetch("/api/assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...appKeyHeaders() },
         body: JSON.stringify({ message, history }),
       });
       const out = await res.json();
@@ -81,7 +82,7 @@ export default function Assistant() {
       try {
         const res = await fetch("/api/assistant", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...appKeyHeaders() },
           body: JSON.stringify({ action: "execute", proposal: turn.proposal }),
         });
         const out = await res.json();

@@ -8,6 +8,7 @@ import {
 } from "@/lib/nextfire";
 import { automationGroup } from "@/lib/automationGroups";
 import { temperatureBounds } from "@/lib/commandRules";
+import { appKeyHeaders } from "@/lib/appKey";
 
 /**
  * Automations screen: a room-grouped, schedule-ordered list + a room-first
@@ -245,7 +246,8 @@ export default function Automations() {
   const [timerMinutes, setTimerMinutes] = useState(20);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/automations");
+    const res = await fetch("/api/automations", { headers: appKeyHeaders() });
+    if (res.status === 401) { location.href = "/"; return; }
     if (!res.ok) {
       setError((await res.json()).error ?? `HTTP ${res.status}`);
       return;
@@ -255,7 +257,11 @@ export default function Automations() {
     setTz(body.tz);
     setAway(body.away === true);
     setSunTimes(body.sun ?? null);
-    const [sc, home, tm] = await Promise.all([fetch("/api/scenes"), fetch("/api/home"), fetch("/api/timers")]);
+    const [sc, home, tm] = await Promise.all([
+      fetch("/api/scenes", { headers: appKeyHeaders() }),
+      fetch("/api/home", { headers: appKeyHeaders() }),
+      fetch("/api/timers", { headers: appKeyHeaders() }),
+    ]);
     if (sc.ok) setScenes(((await sc.json()) as { scenes: SceneMeta[] }).scenes);
     if (home.ok) {
       const devs = ((await home.json()) as {
@@ -308,7 +314,7 @@ export default function Automations() {
     try {
       const res = await fetch("/api/automations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...appKeyHeaders() },
         body: JSON.stringify(body),
       });
       const out = await res.json();
@@ -561,7 +567,7 @@ export default function Automations() {
     try {
       const res = await fetch("/api/timers", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...appKeyHeaders() },
         body: JSON.stringify(body),
       });
       const out = await res.json();
@@ -1094,7 +1100,7 @@ function SaunaFollower() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch("/api/saunawatch")
+    fetch("/api/saunawatch", { headers: appKeyHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then(setSt)
       .catch(() => setSt(null));
@@ -1107,7 +1113,7 @@ function SaunaFollower() {
     setBusy(true);
     fetch("/api/saunawatch", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...appKeyHeaders() },
       body: JSON.stringify({ enabled: !st.enabled }),
     })
       .then((r) => r.json())
@@ -1150,7 +1156,7 @@ function SleepSense({ away }: { away: boolean }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch("/api/sleepwatch")
+    fetch("/api/sleepwatch", { headers: appKeyHeaders() })
       .then((r) => (r.ok ? r.json() : null))
       .then(setSt)
       .catch(() => setSt(null));
@@ -1162,7 +1168,7 @@ function SleepSense({ away }: { away: boolean }) {
     setBusy(true);
     fetch("/api/sleepwatch", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...appKeyHeaders() },
       body: JSON.stringify({ enabled: !st.enabled }),
     })
       .then((r) => r.json())

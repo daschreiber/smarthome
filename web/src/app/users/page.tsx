@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import NavBar from "../NavBar";
+import { appKeyHeaders } from "@/lib/appKey";
 
 type Role = "admin" | "member" | "guest";
 
@@ -21,7 +22,7 @@ export default function Users() {
   const [resetLink, setResetLink] = useState<{ email: string; link: string } | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/users");
+    const res = await fetch("/api/users", { headers: appKeyHeaders() });
     if (!res.ok) {
       setError((await res.json()).error ?? `HTTP ${res.status}`);
       return;
@@ -39,7 +40,7 @@ export default function Users() {
     try {
       const res = await fetch("/api/users", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...appKeyHeaders() },
         body: JSON.stringify(body),
       });
       const out = await res.json();

@@ -5,6 +5,7 @@ import FloorPlan from "./FloorPlan";
 import NavBar from "./NavBar";
 import { BlindsIcon, BulbIcon, FlameIcon, GridIcon, LockIcon, MapIcon, SnowIcon } from "./icons";
 import { canProgram as roleCanProgram } from "@/lib/permissions";
+import { appKeyHeaders } from "@/lib/appKey";
 
 /**
  * Phase C app shell in the decided design direction (docs/DESIGN_DIRECTION.md):
@@ -213,7 +214,6 @@ export default function Page() {
   // True only when the server vouches for cover state (COVER_STATE_TRUSTED=1
   // after the C4 position-feedback fix). Until then shades show no state.
   const [coverTrust, setCoverTrust] = useState(false);
-  const keyRef = useRef("");
   const canProgram = roleCanProgram(role);
 
   // What the cards render: server truth with any live optimistic overlays on
@@ -243,7 +243,6 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    keyRef.current = localStorage.getItem("appKey") ?? "";
     // Explicit choice wins; otherwise the plan suits wide screens, the grid phones.
     const stored = localStorage.getItem("homeLayout");
     if (stored === "plan" || stored === "grid") setLayout(stored);
@@ -272,13 +271,7 @@ export default function Page() {
     history.pushState({}, "", "/");
   }, []);
 
-  const headers = useCallback((): HeadersInit => {
-    // A stored app key with whitespace or non-ASCII (paste artifacts) makes
-    // Safari reject the whole fetch with a cryptic SyntaxError — send the
-    // header only when the value is a legal header token.
-    const k = keyRef.current.trim();
-    return k && /^[\x21-\x7e]+$/.test(k) ? { "x-app-key": k } : {};
-  }, []);
+  const headers = useCallback((): HeadersInit => appKeyHeaders(), []);
 
   const loadFavs = useCallback(async () => {
     try {

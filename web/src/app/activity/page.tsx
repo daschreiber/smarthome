@@ -2,6 +2,7 @@
 
 import NavBar from "../NavBar";
 import { useEffect, useState } from "react";
+import { appKeyHeaders } from "@/lib/appKey";
 
 interface Ev {
   ts: string;
@@ -20,7 +21,7 @@ export default function Activity() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/activity")
+    fetch("/api/activity", { headers: appKeyHeaders() })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json()).error ?? `HTTP ${r.status}`);
         return r.json();

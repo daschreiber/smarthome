@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import NavBar from "../../NavBar";
 import { BlindsIcon, BulbIcon, FlameIcon, SnowIcon } from "../../icons";
 import type { SystemKey } from "@/lib/commandRules";
+import { appKeyHeaders } from "@/lib/appKey";
 
 /**
  * System view: one function across the whole house (lighting / climate /
@@ -47,15 +48,7 @@ export default function SystemPage() {
   const [note, setNote] = useState<string | null>(null);
   // Server-vouched cover state (COVER_STATE_TRUSTED=1 once C4 feedback works).
   const [coverTrust, setCoverTrust] = useState(false);
-  const keyRef = useRef("");
-
-  useEffect(() => {
-    keyRef.current = localStorage.getItem("appKey") ?? "";
-  }, []);
-  const headers = useCallback((): HeadersInit => {
-    const k = keyRef.current.trim();
-    return k && /^[\x21-\x7e]+$/.test(k) ? { "x-app-key": k } : {};
-  }, []);
+  const headers = useCallback((): HeadersInit => appKeyHeaders(), []);
 
   const refresh = useCallback(async () => {
     try {

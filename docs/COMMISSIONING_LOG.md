@@ -318,3 +318,38 @@ Smaller strokes, same day:
 - Whole House devices (the all-rooms closet strip, a `scene_switch`)
   group under "Several rooms" with real labels — display lookups now
   resolve every device, not just the builder's filtered target list.
+
+## 2026-07-29 — Perceived latency: instant taps, CoolMaster-truth A/C state
+
+Owner symptom: "the app takes a while to respond" — both the UI (cards
+spinning/reverting for seconds) and reality (A/C apparently slow to react).
+Diagnosis: three stacked lags, none of them the devices themselves.
+
+1. The command route blocked its HTTP response on read-back polling (up to
+   8s; ~4s typical, since the Control4 integration polls the Director on a
+   5s interval). Every tap held a spinner for that long. Fixed: the route
+   answers `sent` the moment HA accepts the service call and runs the same
+   read-back loop in the background (`void`, like lib/changeover); the
+   verified/`(unverified)` verdict still lands in the audit log. API
+   contract updated — `confirmed` in a response now only comes from the
+   sauna and white-noise paths, which verify inline on purpose.
+2. Cards showed no optimistic state: a toggle looked ignored until
+   `/api/home` (3s poll) caught up with the ~4s Control4 mirror. Fixed:
+   `page.tsx` overlays the expected result at tap time (per-command
+   patches; 12s hold so a stale poll can't flip the card back; dropped the
+   moment the server proves the state, rolled back if the command fails).
+   Room fan-outs get the same treatment. Sauna, noise, and bed cards stay
+   non-optimistic deliberately (safety tier / listener ground-truth).
+3. A/C on/off state displayed from the Control4 zone entity, which lags
+   the CoolMaster bridge by ~4s — the A/C was often already running while
+   the app said off. Fixed: `/api/home` derives climate state from the
+   zone's CoolMaster unit entities (on if any unit runs; Control4 entity
+   remains the fallback when units are absent), matching how setpoint and
+   fan already read. Background read-back for climate also targets the
+   unit entity now.
+
+Also: `/api/home` awaited the white-noise status serially after the
+parallel block — moved into the `Promise.all`, shaving its round trip off
+every poll. Still open if latency needs to shrink further: lower the
+Control4 integration scan interval, then the HA WebSocket stream (both
+flagged 2026-07-16).

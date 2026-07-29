@@ -8,7 +8,7 @@ section it appears in. Consequential loads (boilers, ovens, pump, HVAC
 master cutoffs, TV lift) live under Utilities/Appliances and are
 candidates for a confirm-before-run tap in the UI.
 
-Controllable entities mapped: **186**
+Controllable entities mapped: **206**
 
 ## Appliances (9, 7 hidden)
 
@@ -22,7 +22,7 @@ Controllable entities mapped: **186**
 - [hidden] [Kitchen] Oven (Upper) (kitchen_appliance)  `light.knx_switch_tnvr_lyvn`
 - [Lounge] Floor 6 Roborock (vacuum)  `vacuum.floor_6`
 
-## Climate & Comfort (39, 16 hidden)
+## Climate & Comfort (40, 16 hidden)
 
 - [Daniel's Study] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_daniel_s_study`
 - [hidden] [Daniel's Study] Floor Heating (floor_heating)  `light.knx_switch_5th_fh_daniel_s_study`
@@ -59,12 +59,13 @@ Controllable entities mapped: **186**
 - [Small Guest Room] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_small_guset_room`
 - [Small Guest Room] Small Guest Room Fan (fan)  `light.knx_switch_small_guest_room_fan`
 - [Terrace] Terrace Fan (fan)  `light.knx_switch_terrace_fan`
+- [Terrace] Terrace Heating (heater)  `light.knx_switch_terrace_heating`
 - [Utility Room] A/C & Heating (climate_zone)  `climate.ac_heating_a_c_utility_room`
 - [hidden] [Utility Room] Floor Heating (floor_heating)  `light.knx_switch_6th_fh_utility`
 - [hidden] [Whole House] AC\ HEAT 5TH (hvac_master_switch)  `light.knx_switch_ac_heat_5th`
 - [hidden] [Whole House] AC\HEAT 6TH (hvac_master_switch)  `light.knx_switch_ac_heat_6th`
 
-## Lighting (97)
+## Lighting (96)
 
 - [Balcony (5th)] Balcony lights (light_switch)  `light.knx_switch_5th_balcony_lights`
 - [Balcony (6th)] Balcony Plants (light_switch)  `light.knx_switch_6th_balcony_plants`
@@ -157,21 +158,22 @@ Controllable entities mapped: **186**
 - [Small Guest Room] Small Guest RoomHidden (light_switch)  `light.knx_switch_small_guest_roomhidden`
 - [Stairs & Landing] Landing lights (light_dimmer)  `light.knx_dimmer_landing_lights`
 - [Stairs & Landing] Stairs (light_dimmer)  `light.knx_dimmer_stairs`
-- [Terrace] Terrace Heating (light_switch)  `light.knx_switch_terrace_heating`
 - [Terrace] Terrace Lights (light_switch)  `light.knx_switch_terrace_lights`
 - [Utility Room] Utility Room Hall (light_switch)  `light.knx_switch_utility_room_hall`
 - [Utility Room] Utility Room Lights (light_switch)  `light.knx_switch_utility_room_lights`
 - [Utility Room] Utility Room Spot (light_switch)  `light.knx_switch_utility_room_spot`
 - [Utility Room] Utility Room Strip (light_switch)  `light.knx_switch_utility_room_strip`
 
-## Media (14, 2 hidden)
+## Media (16, 4 hidden)
 
-- [Balcony (6th)] Balcony (media)  `media_player.balcony_2`
 - [Balcony (6th)] Balcony (media)  `media_player.balcony`
+- [Balcony (6th)] Balcony (media)  `media_player.balcony_2`
 - [Den] Den (media)  `media_player.den`
+- [hidden] [Den] Receiver (media)  `media_player.room_den`
 - [Gym] Gym (media)  `media_player.gym_gym`
 - [Kitchen] Kitchen (media)  `media_player.kitchen`
 - [Lounge] Lounge (media)  `media_player.lounge`
+- [hidden] [Lounge] Receiver (media)  `media_player.room_lounge`
 - [Master Bathroom] Master Bathroom (media)  `media_player.master_bathroom`
 - [hidden] [Master Bedroom] 55" QLED (media)  `media_player.55_qled`
 - [hidden] [Master Bedroom] Master Bedroom (media)  `media_player.master_bedroom`
@@ -190,24 +192,45 @@ Controllable entities mapped: **186**
 - [Whole House] Main All House (scene_switch)  `light.knx_switch_main_all_house`
 - [Whole House] Welcome (scene_switch)  `light.knx_switch_welcome`
 
+## Security (2)
+
+- [Daniella's Study] 5th Floor (door_lock)  `lock.5th_floor_5th_floor`
+- [Entrance] Front door (door_lock)  `lock.front_front_door`
+
 ## Shades (13)
 
-- [Daniel's Study] Daniel's Study Daniel Study Blinds (shade)  `cover.daniel_s_study_daniel_study_blinds`
-- [Daniella's Study] Daniella's Study Daniella Study Blinds (shade)  `cover.daniella_s_study_daniella_study_blinds`
-- [Den] Den Blinds (shade)  `cover.den_den_blinds`
-- [Guest Bathroom] Guest Bathroom Blinds (shade)  `cover.guest_bathroom_guest_bathroom_blinds`
-- [Kitchen] Kitchen Left (shade)  `cover.kitchen_kitchen_left`
-- [Kitchen] Kitchen Right (shade)  `cover.kitchen_kitchen_right`
-- [Large Guest Room] Large Guest Room Blinds (shade)  `cover.large_guest_room_large_guest_room_blinds`
-- [Lounge] Lounge Left (shade)  `cover.lounge_lounge_left`
-- [Lounge] Lounge Right (shade)  `cover.lounge_lounge_right`
-- [Master Bedroom] Master Bedroom Balcony Left (shade)  `cover.master_bedroom_master_bedroom_balcony_left`
-- [Master Bedroom] Master Bedroom Balcony Right (shade)  `cover.master_bedroom_master_bedroom_balcony_right`
-- [Master Bedroom] Master Bedroom Window (shade)  `cover.master_bedroom_master_bedroom_window`
-- [Medium Guest Room] Medium Guest Room Blinds (shade)  `cover.medium_guest_room_medium_guest_room_blinds`
+- [Daniel's Study] Daniel's Study Daniel Study Blinds (shade)  `cover.daniel_study_blinds_knx`
+- [Daniella's Study] Daniella's Study Daniella Study Blinds (shade)  `cover.daniella_study_blinds_knx`
+- [Den] Den Blinds (shade)  `cover.den_blinds_knx`
+- [Guest Bathroom] Guest Bathroom Blinds (shade)  `cover.guest_bathroom_blinds_knx`
+- [Kitchen] Kitchen Left (shade)  `cover.kitchen_left_blinds_knx`
+- [Kitchen] Kitchen Right (shade)  `cover.kitchen_right_blinds_knx`
+- [Large Guest Room] Large Guest Room Blinds (shade)  `cover.large_guest_room_blinds_knx`
+- [Lounge] Lounge Left (shade)  `cover.lounge_left_blinds_knx`
+- [Lounge] Lounge Right (shade)  `cover.lounge_right_blinds_knx`
+- [Master Bedroom] Master Bedroom Balcony Left (shade)  `cover.mbr_balcony_left_blinds_knx`
+- [Master Bedroom] Master Bedroom Balcony Right (shade)  `cover.mbr_balcony_right_blinds_knx`
+- [Master Bedroom] Master Bedroom Window (shade)  `cover.mbr_window_blinds_knx`
+- [Medium Guest Room] Medium Guest Room Blinds (shade)  `cover.medium_guest_room_blinds_knx`
 
-## Utilities (8, 7 hidden)
+## Utilities (24, 23 hidden)
 
+- [hidden] [NO ROOM] L1.101 (coolmaster_setpoint_unit)  `climate.l1_101`
+- [hidden] [NO ROOM] L1.102 (coolmaster_setpoint_unit)  `climate.l1_102`
+- [hidden] [NO ROOM] L1.103 (coolmaster_setpoint_unit)  `climate.l1_103`
+- [hidden] [NO ROOM] L1.104 (coolmaster_setpoint_unit)  `climate.l1_104`
+- [hidden] [NO ROOM] L1.105 (coolmaster_setpoint_unit)  `climate.l1_105`
+- [hidden] [NO ROOM] L1.106 (coolmaster_setpoint_unit)  `climate.l1_106`
+- [hidden] [NO ROOM] L1.107 (coolmaster_setpoint_unit)  `climate.l1_107`
+- [hidden] [NO ROOM] L1.108 (coolmaster_setpoint_unit)  `climate.l1_108`
+- [hidden] [NO ROOM] L1.109 (coolmaster_setpoint_unit)  `climate.l1_109`
+- [hidden] [NO ROOM] L1.110 (coolmaster_setpoint_unit)  `climate.l1_110`
+- [hidden] [NO ROOM] L1.111 (coolmaster_setpoint_unit)  `climate.l1_111`
+- [hidden] [NO ROOM] L1.112 (coolmaster_setpoint_unit)  `climate.l1_112`
+- [hidden] [NO ROOM] L1.114 (coolmaster_setpoint_unit)  `climate.l1_114`
+- [hidden] [NO ROOM] L1.115 (coolmaster_setpoint_unit)  `climate.l1_115`
+- [hidden] [NO ROOM] L1.201 (coolmaster_setpoint_unit)  `climate.l1_201`
+- [hidden] [NO ROOM] L1.202 (coolmaster_setpoint_unit)  `climate.l1_202`
 - [Master Bedroom] MBR TV Lift (motorized_furniture)  `light.knx_switch_mbr_tv_lift`
 - [hidden] [Utility Room] Boiler 6th Floor (infrastructure)  `light.knx_switch_boiler_6th_floor`
 - [hidden] [Utility Room] Boiler Roof (infrastructure)  `light.knx_switch_boiler_roof`

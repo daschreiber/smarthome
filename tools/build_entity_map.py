@@ -113,6 +113,32 @@ VISIBILITY_OVERRIDES = {
     # sources. Hidden 2026-07-22.
     "media_player.55_qled": False,
     "media_player.master_bedroom": False,
+    "media_player.room_den": False,
+    "media_player.room_lounge": False,
+}
+
+# The live HA inventory now includes auto-discovered TVs, secondary receiver
+# zones, and DLNA players in addition to the deliberately commissioned room
+# audio endpoints. Keep the app registry on the reviewed endpoints; adding a
+# new player is an explicit product decision rather than an inventory side
+# effect.
+MEDIA_ENTITIES = {
+    "media_player.balcony_2",
+    "media_player.balcony",
+    "media_player.den",
+    "media_player.gym_gym",
+    "media_player.kitchen",
+    "media_player.lounge",
+    "media_player.master_bathroom",
+    "media_player.55_qled",
+    "media_player.master_bedroom",
+    "media_player.mbr_balcony",
+    "media_player.master_bedroom_balcony",
+    "media_player.sauna",
+    "media_player.bbq_speaker",
+    "media_player.terrace",
+    "media_player.room_den",
+    "media_player.room_lounge",
 }
 
 GROUPS = {
@@ -162,6 +188,26 @@ HEBREW_NAMES = {
 # that referenced it.
 NAME_OVERRIDES = {
     "light.knx_dimmer_daniel_study_lights": "Study Spots",
+    # These ids were deliberately repointed from Control4/HomeKit wrappers to
+    # direct KNX covers without changing app device ids. Preserve the reviewed
+    # labels even if HA's friendly names later gain a "KNX" suffix.
+    "cover.daniel_study_blinds_knx": "Daniel's Study Daniel Study Blinds",
+    "cover.daniella_study_blinds_knx": "Daniella's Study Daniella Study Blinds",
+    "cover.den_blinds_knx": "Den Blinds",
+    "cover.guest_bathroom_blinds_knx": "Guest Bathroom Blinds",
+    "cover.kitchen_left_blinds_knx": "Kitchen Left",
+    "cover.kitchen_right_blinds_knx": "Kitchen Right",
+    "cover.large_guest_room_blinds_knx": "Large Guest Room Blinds",
+    "cover.lounge_left_blinds_knx": "Lounge Left",
+    "cover.lounge_right_blinds_knx": "Lounge Right",
+    "cover.mbr_balcony_left_blinds_knx": "Master Bedroom Balcony Left",
+    "cover.mbr_balcony_right_blinds_knx": "Master Bedroom Balcony Right",
+    "cover.mbr_window_blinds_knx": "Master Bedroom Window",
+    "cover.medium_guest_room_blinds_knx": "Medium Guest Room Blinds",
+    "media_player.balcony": "Balcony",
+    "media_player.balcony_2": "Balcony",
+    "media_player.room_den": "Receiver",
+    "media_player.room_lounge": "Receiver",
 }
 
 # Lights that keep their own card in the app's room view instead of collapsing
@@ -172,9 +218,13 @@ PINNED = {
 }
 
 ROOM_OVERRIDES = {
+    # Yale door from Daniella's Study out to the fifth-floor landing.
+    "lock.5th_floor_5th_floor": "Daniella's Study",
     # shades onto the MBR balcony are inside the master bedroom
     "cover.master_bedroom_master_bedroom_balcony_left": "Master Bedroom",
     "cover.master_bedroom_master_bedroom_balcony_right": "Master Bedroom",
+    "cover.mbr_balcony_left_blinds_knx": "Master Bedroom",
+    "cover.mbr_balcony_right_blinds_knx": "Master Bedroom",
     # the 55" QLED physically lives in the master bedroom (ROOMS would
     # otherwise file it under Lounge)
     "media_player.55_qled": "Master Bedroom",
@@ -190,6 +240,7 @@ ROOM_OVERRIDES = {
     "light.knx_switch_tnvr_mrkz": "Kitchen",
     "light.knx_switch_tnvr_tkhtvn": "Kitchen",
     "light.knx_switch_tnvr_lyvn": "Kitchen",
+    "light.knx_switch_5th_balcony_lights": "Balcony (5th)",
 }
 
 
@@ -226,7 +277,10 @@ def clean_name(name, room):
 
 
 def classify(e):
-    domain, low = e["domain"], e["name"].lower()
+    domain = e["domain"]
+    # Friendly names are owner-editable. Safety classification must survive a
+    # rename, so match the stable entity id as well as the current label.
+    low = f"{e['name']} {e['entity_id'].replace('_', ' ')}".lower()
     if domain == "climate":
         # Raw CoolMaster unit entities (once the owner adds the `coolmaster`
         # integration and re-exports): setpoint plumbing, never room cards.
@@ -249,6 +303,8 @@ def classify(e):
         # tier on every lock row regardless of this map (web lib/registry).
         return "door_lock"
     if domain == "light":
+        if e["entity_id"] in HEBREW_NAMES:
+            return "kitchen_appliance"
         for pattern, category in LIGHT_RULES:
             if re.search(pattern, low):
                 return category
@@ -280,6 +336,19 @@ def main():
     for e in entities:
         if e["domain"] not in ("light", "cover", "climate", "media_player", "vacuum", "lock"):
             continue
+        # Inventory is intentionally broader than the app. Direct KNX covers
+        # replaced their Control4/HomeKit wrappers, KNX circuits replaced room
+        # aggregate lights, and media endpoints are explicitly reviewed above.
+        if e["domain"] == "cover" and not e["entity_id"].endswith("_knx"):
+            continue
+        if e["domain"] == "light" and not e["entity_id"].startswith("light.knx_"):
+            continue
+        if e["domain"] == "media_player" and e["entity_id"] not in MEDIA_ENTITIES:
+            continue
+        # Eight Sleep is represented by the bespoke per-side bed cards; its
+        # diagnostic climate entities must not become generic A/C cards.
+        if e["domain"] == "climate" and "eight_sleep" in e["entity_id"]:
+            continue
         category = classify(e)
         room = (ROOM_OVERRIDES.get(e["entity_id"])
                 or infer_room(e["name"])
@@ -291,6 +360,8 @@ def main():
             display = "A/C & Heating"
         elif category == "floor_heating":
             display = "Floor Heating"
+        elif category == "door_lock":
+            display = NAME_OVERRIDES.get(e["entity_id"]) or e["name"]
         else:
             display = (NAME_OVERRIDES.get(e["entity_id"])
                        or HEBREW_NAMES.get(e["entity_id"])

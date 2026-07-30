@@ -9,6 +9,7 @@ import { saunaConfigured, saunaScheduleStatus, saunaStatus } from "@/lib/sauna";
 import { noiseConfigured, noiseStatus } from "@/lib/whitenoise";
 import { bedConfigured, bedSideForDeviceId } from "@/lib/eightsleep";
 import { zoneRoomFor } from "@/lib/audio";
+import { unverifiedFor } from "@/lib/knxLights";
 
 /**
  * Full visible-device snapshot joined with live HA state.
@@ -18,6 +19,19 @@ import { zoneRoomFor } from "@/lib/audio";
 const strAttr = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const strListAttr = (v: unknown): string[] | null =>
   Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : null;
+
+/**
+ * A light command that was sent, re-asserted, and still never showed up in
+ * the light's own state (lib/knxLights). The card uses this to retire its
+ * optimistic "on" and say the light didn't answer — without it the next tap
+ * sends turn_off into an already-dark room, which is what "I tried a few
+ * times and nothing happened" actually looks like from the sofa.
+ */
+function unverifiedPatch(deviceId: string, liveState?: string): { unverifiedAt?: string } {
+  const u = unverifiedFor(deviceId, liveState);
+  return u ? { unverifiedAt: u.ts } : {};
+}
+
 export async function GET(req: NextRequest) {
   const auth = authenticate(req);
   if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -233,6 +247,7 @@ export async function GET(req: NextRequest) {
           // route (lib/permissions); this only drives the UI.
           ...(d.kind === "lock" ? { lockAllowed: canOperateLocks(auth.role) } : {}),
           ...(d.pinned ? { pinned: true } : {}),
+          ...unverifiedPatch(d.id, s?.state),
         };
       });
     // White noise is hidden from the registry (and thus the command,

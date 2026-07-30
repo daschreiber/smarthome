@@ -44,6 +44,11 @@ The one bulk read the UI polls (~3s). Returns:
   mediaTitle/volumePct/canTurnOn, bedPresence(+Since), noiseType, stopAt,
   requiresConfirmation, note). Unconfigured features (bed, noise, vacuum)
   appear as display-only unavailable cards rather than vanishing.
+- `unverifiedAt` (lights, only when it applies): ISO time of a command that
+  was sent, re-asserted, and still never proved itself in the light's state
+  (lib/knxLights). The card drops its optimistic overlay and says the light
+  didn't answer. Retires itself once the light reaches the wanted state or
+  after 90s.
 - `floorModes`: `{ "5"|"6": { mode: "heat"|"cool"|null, pending, error } }`
   — read off the KNX changeover relays (on = heating).
 - 502 when HA is unreachable.

@@ -36,24 +36,50 @@ export type OAuthStatePurpose = "google-signin" | "spotify-link";
  * Purpose-scoped keys keep each callback accepting only its own flow's
  * states.
  */
-export function createStateToken(purpose: OAuthStatePurpose, nowMs = Date.now()): string {
+/**
+ * The optional SUBJECT rides inside the signed payload, which is what makes
+ * per-user Spotify linking safe: the Spotify callback carries no app
+ * credentials of its own, so "which household account is this consent for?"
+ * has to be unforgeable. Signed into the state, it cannot be edited into
+ * someone else's — a member cannot come back from Spotify holding a state
+ * that overwrites the admin's link.
+ */
+export function createStateToken(purpose: OAuthStatePurpose, nowMs = Date.now(), subject = ""): string {
   const secret = process.env.APP_SESSION_SECRET;
   if (!secret) throw new Error("APP_SESSION_SECRET is not set");
-  const payload = Buffer.from(`${crypto.randomBytes(12).toString("hex")}|${nowMs + 10 * 60_000}`).toString("base64url");
+  const nonce = crypto.randomBytes(12).toString("hex");
+  // Subject-less tokens keep their original two-field payload, so states
+  // minted by the previous build still verify across a deploy.
+  const body = subject
+    ? `${nonce}|${nowMs + 10 * 60_000}|${Buffer.from(subject).toString("base64url")}`
+    : `${nonce}|${nowMs + 10 * 60_000}`;
+  const payload = Buffer.from(body).toString("base64url");
   const sig = crypto.createHmac("sha256", `${secret}|oauth-state|${purpose}`).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
 
-export function verifyStateToken(purpose: OAuthStatePurpose, state: string, nowMs = Date.now()): boolean {
+/** Verify and unpack: `subject` is null for tokens minted without one. */
+export function readStateToken(
+  purpose: OAuthStatePurpose,
+  state: string,
+  nowMs = Date.now(),
+): { ok: boolean; subject: string | null } {
+  const no = { ok: false, subject: null };
   const secret = process.env.APP_SESSION_SECRET;
-  if (!secret) return false;
+  if (!secret) return no;
   const dot = state.lastIndexOf(".");
-  if (dot < 1) return false;
+  if (dot < 1) return no;
   const payload = state.slice(0, dot);
   const expect = crypto.createHmac("sha256", `${secret}|oauth-state|${purpose}`).update(payload).digest("base64url");
   const a = Buffer.from(state.slice(dot + 1));
   const b = Buffer.from(expect);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
-  const exp = Number(Buffer.from(payload, "base64url").toString().split("|")[1]);
-  return Number.isFinite(exp) && nowMs <= exp;
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return no;
+  const [, expRaw, subRaw] = Buffer.from(payload, "base64url").toString().split("|");
+  const exp = Number(expRaw);
+  if (!Number.isFinite(exp) || nowMs > exp) return no;
+  return { ok: true, subject: subRaw ? Buffer.from(subRaw, "base64url").toString() : null };
+}
+
+export function verifyStateToken(purpose: OAuthStatePurpose, state: string, nowMs = Date.now()): boolean {
+  return readStateToken(purpose, state, nowMs).ok;
 }

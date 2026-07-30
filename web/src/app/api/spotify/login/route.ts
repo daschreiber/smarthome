@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
-import { authUrl, spotifyConfigured, spotifyRedirectUri } from "@/lib/spotify";
+import { authUrl, spotifyConfigured, spotifyRedirectUri, type LinkTarget } from "@/lib/spotify";
+import { MAX_LINKED_USERS, getLink, listLinks } from "@/lib/spotifyAccounts";
 
-/** Start the one-time Spotify account link. Admin-only: the linked account
- *  becomes the whole household's music source. */
+/**
+ * Start a Spotify consent flow. Two targets:
+ *
+ * - `?target=me` (the default) — any signed-in user links THEIR OWN
+ *   Spotify, so the room controls on their phone drive their account.
+ * - `?target=house` — admin only: the shared fallback account that everyone
+ *   without a personal link (and the APP_KEY admin) plays as.
+ */
 export async function GET(req: NextRequest) {
   const auth = authenticate(req);
-  if (!auth.ok || auth.role !== "admin") {
-    return NextResponse.json({ error: "admin only" }, { status: auth.ok ? 403 : 401 });
+  if (!auth.ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const wantsHouse = req.nextUrl.searchParams.get("target") === "house";
+  if (wantsHouse && auth.role !== "admin") {
+    return NextResponse.json({ error: "admin only" }, { status: 403 });
   }
   if (!spotifyConfigured()) {
     return NextResponse.json(
@@ -23,5 +33,33 @@ export async function GET(req: NextRequest) {
       { status: 501 },
     );
   }
-  return NextResponse.redirect(authUrl(spotifyRedirectUri()));
+
+  let target: LinkTarget;
+  if (wantsHouse) {
+    target = { kind: "house" };
+  } else {
+    // A personal link needs a real account to hang the token on; the
+    // password-less principals (APP_KEY admin, dev fallback) have none.
+    if (!auth.user.includes("@")) {
+      return NextResponse.json(
+        { error: "sign in with your own account to link your Spotify — the app key has no personal account" },
+        { status: 400 },
+      );
+    }
+    // Spotify's Development Mode ceiling (5 authorised users since Feb 2026)
+    // is worth hitting HERE, with a number and a remedy, rather than at
+    // Spotify's consent screen with "we couldn't link your account".
+    if (!getLink(auth.user) && listLinks().length >= MAX_LINKED_USERS) {
+      return NextResponse.json(
+        {
+          error:
+            `Spotify allows ${MAX_LINKED_USERS} linked accounts for this app, and all ${MAX_LINKED_USERS} are taken — ` +
+            `someone can disconnect theirs in More → Spotify to free a slot`,
+        },
+        { status: 409 },
+      );
+    }
+    target = { kind: "user", email: auth.user };
+  }
+  return NextResponse.redirect(authUrl(spotifyRedirectUri(), target));
 }

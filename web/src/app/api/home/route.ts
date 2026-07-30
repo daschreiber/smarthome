@@ -8,6 +8,7 @@ import { changeoverStatus, modeFromRelayState, relayEntityId } from "@/lib/chang
 import { saunaConfigured, saunaScheduleStatus, saunaStatus } from "@/lib/sauna";
 import { noiseConfigured, noiseStatus } from "@/lib/whitenoise";
 import { bedConfigured, bedSideForDeviceId } from "@/lib/eightsleep";
+import { zoneRoomFor } from "@/lib/audio";
 
 /**
  * Full visible-device snapshot joined with live HA state.
@@ -221,6 +222,10 @@ export async function GET(req: NextRequest) {
               : null,
           canTurnOn:
             d.kind !== "media_player" || ((attr("supported_features") ?? 0) & 128) !== 0,
+          // The room's Control4 matrix zone, named (lib/audio). Only these
+          // can mirror one room's input into another, so the Music card
+          // needs to know which player in the room is the real zone.
+          audioZone: d.kind === "media_player" ? zoneRoomFor(d.entityId) : null,
           lastUpdated: s?.last_updated ?? null,
           note: null as string | null,
           // The security tier travels with the device: guests see the lock's
@@ -319,6 +324,7 @@ export async function GET(req: NextRequest) {
           mediaTitle: null,
           volumePct: null,
           canTurnOn: true,
+          audioZone: null,
           lastUpdated: null,
           note: "waiting for the Roborock integration in Home Assistant",
         });
@@ -354,6 +360,7 @@ export async function GET(req: NextRequest) {
         mediaTitle: null,
         volumePct: null,
         canTurnOn: true,
+        audioZone: null,
         lastUpdated: null,
         note: "waiting for the Yale Home integration in Home Assistant",
         lockAllowed: false,

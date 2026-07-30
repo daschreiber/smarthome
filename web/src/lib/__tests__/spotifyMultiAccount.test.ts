@@ -110,17 +110,94 @@ describe("account resolution", () => {
 
   it("holds Spotify's five-account ceiling and says how to clear it", async () => {
     const { accounts } = await load();
-    for (let i = 0; i < accounts.MAX_LINKED_USERS; i += 1) {
-      accounts.saveLink({ user: `u${i}@example.com`, refreshToken: `r${i}`, displayName: `U${i}`, premium: true });
+    // The house account is one of the five (it's a Spotify user too), so
+    // four personal links fill the allow-list.
+    fs.writeFileSync(
+      process.env.SPOTIFY_TOKEN_PATH!,
+      JSON.stringify({ refresh_token: "r-house", spotify_user_id: "sp-house" }),
+    );
+    for (let i = 0; i < accounts.MAX_LINKED_USERS - 1; i += 1) {
+      accounts.saveLink({
+        user: `u${i}@example.com`, refreshToken: `r${i}`, displayName: `U${i}`,
+        premium: true, spotifyUserId: `sp-${i}`,
+      });
     }
+    expect(accounts.usedSlots()).toBe(accounts.MAX_LINKED_USERS);
     expect(() =>
-      accounts.saveLink({ user: "late@example.com", refreshToken: "rx", displayName: "Late", premium: true }),
+      accounts.saveLink({
+        user: "late@example.com", refreshToken: "rx", displayName: "Late",
+        premium: true, spotifyUserId: "sp-late",
+      }),
     ).toThrow(/unlink first|disconnect/i);
     // Re-linking someone who already has a slot is always allowed.
     expect(() =>
-      accounts.saveLink({ user: "u0@example.com", refreshToken: "new", displayName: "U0", premium: true }),
+      accounts.saveLink({
+        user: "u0@example.com", refreshToken: "new", displayName: "U0",
+        premium: true, spotifyUserId: "sp-0",
+      }),
     ).not.toThrow();
     expect(accounts.getLink("u0@example.com")?.refreshToken).toBe("new");
+  });
+
+  it("counts the house account as one of Spotify's five", async () => {
+    const { accounts } = await load();
+    fs.writeFileSync(
+      process.env.SPOTIFY_TOKEN_PATH!,
+      JSON.stringify({ refresh_token: "r-house", spotify_user_id: "sp-house" }),
+    );
+    expect(accounts.usedSlots()).toBe(1);
+    accounts.saveLink({
+      user: "ruth@example.com", refreshToken: "r-ruth", displayName: "Ruth",
+      premium: true, spotifyUserId: "sp-ruth",
+    });
+    expect(accounts.usedSlots()).toBe(2);
+  });
+
+  it("doesn't charge a second slot when the admin links the house account as their own", async () => {
+    // The common case: the house Spotify IS Daniel's. Spotify's allow-list
+    // counts users, so this is one authorised account, not two — reserving
+    // a slot for the house here would turn him away for no reason.
+    const { accounts } = await load();
+    fs.writeFileSync(
+      process.env.SPOTIFY_TOKEN_PATH!,
+      JSON.stringify({ refresh_token: "r-house", spotify_user_id: "sp-daniel" }),
+    );
+    for (let i = 0; i < 4; i += 1) {
+      accounts.saveLink({
+        user: `u${i}@example.com`, refreshToken: `r${i}`, displayName: `U${i}`,
+        premium: true, spotifyUserId: `sp-${i}`,
+      });
+    }
+    expect(accounts.usedSlots()).toBe(5);
+    expect(accounts.hasSlotFor("daniel@example.com", "sp-daniel")).toBe(true);
+    expect(() =>
+      accounts.saveLink({
+        user: "daniel@example.com", refreshToken: "r-d", displayName: "Daniel",
+        premium: true, spotifyUserId: "sp-daniel",
+      }),
+    ).not.toThrow();
+    // Still five Spotify users authorised, six app accounts pointing at them.
+    expect(accounts.usedSlots()).toBe(5);
+    // …and a genuinely new sixth user is still refused.
+    expect(accounts.hasSlotFor("late@example.com", "sp-late")).toBe(false);
+  });
+
+  it("counts a house account linked before ids were recorded as its own slot", async () => {
+    // Backwards compatibility: the old file has no id, so it can't be
+    // matched against anything. Over-counting risks a "free a slot" message;
+    // under-counting risks a dead end at Spotify. Prefer the former.
+    const { accounts } = await load();
+    expect(accounts.houseRefreshToken()).toBe("r-house");
+    expect(accounts.houseSpotifyUserId()).toBeNull();
+    expect(accounts.usedSlots()).toBe(1);
+  });
+
+  it("keeps the house account's identity across a token rotation", async () => {
+    const { accounts } = await load();
+    accounts.saveHouseRefreshToken("r-house", "sp-house");
+    accounts.saveHouseRefreshToken("rotated");
+    expect(accounts.houseRefreshToken()).toBe("rotated");
+    expect(accounts.houseSpotifyUserId()).toBe("sp-house");
   });
 
   it("labels an account by its Spotify display name", async () => {

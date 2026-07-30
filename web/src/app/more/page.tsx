@@ -24,15 +24,18 @@ export default function More() {
   const [spotifyNote, setSpotifyNote] = useState<string | null>(null);
   const [links, setLinks] = useState<LinkStatus | null>(null);
 
-  // The OAuth callback bounces back here with ?spotify=linked|linked-free|denied.
+  // The OAuth callback bounces back here with
+  // ?spotify=linked|linked-free|denied|error.
   useEffect(() => {
-    const q = new URLSearchParams(location.search).get("spotify");
+    const params = new URLSearchParams(location.search);
+    const q = params.get("spotify");
     if (q === "linked") setSpotifyNote("Connected — room controls now play your Spotify");
     else if (q === "linked-free")
       // Worth saying out loud: Connect control is a Premium feature, so a
       // free account links fine and then fails at the first Play.
       setSpotifyNote("Connected, but this account isn't Premium — Spotify only allows speaker control on Premium");
     else if (q === "denied") setSpotifyNote("Link cancelled on the Spotify consent page");
+    else if (q === "error") setSpotifyNote(params.get("msg") || "The Spotify link didn't complete");
     if (q) history.replaceState(null, "", "/more");
   }, []);
 

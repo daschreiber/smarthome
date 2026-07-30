@@ -32,17 +32,32 @@ export async function GET(req: NextRequest) {
     // account to fail mysteriously at the first Play.
     const profile = await profileWithToken(accessToken);
     if (subject === "house") {
-      saveHouseRefreshToken(refreshToken);
+      saveHouseRefreshToken(refreshToken, profile.id);
       forgetAccount(HOUSE);
     } else {
       const email = subject.startsWith("user:") ? subject.slice(5) : subject;
-      saveLink({ user: email, refreshToken, displayName: profile.displayName, premium: profile.premium });
+      // saveLink re-checks capacity now that the Spotify identity is known:
+      // the login gate had to guess before consent, and this is where an
+      // account that turns out to be one we've already authorised (the
+      // admin linking the house account as their own) stops costing a slot.
+      saveLink({
+        user: email,
+        refreshToken,
+        displayName: profile.displayName,
+        premium: profile.premium,
+        spotifyUserId: profile.id,
+      });
       forgetAccount(userKey(email));
     }
     const flag = profile.premium === false ? "linked-free" : "linked";
     return NextResponse.redirect(`${publicBaseUrl()}/more?spotify=${flag}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : "link failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    // The user is in the middle of a browser flow — a JSON blob is a dead
+    // end. Send them back to the page they started from, carrying the
+    // reason (React escapes it on the way out).
+    return NextResponse.redirect(
+      `${publicBaseUrl()}/more?spotify=error&msg=${encodeURIComponent(message.slice(0, 300))}`,
+    );
   }
 }

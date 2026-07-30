@@ -219,6 +219,10 @@ function reasonFrom(json: unknown, fallback: string): string {
 // ---- Accounts ----
 
 export interface SpotifyProfile {
+  /** Spotify's own user id — the unit its authorised-user limit counts in
+   *  (spotifyAccounts.usedSlots), so the house account linked personally by
+   *  the same admin doesn't burn two of five slots. */
+  id: string | null;
   displayName: string | null;
   premium: boolean | null;
 }
@@ -226,16 +230,18 @@ export interface SpotifyProfile {
 /** Read /me with an access token we already hold (used during linking,
  *  before the token has been filed under an account key). */
 export async function profileWithToken(accessTok: string): Promise<SpotifyProfile> {
+  const unknown: SpotifyProfile = { id: null, displayName: null, premium: null };
   try {
     const res = await fetch(`${API}/me`, { headers: { Authorization: `Bearer ${accessTok}` } });
-    if (!res.ok) return { displayName: null, premium: null };
-    const out = (await res.json()) as { display_name?: string; product?: string };
+    if (!res.ok) return unknown;
+    const out = (await res.json()) as { id?: string; display_name?: string; product?: string };
     return {
+      id: out.id || null,
       displayName: out.display_name || null,
       premium: out.product ? out.product === "premium" : null,
     };
   } catch {
-    return { displayName: null, premium: null };
+    return unknown;
   }
 }
 

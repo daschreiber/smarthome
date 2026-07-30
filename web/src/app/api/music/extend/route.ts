@@ -60,15 +60,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const failed = results.filter((r) => r.status === "failed");
+    // A room that refused to switch off is a failure of the same operation:
+    // an audit entry saying "ok" while the room is still playing would make
+    // the activity log lie about the house.
+    const problems = [
+      ...results.filter((r) => r.status === "failed").map((r) => `${r.room}: ${r.detail}`),
+      ...dropped.filter((r) => !r.ok).map((r) => `${r.room}: ${r.detail}`),
+    ];
+    const outcome = [
+      ...results.map((r) => `${r.room}:${r.status}`),
+      ...dropped.map((r) => `${r.room}:${r.ok ? "off" : "failed"}`),
+    ].join(" ");
     audit({
       ts: new Date().toISOString(), user: auth.user, deviceId: `music:${from}`,
       entityId: origin.entityId, command: "audio_extend",
       args: { from, add, remove, source },
-      ok: failed.length === 0,
+      ok: problems.length === 0,
       durationMs: Date.now() - started,
-      resultState: results.map((r) => `${r.room}:${r.status}`).join(" ") || undefined,
-      error: failed.length ? failed.map((r) => `${r.room}: ${r.detail}`).join("; ") : undefined,
+      resultState: outcome || undefined,
+      error: problems.length ? problems.join("; ") : undefined,
     });
 
     return NextResponse.json({ ok: true, source, results, dropped });

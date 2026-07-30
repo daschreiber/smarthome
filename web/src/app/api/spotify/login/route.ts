@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { authUrl, spotifyConfigured, spotifyRedirectUri, type LinkTarget } from "@/lib/spotify";
-import { MAX_LINKED_USERS, getLink, listLinks } from "@/lib/spotifyAccounts";
+import { MAX_LINKED_USERS, getLink, usedSlots } from "@/lib/spotifyAccounts";
 
 /**
  * Start a Spotify consent flow. Two targets:
@@ -49,7 +49,11 @@ export async function GET(req: NextRequest) {
     // Spotify's Development Mode ceiling (5 authorised users since Feb 2026)
     // is worth hitting HERE, with a number and a remedy, rather than at
     // Spotify's consent screen with "we couldn't link your account".
-    if (!getLink(auth.user) && listLinks().length >= MAX_LINKED_USERS) {
+    // usedSlots counts Spotify USERS — the house account included, since it
+    // holds a slot of its own unless it's the same account being linked
+    // personally. That last case can only be known after consent, so the
+    // callback re-checks with the identity in hand.
+    if (!getLink(auth.user) && usedSlots(auth.user) >= MAX_LINKED_USERS) {
       return NextResponse.json(
         {
           error:

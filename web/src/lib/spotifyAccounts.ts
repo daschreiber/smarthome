@@ -36,6 +36,9 @@ export interface UserLink {
   displayName: string | null;
   /** Connect control is Premium-only; false lets the UI say why. */
   premium: boolean | null;
+  /** The Spotify user id. Capacity is counted in Spotify USERS, not links —
+   * see usedSlots(). Absent on links made before this was recorded. */
+  spotifyUserId?: string | null;
   linkedAt: string;
 }
 
@@ -58,17 +61,34 @@ function linksPath(): string {
 
 // ---- House account ----
 
-export function houseRefreshToken(): string | null {
+function houseFile(): { refresh_token?: unknown; spotify_user_id?: unknown } {
   try {
-    const token = JSON.parse(fs.readFileSync(housePath(), "utf8")).refresh_token;
-    return typeof token === "string" && token ? token : null;
+    return JSON.parse(fs.readFileSync(housePath(), "utf8"));
   } catch {
-    return null;
+    return {};
   }
 }
 
-export function saveHouseRefreshToken(refreshToken: string): void {
-  writeJsonFile(housePath(), { refresh_token: refreshToken });
+export function houseRefreshToken(): string | null {
+  const token = houseFile().refresh_token;
+  return typeof token === "string" && token ? token : null;
+}
+
+/** Null for a house account linked before ids were recorded — usedSlots()
+ *  treats that as "an identity we can't match", not "no identity". */
+export function houseSpotifyUserId(): string | null {
+  const id = houseFile().spotify_user_id;
+  return typeof id === "string" && id ? id : null;
+}
+
+/**
+ * The house file keeps its original `{refresh_token}` shape plus an
+ * optional id, so a volume written by the previous build still reads. A
+ * token rotation carries the known id forward rather than dropping it.
+ */
+export function saveHouseRefreshToken(refreshToken: string, spotifyUserId?: string | null): void {
+  const id = spotifyUserId ?? houseSpotifyUserId();
+  writeJsonFile(housePath(), { refresh_token: refreshToken, ...(id ? { spotify_user_id: id } : {}) });
 }
 
 // ---- Per-user links ----
@@ -87,18 +107,67 @@ export function getLink(email: string): UserLink | null {
 }
 
 /**
- * Save (or replace) one person's link. Re-linking an existing account is
- * always allowed — only a NEW person can hit the ceiling, and they're told
- * the number rather than a bare refusal.
+ * How many of Spotify's authorised-user slots are taken, EXCLUDING one app
+ * account if named.
+ *
+ * Spotify's allow-list counts distinct Spotify USERS, not links in our
+ * store, and two things follow. The house account occupies a slot of its
+ * own whenever it is a different Spotify user — so counting only personal
+ * links would advertise a free slot that Spotify would refuse. But the
+ * house account is usually the admin's OWN Spotify, and then their personal
+ * link is the same user and costs nothing extra — so naively reserving a
+ * slot for the house would wrongly turn them away.
+ *
+ * Hence identity, not arithmetic. An account whose Spotify id we never
+ * recorded (a house link from before this was tracked) can't be matched
+ * against anything, so it counts as its own slot: over-counting risks a
+ * "free a slot first" message, under-counting risks a dead end at Spotify's
+ * consent screen, and the first is the kinder failure.
+ */
+export function usedSlots(excludeUser?: string): number {
+  const ids = new Set<string>();
+  let unidentified = 0;
+  const add = (id: string | null | undefined) => {
+    if (id) ids.add(id);
+    else unidentified += 1;
+  };
+  if (houseRefreshToken()) add(houseSpotifyUserId());
+  for (const l of loadLinks()) {
+    if (excludeUser && l.user.toLowerCase() === excludeUser.toLowerCase()) continue;
+    add(l.spotifyUserId);
+  }
+  return ids.size + unidentified;
+}
+
+/** Is there room for `spotifyUserId` to link as `user`? A Spotify account
+ *  already authorised (typically the house account being linked personally
+ *  by the same admin) is free — it's one user to Spotify either way. */
+export function hasSlotFor(user: string, spotifyUserId?: string | null): boolean {
+  if (spotifyUserId) {
+    const ids = new Set<string>();
+    if (houseRefreshToken() && houseSpotifyUserId()) ids.add(houseSpotifyUserId()!);
+    for (const l of loadLinks()) {
+      if (l.user.toLowerCase() === user.toLowerCase()) continue;
+      if (l.spotifyUserId) ids.add(l.spotifyUserId);
+    }
+    if (ids.has(spotifyUserId)) return true;
+  }
+  return usedSlots(user) < MAX_LINKED_USERS;
+}
+
+/**
+ * Save (or replace) one person's link. Re-linking an account that already
+ * holds a slot is always allowed — only a new Spotify USER can hit the
+ * ceiling, and they're told the number rather than given a bare refusal.
  */
 export function saveLink(link: Omit<UserLink, "linkedAt">): void {
-  const links = loadLinks();
-  const at = links.findIndex((l) => l.user.toLowerCase() === link.user.toLowerCase());
-  if (at < 0 && links.length >= MAX_LINKED_USERS) {
+  if (!hasSlotFor(link.user, link.spotifyUserId)) {
     throw new Error(
-      `Spotify allows ${MAX_LINKED_USERS} linked accounts for this app — someone has to unlink first (More → Spotify)`,
+      `Spotify allows ${MAX_LINKED_USERS} accounts for this app — someone has to unlink first (More → Spotify)`,
     );
   }
+  const links = loadLinks();
+  const at = links.findIndex((l) => l.user.toLowerCase() === link.user.toLowerCase());
   const record: UserLink = { ...link, user: link.user.toLowerCase(), linkedAt: new Date().toISOString() };
   if (at < 0) links.push(record);
   else links[at] = record;

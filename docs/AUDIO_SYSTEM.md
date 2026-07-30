@@ -144,6 +144,18 @@ hatch if the house ever needs more than five people. The app enforces five
 in `MAX_LINKED_USERS` and says so before sending anyone to a consent screen
 they'd fail at.
 
+Capacity is counted in **Spotify users, not links** (`usedSlots`). The house
+account holds a slot of its own whenever it's a different Spotify account —
+but it's usually the admin's own, and then their personal link is the same
+user and costs nothing extra. So each link records the Spotify user id and
+the count de-duplicates. The login gate has to guess before consent (the
+identity isn't known yet), so the callback re-checks with the id in hand. A
+house account linked before ids were recorded can't be matched, so it counts
+as its own slot — over-counting produces a "free a slot first" message,
+under-counting produces a dead end at Spotify's consent screen, and the
+first is the kinder failure. Re-linking the house account records its id and
+clears that up.
+
 ### Hand-off: "open my own Spotify on this room"
 
 The Music card's **Open in Spotify ↗** is the answer to "the controls

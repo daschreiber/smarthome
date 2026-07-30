@@ -1812,14 +1812,29 @@ function MediaCard({
    * it survives the navigation that follows in the same tap — Safari blocks
    * a window.open issued after an await, so the anchor must do the
    * navigating while the transfer rides along beside it.
+   *
+   * The transfer can still fail (the room's device out of the picker, a
+   * revoked token), and target="_blank" leaves this page alive to say so —
+   * the note is waiting when they come back from Spotify, along with the
+   * route's manual-picker instruction.
    */
-  const handOff = () => {
-    fetch("/api/music/handoff", {
-      method: "POST",
-      headers: musicHeaders(),
-      body: JSON.stringify({ room: d.room }),
-      keepalive: true,
-    }).catch(() => {});
+  const handOff = async () => {
+    try {
+      const res = await fetch("/api/music/handoff", {
+        method: "POST",
+        headers: musicHeaders(),
+        body: JSON.stringify({ room: d.room }),
+        keepalive: true,
+      });
+      if (!res.ok) {
+        say(`Spotify opened, but the ${d.room} wasn't attached — ${await errorFrom(res, "the hand-off failed")}`, 20_000);
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { transferred?: boolean; hint?: string } | null;
+      if (body && body.transferred === false && body.hint) say(body.hint, 20_000);
+    } catch (e) {
+      say(`Spotify opened, but the ${d.room} wasn't attached — ${networkError(e, "the hand-off failed")}`, 20_000);
+    }
   };
 
   const explainHandoff = () => {

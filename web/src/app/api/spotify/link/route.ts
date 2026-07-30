@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { forgetAccount, spotifyConfigured, spotifyLinked } from "@/lib/spotify";
-import { MAX_LINKED_USERS, getLink, listLinks, removeLink, userKey } from "@/lib/spotifyAccounts";
+import { MAX_LINKED_USERS, getLink, listLinks, removeLink, usedSlots, userKey } from "@/lib/spotifyAccounts";
 
 /** Who is linked to Spotify: mine in detail, everyone else by name only. */
 export async function GET(req: NextRequest) {
@@ -21,7 +21,9 @@ export async function GET(req: NextRequest) {
     others: links
       .filter((l) => l.user.toLowerCase() !== auth.user.toLowerCase())
       .map((l) => ({ displayName: l.displayName ?? l.user.split("@")[0] })),
-    slots: { used: links.length, max: MAX_LINKED_USERS },
+    // Spotify counts USERS, so the house account is in here too unless it
+    // is the same Spotify account someone linked personally.
+    slots: { used: usedSlots(), max: MAX_LINKED_USERS },
   });
 }
 

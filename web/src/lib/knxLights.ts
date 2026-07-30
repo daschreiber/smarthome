@@ -70,6 +70,48 @@ export function reassertCall(device: Device, cmd: Command, attempt: number): Ser
 }
 
 /**
+ * Has the light done what was asked? "on" is not proof for a dim: a fixture
+ * already alight satisfies the state check the instant the command is sent,
+ * so a dropped brightness telegram would count as success and never be
+ * re-asserted. The level has to be read back too.
+ *
+ * A light that reports no brightness at all is taken at its word on state
+ * alone — better than re-asserting forever at an integration that simply
+ * doesn't echo levels. Tolerance matches the card's: HA round-trips
+ * brightness through a 0-255 scale, so percentages don't land exactly.
+ */
+export function lightAgrees(cmd: Command, state: string, brightness: number | null): boolean {
+  if (cmd.command === "turn_off") return state === "off";
+  if (state !== "on") return false;
+  if (cmd.command !== "set_brightness" || brightness == null) return true;
+  return Math.abs(Math.round((brightness / 255) * 100) - cmd.brightnessPct) <= 2;
+}
+
+/**
+ * Whose command a light is currently obeying. A verification loop runs for up
+ * to 16s in the background, which is ample time for the owner to change their
+ * mind — and a loop that re-asserts a superseded intent doesn't just waste a
+ * telegram, it UNDOES the newer command (tap on, tap off, and the stale
+ * turn_on verifier reads "off" as a contradiction and lights it again). So
+ * every light command claims the device first, and every re-assert and every
+ * verdict is gated on still holding that claim.
+ */
+const claims = new Map<string, number>();
+
+/** Take the device: any verifier still running on it stands down. Supersedes
+ *  the previous verdict too — the card must follow THIS command, not the last. */
+export function claimLight(deviceId: string): number {
+  const token = (claims.get(deviceId) ?? 0) + 1;
+  claims.set(deviceId, token);
+  unverified.delete(deviceId);
+  return token;
+}
+
+export function holdsClaim(deviceId: string, token: number): boolean {
+  return claims.get(deviceId) === token;
+}
+
+/**
  * Commands that were sent, retried, and still never showed up in the light's
  * own state. The UI polls this through /api/home so a card can stop claiming
  * a light is on when the house disagrees — without it the optimistic overlay
@@ -122,6 +164,7 @@ export function unverifiedFor(
 /** Test seam only. */
 export function resetUnverified(): void {
   unverified.clear();
+  claims.clear();
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -141,27 +184,36 @@ export async function verifyLightSweep(
   cmd: Command,
   user: string,
   room: string | null,
+  tokens: Map<string, number>,
 ): Promise<void> {
   const lights = targets.filter((d) => lightRetriable(d, cmd));
   if (lights.length === 0) return;
-  const want = cmd.command === "turn_off" ? "off" : "on";
   const started = Date.now();
   const deadline = started + LIGHT_VERIFY_MS;
   const attempts = new Map(lights.map((d) => [d.id, 1]));
   const lastSent = new Map(lights.map((d) => [d.id, started]));
+  const mine = (d: Device) => holdsClaim(d.id, tokens.get(d.id) ?? -1);
   let waiting = [...lights];
 
   for (;;) {
     await sleep(900);
     const states = new Map(
-      (await getStates().catch(() => [])).map((s) => [s.entity_id, s.state]),
+      (await getStates().catch(() => [])).map((s) => [s.entity_id, s]),
     );
-    waiting = waiting.filter((d) => states.get(d.entityId) !== want);
+    const agreed = (d: Device) => {
+      const s = states.get(d.entityId);
+      if (!s) return false;
+      const b = s.attributes.brightness;
+      return lightAgrees(cmd, s.state, typeof b === "number" ? b : null);
+    };
+    // A light someone has since re-commanded is no longer this sweep's
+    // business — drop it rather than fight the newer intent.
+    waiting = waiting.filter((d) => mine(d) && !agreed(d));
     if (waiting.length === 0 || Date.now() >= deadline) break;
     for (const d of waiting) {
       // Re-send only where the light positively contradicts the command; a
       // missing or unavailable read gets waited out, not shouted at.
-      const seen = states.get(d.entityId);
+      const seen = states.get(d.entityId)?.state;
       if (seen == null || seen === "unavailable" || seen === "unknown") continue;
       const n = attempts.get(d.id)!;
       if (n >= LIGHT_ATTEMPTS || Date.now() - lastSent.get(d.id)! < REASSERT_AFTER_MS) continue;
@@ -174,6 +226,7 @@ export async function verifyLightSweep(
 
   const stuck = new Set(waiting.map((d) => d.id));
   for (const d of lights) {
+    if (!mine(d)) continue; // a newer command owns this light's verdict now
     if (stuck.has(d.id)) noteUnverified(d.id, cmd.command);
     else clearUnverified(d.id);
   }
@@ -192,6 +245,6 @@ export async function verifyLightSweep(
     },
     ok: stuck.size === 0,
     durationMs: Date.now() - started,
-    error: stuck.size ? `never reported ${want}: ${[...stuck].join(", ")}` : undefined,
+    error: stuck.size ? `never obeyed ${cmd.command}: ${[...stuck].join(", ")}` : undefined,
   });
 }

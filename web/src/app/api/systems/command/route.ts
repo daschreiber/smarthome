@@ -4,7 +4,7 @@ import { authenticate } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { executeSystemCommand, systemTargets } from "@/lib/execute";
 import { SYSTEM_COMMANDS } from "@/lib/commandRules";
-import { clearUnverified, verifyLightSweep } from "@/lib/knxLights";
+import { claimLight, verifyLightSweep } from "@/lib/knxLights";
 import type { Command } from "@/lib/commands";
 
 /**
@@ -47,19 +47,20 @@ export async function POST(req: NextRequest) {
 
   const started = Date.now();
   try {
-    const result = await executeSystemCommand(system, command, rooms, brightnessPct);
     // "Room lights on" is one request but many KNX telegrams, and each can go
     // missing on its own — the room that came up half-lit is the same defect
-    // a single tap hits. Verification runs in the background (the server is
-    // long-lived) and re-asserts the fixtures that never reported in; the
+    // a single tap hits. So the sweep claims every fixture it's about to
+    // touch (standing down any verifier still running on them), fans the
+    // command out, then verifies and re-asserts in the background — the
     // response stays instant.
-    if (system === "lighting") {
+    const lights = system === "lighting" ? systemTargets(system, command, rooms) : [];
+    const tokens = new Map(lights.map((d) => [d.id, claimLight(d.id)]));
+    const result = await executeSystemCommand(system, command, rooms, brightnessPct);
+    if (lights.length) {
       const cmd = (command === "set_brightness"
         ? { command, brightnessPct: brightnessPct! }
         : { command }) as Command;
-      const targets = systemTargets(system, command, rooms);
-      for (const d of targets) clearUnverified(d.id);
-      void verifyLightSweep(targets, cmd, auth.user, rooms?.length === 1 ? rooms[0] : null);
+      void verifyLightSweep(lights, cmd, auth.user, rooms?.length === 1 ? rooms[0] : null, tokens);
     }
     audit({
       ts: new Date().toISOString(), user: auth.user, deviceId: `system:${system}`,

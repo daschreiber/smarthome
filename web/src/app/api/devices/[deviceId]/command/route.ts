@@ -12,7 +12,10 @@ import {
   LIGHT_ATTEMPTS,
   LIGHT_VERIFY_MS,
   REASSERT_AFTER_MS,
+  claimLight,
   clearUnverified,
+  holdsClaim,
+  lightAgrees,
   lightRetriable,
   noteUnverified,
   reassertCall,
@@ -298,11 +301,13 @@ export async function POST(
         );
       }
     }
+    // A light command claims the device before it goes out: any verification
+    // loop still running from an earlier tap stands down instead of
+    // re-asserting a superseded intent over this one (lib/knxLights).
+    const retriable = lightRetriable(device, cmd);
+    const claim = retriable ? claimLight(deviceId) : 0;
     const call = buildServiceCall(device, cmd);
     await callService(call.domain, call.service, call.data);
-    // Any earlier "this one never landed" mark is stale the moment a new
-    // command goes out — the card must follow THIS attempt, not the last.
-    clearUnverified(deviceId);
 
     // HA accepted the command — answer NOW ("sent") so the UI settles
     // instantly, and verify in the background (the server is long-lived;
@@ -345,8 +350,15 @@ export async function POST(
       // invisible: the light stays dark while everything reports success. So
       // a light command doesn't just read back, it re-asserts itself while
       // the light disagrees (lib/knxLights) — which needs a longer window
-      // than a plain read-back to fit its attempts.
-      const retriable = lightRetriable(device, cmd);
+      // than a plain read-back to fit its attempts. And "on" is not proof of
+      // a DIM: an already-lit fixture satisfies it the instant the command is
+      // sent, so lightAgrees reads the level back too.
+      const lightReached = (ss: Read[]) =>
+        ss.length > 0 &&
+        ss.every((s) => {
+          const b = s?.attributes.brightness;
+          return !!s && lightAgrees(cmd, s.state, typeof b === "number" ? b : null);
+        });
       const deadline = Date.now() + (retriable ? LIGHT_VERIFY_MS : 8000);
       let attempts = 1;
       let lastSent = started;
@@ -361,9 +373,14 @@ export async function POST(
           if (fanReached(reads)) break;
         } else if (wantedSource != null) {
           if (sourceReached(reads)) break;
+        } else if (retriable) {
+          if (lightReached(reads)) break;
         } else if (!expected) break;
         else if (stateReached(reads)) break;
         if (Date.now() >= deadline) break;
+        // A newer command owns this light now — stand down rather than
+        // re-assert an intent the owner has already replaced.
+        if (retriable && !holdsClaim(deviceId, claim)) break;
         // Re-assert only on positive contradiction: a light reading
         // unavailable proves nothing, and shouting at it helps nothing.
         const seen = reads[0]?.state;
@@ -387,12 +404,15 @@ export async function POST(
           ? fanReached(reads)
           : wantedSource != null
             ? sourceReached(reads)
-            : stateReached(reads);
+            : retriable
+              ? lightReached(reads)
+              : stateReached(reads);
       const seen = [...new Set(reads.filter(Boolean).map((s) => s!.state))].join("/");
       // A light that never showed up in its own state is remembered, so the
       // card can drop its optimistic "on" and say the light didn't answer —
-      // otherwise the next tap sends turn_off and the room stays dark.
-      if (retriable) {
+      // otherwise the next tap sends turn_off and the room stays dark. Only
+      // the command that still holds the claim gets to write that verdict.
+      if (retriable && holdsClaim(deviceId, claim)) {
         if (verified) clearUnverified(deviceId);
         else noteUnverified(deviceId, command);
       }

@@ -395,6 +395,24 @@ Only positive evidence acts, in both directions (the hold loop's rule): a
 light reading `unavailable` is never re-commanded, and never counted as
 proof that the command landed.
 
+Two rules the re-assert loop needs to be safe rather than merely persistent
+(both from the Codex review on PR #97):
+
+- **A newer command wins.** A verifier runs for up to 16s in the background,
+  which is ample time to change your mind — and a loop re-asserting a
+  superseded intent doesn't waste a telegram, it *undoes* the newer command
+  (tap on, tap off, and the stale `turn_on` verifier reads "off" as a
+  contradiction and relights the room). Every light command now claims the
+  device before it goes out; each re-assert and each verdict is gated on
+  still holding that claim, single-device and room-sweep alike.
+- **"On" is not proof of a dim.** A fixture already alight satisfies a state
+  check the instant a `set_brightness` is sent, so a dropped level telegram
+  would have counted as success and never been re-asserted. Verification
+  reads the brightness attribute back too (±2% for HA's 0-255 round trip),
+  and a light that reports no level at all is still taken at its word on
+  state — better than re-asserting forever at an integration that simply
+  doesn't echo levels.
+
 Still open — the real fix is upstream of the app. These dimmers are Control4
 proxies of KNX dimming actuators; the app can only re-send what Control4 will
 carry. If the on-from-cold keeps needing three tries, the questions for the

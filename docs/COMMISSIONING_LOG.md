@@ -353,3 +353,54 @@ parallel block — moved into the `Promise.all`, shaving its round trip off
 every poll. Still open if latency needs to shrink further: lower the
 Control4 integration scan interval, then the HA WebSocket stream (both
 flagged 2026-07-16).
+
+## 2026-07-30 — Light commands re-assert: KNX drops turn-ons, silently
+
+Owner symptom (Daniel's Study): "despite trying a couple of times, the spots
+and strip aren't coming on. If I try a few times the strip comes on but the
+spots still don't." And the decisive detail: **once they're on (from the wall
+switch) they obey off and dim reliably** — it is the on-from-cold that gets
+lost. The room's plain KNX *switch* channels (desk light, closet LED) were
+never affected; only the dimmer channels.
+
+Two failures were stacked, and the second is what made the first feel random.
+
+1. **The telegram goes missing.** Nothing new about this bus: the installer's
+   own changeover macro flips its relay twice "for KNX reliability"
+   (2026-07-26), and `holdUntil` exists because automation lights come back
+   off. The interactive path had no such belt — one telegram, one hope. Fixed:
+   a light command is now an intent, not a telegram (`web/src/lib/knxLights.ts`).
+   The command route sends, watches the read-back, and re-sends while the
+   light disagrees — up to 3 attempts, ~4.2s apart (longer than the ~3.7s
+   Control4 feedback lag, or every command would re-assert against its own
+   stale read), then stands down. The retry **escalates** for dimmers: a bare
+   `light.turn_on` reaches these Control4-fronted KNX dimmers as an unnamed
+   ramp to full, so attempt 2+ names `brightness_pct: 100` instead — the same
+   shape the slider sends, and the slider is the control the owner reports as
+   reliable. Same treatment for the "Room lights" fan-out, which is one
+   request but many telegrams (`verifyLightSweep`, background, per-fixture).
+2. **The card lied about it.** The optimistic overlay flipped the toggle to
+   "on" at tap time and the route answered `sent` immediately; the background
+   read-back knew the light never came on but told only the audit log. So the
+   card showed a lit light over a dark room — and the owner's *next* tap sent
+   `turn_off`. That is precisely the "I tried a few times, sometimes it works"
+   pattern: alternate taps were switching off a light that was already off.
+   Fixed: a command that is re-asserted and still never proven is remembered
+   (in-memory, 90s TTL, same single-service assumption as `changeoverStatus`),
+   published per device as `unverifiedAt` in `/api/home`. The card retires its
+   overlay the moment the server refutes it and says **"off · didn't answer —
+   try again"** rather than showing a state nobody asked for.
+
+Only positive evidence acts, in both directions (the hold loop's rule): a
+light reading `unavailable` is never re-commanded, and never counted as
+proof that the command landed.
+
+Still open — the real fix is upstream of the app. These dimmers are Control4
+proxies of KNX dimming actuators; the app can only re-send what Control4 will
+carry. If the on-from-cold keeps needing three tries, the questions for the
+integrator are (a) whether the dimming actuator is parameterised to switch on
+when it receives a brightness value while off, and (b) whether native HA `knx`
+light entities on the dimmers' own switch + brightness GAs would bypass the
+Control4 driver entirely — the tunnel and the pattern already exist for the
+shades (`knx/README.md`), and light actuators here *do* transmit status
+(cmd `2/0/14` → status `7/1/84`), which the shades never did.

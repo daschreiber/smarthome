@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticate } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { executeSystemCommand } from "@/lib/execute";
+import { executeSystemCommand, systemTargets } from "@/lib/execute";
 import { SYSTEM_COMMANDS } from "@/lib/commandRules";
+import { clearUnverified, verifyLightSweep } from "@/lib/knxLights";
+import type { Command } from "@/lib/commands";
 
 /**
  * House-wide system commands ("all lights off", "all A/C off", room subsets).
@@ -46,6 +48,19 @@ export async function POST(req: NextRequest) {
   const started = Date.now();
   try {
     const result = await executeSystemCommand(system, command, rooms, brightnessPct);
+    // "Room lights on" is one request but many KNX telegrams, and each can go
+    // missing on its own — the room that came up half-lit is the same defect
+    // a single tap hits. Verification runs in the background (the server is
+    // long-lived) and re-asserts the fixtures that never reported in; the
+    // response stays instant.
+    if (system === "lighting") {
+      const cmd = (command === "set_brightness"
+        ? { command, brightnessPct: brightnessPct! }
+        : { command }) as Command;
+      const targets = systemTargets(system, command, rooms);
+      for (const d of targets) clearUnverified(d.id);
+      void verifyLightSweep(targets, cmd, auth.user, rooms?.length === 1 ? rooms[0] : null);
+    }
     audit({
       ts: new Date().toISOString(), user: auth.user, deviceId: `system:${system}`,
       entityId: `system.${system}`, command,

@@ -150,6 +150,24 @@ export function systemDevices(system: SystemKey): Device[] {
   }
 }
 
+/**
+ * Exactly what a system fan-out will command, without commanding it — the
+ * membership rules live here once, so the caller's background verification
+ * (lib/knxLights) watches the same set the sweep actually touched.
+ */
+export function systemTargets(
+  system: SystemKey,
+  command: Command["command"],
+  rooms?: string[],
+): Device[] {
+  let targets = systemDevices(system);
+  if (rooms && rooms.length > 0) targets = targets.filter((d) => rooms.includes(d.room));
+  // Group dim only touches lights that can actually dim; plain switches
+  // keep their current state rather than erroring.
+  if (command === "set_brightness") targets = targets.filter((d) => d.capabilities.includes("brightness"));
+  return targets;
+}
+
 /** Fan a simple command across a system, optionally limited to given rooms. */
 export async function executeSystemCommand(
   system: SystemKey,
@@ -160,14 +178,10 @@ export async function executeSystemCommand(
   if (!SYSTEM_COMMANDS[system].includes(command)) {
     throw new Error(`${command} is not a ${system} system command`);
   }
-  let targets = systemDevices(system);
-  if (rooms && rooms.length > 0) targets = targets.filter((d) => rooms.includes(d.room));
+  const targets = systemTargets(system, command, rooms);
   let cmd: Command = { command } as Command;
   if (command === "set_brightness") {
     if (brightnessPct == null) throw new Error("set_brightness needs brightnessPct");
-    // Group dim only touches lights that can actually dim; plain switches
-    // keep their current state rather than erroring.
-    targets = targets.filter((d) => d.capabilities.includes("brightness"));
     cmd = { command: "set_brightness", brightnessPct };
   }
   if (targets.length === 0) return { total: 0, failed: [{ target: system, error: "no matching devices" }] };

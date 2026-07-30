@@ -60,6 +60,10 @@ interface UiDevice {
   lockAllowed?: boolean;
   /** Lights only: keeps its own card instead of collapsing into "Room lights". */
   pinned?: boolean;
+  /** Lights only: when the server last sent a command, re-asserted it, and
+   * still never saw the light agree (lib/knxLights). Retires the optimistic
+   * overlay and tells the card to say the light didn't answer. */
+  unverifiedAt?: string | null;
   /** Media players only: the audio room this player is the Control4 matrix
    * zone for (lib/audio). Null for every other player in the room. */
   audioZone?: string | null;
@@ -85,10 +89,33 @@ interface PendingPatch {
   patch: Partial<UiDevice>;
   done: (d: UiDevice) => boolean;
   until: number;
+  /** When the promise was made — an `unverifiedAt` at or after this is the
+   *  server refuting THIS command, not reporting an older one. */
+  at: number;
 }
 
 /** Overlay deadline: C4 feedback lag (~4s) + a poll cycle (3s) + margin. */
 const PENDING_MS = 12_000;
+
+/** Lights get longer: the server keeps re-asserting a light command for up to
+ *  16s (three attempts — lib/knxLights), and the card should hold its promise
+ *  exactly as long as the house is still being asked to keep it. It doesn't
+ *  cost honesty — the server refutes a command that failed (`unverifiedAt`),
+ *  so a dead promise is retired on the next poll rather than at this deadline. */
+const LIGHT_PENDING_MS = 20_000;
+
+/**
+ * The server sent the command, re-asserted it, and the light still never
+ * agreed. The overlay's promise is dead: show the truth instead of holding
+ * "on" over a dark room — a card that lies turns the owner's next tap into
+ * a turn_off.
+ */
+function overlayRefuted(d: UiDevice, pp: PendingPatch): boolean {
+  return d.unverifiedAt != null && Date.parse(d.unverifiedAt) >= pp.at;
+}
+
+/** How long a card keeps saying a light didn't answer. */
+const UNANSWERED_MS = 60_000;
 
 /**
  * The expected outcome of a command, per kind. Sauna, noise, and bed cards
@@ -98,11 +125,19 @@ const PENDING_MS = 12_000;
  * server round-trips brightness through HA's 0-255 scale.
  */
 function optimisticFor(kind: string, body: Record<string, unknown>): PendingPatch | null {
+  const base = optimisticPatch(kind, body);
+  return base && { ...base, at: Date.now() };
+}
+
+function optimisticPatch(
+  kind: string,
+  body: Record<string, unknown>,
+): Omit<PendingPatch, "at"> | null {
   // Locks join the never-optimistic set: a door must only ever display its
   // PROVEN bolt state (the lock route verifies synchronously for the same
   // reason), and lock/unlock have no cases below anyway.
   if (kind === "sauna" || kind === "noise" || kind === "bed" || kind === "lock") return null;
-  const until = Date.now() + PENDING_MS;
+  const until = Date.now() + (kind === "light" ? LIGHT_PENDING_MS : PENDING_MS);
   const near = (a: number | null | undefined, b: number) => a != null && Math.abs(a - b) <= 2;
   const isOn = (d: UiDevice) =>
     d.state !== "off" && d.state !== "unavailable" && d.state !== "unknown";
@@ -272,7 +307,9 @@ export default function Page() {
     () =>
       serverDevices.map((d) => {
         const pp = pendingPatches[d.id];
-        return pp && !pp.done(d) && Date.now() < pp.until ? { ...d, ...pp.patch } : d;
+        return pp && !pp.done(d) && !overlayRefuted(d, pp) && Date.now() < pp.until
+          ? { ...d, ...pp.patch }
+          : d;
       }),
     [serverDevices, pendingPatches],
   );
@@ -355,7 +392,8 @@ export default function Page() {
         const n: Record<string, PendingPatch> = {};
         for (const [id, pp] of Object.entries(m)) {
           const d = byId.get(id);
-          if (now < pp.until && !(d && pp.done(d))) n[id] = pp;
+          // Confirmed, refuted, or timed out — all three retire the overlay.
+          if (now < pp.until && !(d && (pp.done(d) || overlayRefuted(d, pp)))) n[id] = pp;
         }
         return Object.keys(n).length === Object.keys(m).length ? m : n;
       });
@@ -1360,6 +1398,11 @@ function Device({
         : d.label;
   const stateText =
     d.category === "motorized_furniture" ? (on ? "TV up" : "TV hidden") : d.state;
+  // The server tried, re-asserted, and the light never agreed. Saying so
+  // beats a card that shows "off" as if nothing had been asked of it — the
+  // owner needs to know the tap was heard and the fixture wasn't.
+  const unanswered =
+    d.unverifiedAt != null && Date.now() - Date.parse(d.unverifiedAt) < UNANSWERED_MS;
   const row = (
     <div className={`dev ${on ? "on" : ""} ${d.available ? "" : "unavailable"} ${hasDimmer ? "" : flashClass(flash)}`}>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -1367,7 +1410,13 @@ function Device({
         <div>
           <div className="nm">{label}</div>
           <div className="st">
-            {busy ? "…" : d.available ? `${stateText}${on && d.brightnessPct != null ? ` · ${d.brightnessPct}%` : ""}` : "unavailable"}
+            {busy
+              ? "…"
+              : !d.available
+                ? "unavailable"
+                : unanswered
+                  ? `${stateText} · didn't answer — try again`
+                  : `${stateText}${on && d.brightnessPct != null ? ` · ${d.brightnessPct}%` : ""}`}
           </div>
         </div>
       </div>

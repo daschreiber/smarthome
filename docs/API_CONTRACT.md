@@ -162,16 +162,49 @@ readingLights, closetLights, canToggle }`. POST (canProgram): `{ enabled }`.
 configured.
 
 ### `GET /api/music/now`
-The household Spotify session; degrades to `{ playing: false, ... }`
-rather than erroring when unlinked.
+Spotify from the caller's point of view: `{ configured, linked, usingHouse,
+premium, mine, rooms[] }`. `mine` is the session on the account this user
+plays as; `rooms[]` is every room with a session across ALL linked accounts
+(`{ room, track, artist, artUrl, playing, who, mine }`), which is how a card
+can say "Ruth's Spotify is playing here". Degrades to empty rather than
+erroring when unlinked.
 
 ### `POST /api/music/play` / `POST /api/music/skip`
-`{ room }` starts Spotify on the room's mapped Connect device;
-`{ direction: "next"|"previous" }` skips. 501 unlinked, 502 on Spotify
-failure.
+`{ room }` starts the caller's own Spotify (their link if they have one,
+else the house account) on the room's mapped Connect device, answering
+`{ ok, device, who, usingHouse }`; `{ direction: "next"|"previous" }` skips
+— always on the caller's own session, never someone else's. 501 unlinked,
+502 on Spotify failure.
 
-### `GET /api/spotify/login` (admin) / `GET /api/spotify/callback`
-OAuth link of the household Spotify account (one-time; nonce-protected).
+### `POST /api/music/handoff`
+`{ room }` points the caller's OWN Spotify at that room's Connect endpoint
+and returns `{ transferred, device, url, hint }`. The client navigates to
+`url` in the same tap, so the phone lands in the Spotify app already
+attached to the room — Spotify publishes no deep link that selects a
+device, so the API does that half. Un-linked callers get
+`transferred: false` plus the manual instruction instead.
+
+### `POST /api/music/extend` (`maxDuration` 30s)
+`{ from, add?: string[], remove?: string[] }` mirrors one room's matrix
+input into others (and switches rooms back off). Answers
+`{ source, results[], dropped[] }` where each result is
+`{ room, status: "confirmed"|"sent"|"failed", detail }` — `confirmed` only
+when the target zone echoed the input back, `sent` when it accepted but
+hasn't, `failed` with the reason (including "this zone can't take that
+input", listing the ones it can). This is a Control4 matrix operation, not
+a Spotify one: see `lib/audio.ts`.
+
+### `GET /api/spotify/login` / `GET /api/spotify/callback`
+OAuth link. `?target=me` (default) links the signed-in user's own Spotify;
+`?target=house` (admin only) links the shared fallback account. The signed
+state carries which of the two the callback is completing, so it can't be
+redirected at someone else's link.
+
+### `GET /api/spotify/link` / `DELETE /api/spotify/link`
+Who is connected: `{ configured, houseLinked, canLinkOwn, me, others[],
+slots: { used, max } }` — `others` is display names only. DELETE
+disconnects your own account (admins may pass `{ user }` to free someone
+else's slot).
 
 ### `POST /api/noise`
 White noise: `{ noiseType?: "white"|"brown"|"pink", volumePct?: 0–100 }`

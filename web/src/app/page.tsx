@@ -6,6 +6,7 @@ import NavBar from "./NavBar";
 import { BlindsIcon, BulbIcon, FlameIcon, GridIcon, LockIcon, MapIcon, SnowIcon } from "./icons";
 import { canProgram as roleCanProgram } from "@/lib/permissions";
 import { appKeyHeaders } from "@/lib/appKey";
+import { errorFrom, networkError } from "@/lib/fetchError";
 import ClimateCard from "./ClimateCard";
 
 /**
@@ -59,6 +60,9 @@ interface UiDevice {
   lockAllowed?: boolean;
   /** Lights only: keeps its own card instead of collapsing into "Room lights". */
   pinned?: boolean;
+  /** Media players only: the audio room this player is the Control4 matrix
+   * zone for (lib/audio). Null for every other player in the room. */
+  audioZone?: string | null;
 }
 
 type View = { t: "home" } | { t: "room"; room: string };
@@ -169,14 +173,53 @@ interface CustomScene {
   canDelete: boolean;
 }
 
-/** The household Spotify session (from /api/music/now). */
-interface MusicNow {
-  playing: boolean;
+/** A session in a room, on whichever account holds it (/api/music/now). */
+interface RoomSession {
+  room: string;
   track: string | null;
   artist: string | null;
   artUrl: string | null;
-  deviceName: string | null;
-  room: string | null;
+  playing: boolean;
+  /** "Ruth's Spotify" / "the house Spotify" — whose account it is. */
+  who: string;
+  /** True when it's the viewer's own account, which is what decides
+   *  whether the transport controls can touch it. */
+  mine: boolean;
+}
+
+/** Spotify, from this phone's point of view (/api/music/now). */
+interface MusicNow {
+  configured: boolean;
+  linked: boolean;
+  /** No personal link — playing falls back to the shared house account. */
+  usingHouse: boolean;
+  premium: boolean | null;
+  mine: {
+    playing: boolean;
+    track: string | null;
+    artist: string | null;
+    artUrl: string | null;
+    deviceName: string | null;
+    room: string | null;
+  };
+  rooms: RoomSession[];
+}
+
+/** A Control4 matrix zone, as the room cards see it. Extend works on these
+ *  and only these — a room can hold other players that can't take a matrix
+ *  source (the Terrace's un-cabled BBQ amp). */
+interface ZoneInfo {
+  room: string;
+  source: string | null;
+  mediaTitle: string | null;
+  active: boolean;
+  available: boolean;
+}
+
+/** Everything the Music cards need, assembled once per render. */
+interface MusicView {
+  now: MusicNow | null;
+  zones: ZoneInfo[];
 }
 
 /** A floor's heat/cool changeover state (from /api/home `floorModes`). */
@@ -341,8 +384,9 @@ export default function Page() {
     return () => clearInterval(t);
   }, [refresh, loadFavs, loadScenes]);
 
-  // The household Spotify session, polled gently (the server caches it too):
-  // Music cards show track/artist/art and "playing in <room>" from this.
+  // Spotify, polled gently (the server caches across accounts too — see
+  // roomSessions in lib/spotify): Music cards show track/artist/art, which
+  // room each session is in, and whose account holds it.
   useEffect(() => {
     let stop = false;
     const load = () =>
@@ -354,6 +398,25 @@ export default function Page() {
     const t = setInterval(load, 10_000);
     return () => { stop = true; clearInterval(t); };
   }, [headers]);
+
+  // The matrix zones, straight off the live device poll — so "also playing
+  // in the Kitchen" stays true within a poll of somebody changing it, with
+  // no extra endpoint to keep in sync.
+  const musicView = useMemo<MusicView>(
+    () => ({
+      now: musicNow,
+      zones: devices
+        .filter((d) => d.audioZone)
+        .map((d) => ({
+          room: d.audioZone!,
+          source: d.source ?? null,
+          mediaTitle: d.mediaTitle ?? null,
+          active: ["playing", "paused", "buffering", "on"].includes(d.state),
+          available: d.available,
+        })),
+    }),
+    [musicNow, devices],
+  );
 
   const sceneOp = useCallback(
     async (body: Record<string, unknown>) => {
@@ -598,7 +661,7 @@ export default function Page() {
               <div className="section-label">Favorites</div>
               <div className="dev-list">
                 {favDevices.map((d) => (
-                  <Device key={d.id} d={d} flash={flash[d.id]} busy={!!busy[d.id]} send={send} fav={true} onFav={toggleFav} music={musicNow} />
+                  <Device key={d.id} d={d} flash={flash[d.id]} busy={!!busy[d.id]} send={send} fav={true} onFav={toggleFav} music={musicView} />
                 ))}
               </div>
             </>
@@ -804,7 +867,7 @@ export default function Page() {
           groups={groups}
           flash={flash}
           busy={busy}
-          music={musicNow}
+          music={musicView}
           send={send}
           sendSystem={sendSystem}
           favs={favs}
@@ -984,7 +1047,7 @@ function RoomView({
   groups: [string, UiDevice[]][];
   flash: Record<string, Flash>;
   busy: Record<string, boolean>;
-  music: MusicNow | null;
+  music: MusicView | null;
   send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   sendSystem: (system: string, command: string, room: string, extra?: Record<string, unknown>) => Promise<SendResult>;
   favs: string[];
@@ -1241,7 +1304,7 @@ function Device({
   send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   fav?: boolean;
   onFav?: (id: string) => void;
-  music?: MusicNow | null;
+  music?: MusicView | null;
   coverTrust?: boolean;
 }) {
   const star = onFav ? <Star on={!!fav} onClick={() => onFav(d.id)} label={d.label} /> : null;
@@ -1656,10 +1719,25 @@ function MediaCard({
   busy: boolean;
   send: (id: string, body: Record<string, unknown>) => Promise<SendResult>;
   star?: React.ReactNode;
-  music: MusicNow | null;
+  music: MusicView | null;
 }) {
   const [drag, setDrag] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [showExtend, setShowExtend] = useState(false);
+  const [roomBusy, setRoomBusy] = useState<string | null>(null);
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A note is a transient answer to a tap. Clearing on unmount matters here
+  // because the room view swaps cards out from under an in-flight request.
+  const say = useCallback((message: string | null, holdMs = 9000) => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    setNote(message);
+    if (message) noteTimer.current = setTimeout(() => setNote(null), holdMs);
+  }, []);
+  useEffect(() => () => { if (noteTimer.current) clearTimeout(noteTimer.current); }, []);
+
+  const now = music?.now ?? null;
+  const zones = music?.zones ?? [];
   const active = ["playing", "paused", "buffering", "on"].includes(d.state);
   const playing = d.state === "playing";
   const label = d.label === d.room ? "Speakers" : d.label;
@@ -1668,69 +1746,176 @@ function MediaCard({
     isReceiver ? RECEIVER_SOURCES.includes(s) : !HIDDEN_SOURCES.test(s),
   );
   const volume = drag ?? d.volumePct ?? 0;
-  // The Spotify session lives HERE when its Connect device maps to this
-  // room: the card upgrades to track/artist/art + skip (via the Spotify
-  // API — the C4 zones themselves can't skip through HA).
-  const sessionHere = !!music?.room && music.room === d.room && active;
-  const playingElsewhere = !!music?.playing && !!music.room && music.room !== d.room && !active;
-  const doSkip = (direction: "next" | "previous") => {
-    fetch("/api/music/skip", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ direction }),
-    }).catch(() => {});
-  };
-  // Idle Play = "continue my Spotify here": the backend resumes the
-  // household account on this room's Connect endpoint (/api/music/play).
-  const playHere = () => {
-    setNote("starting…");
-    fetch("/api/music/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ room: d.room }),
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? "play failed");
-        setNote(null);
-      })
-      .catch((e) => {
-        setNote(e instanceof Error ? e.message : "play failed");
-        setTimeout(() => setNote(null), 8000);
+
+  // Whose music is in THIS room — any linked account, not just the viewer's.
+  // `mine` is what decides whether the Spotify-side controls may touch it:
+  // skip acts on your own session, so offering it for someone else's music
+  // would skip a track in whichever room YOU were last playing in.
+  const here = now?.rooms?.find((r) => r.room === d.room) ?? null;
+  const sessionHere = !!here && active;
+  const mineHere = !!here?.mine;
+  const myRoom = now?.mine.playing ? now.mine.room : null;
+  const myMusicElsewhere = myRoom && myRoom !== d.room ? myRoom : null;
+  // A personal link is what makes hand-off meaningful: pointing the HOUSE
+  // account at a room and then opening the user's own Spotify would attach
+  // the room to one account and show them another.
+  const personal = !!now?.linked && !now.usingHouse;
+
+  // Extend works on the room's Control4 matrix zone (lib/audio), so a room
+  // whose card isn't that zone (the Terrace's BBQ amp) doesn't offer it.
+  const zoneRoom = d.audioZone ?? null;
+  const zone = zones.find((z) => z.room === zoneRoom) ?? null;
+  const otherZones = zones.filter((z) => z.room !== zoneRoom);
+  const sharesWith = (z: ZoneInfo) => !!zone?.source && z.source === zone.source && z.active;
+  const alsoIn = otherZones.filter(sharesWith).map((z) => z.room);
+  const canExtend = !!zoneRoom && active && otherZones.length > 0;
+
+  const musicHeaders = () => ({ "Content-Type": "application/json", ...appKeyHeaders() });
+
+  const doSkip = async (direction: "next" | "previous") => {
+    try {
+      const res = await fetch("/api/music/skip", {
+        method: "POST",
+        headers: musicHeaders(),
+        body: JSON.stringify({ direction }),
       });
+      if (!res.ok) say(await errorFrom(res, "skip failed"));
+    } catch (e) {
+      say(networkError(e, "skip failed"));
+    }
   };
+
+  // Idle Play = "play my music here": the backend resumes the caller's own
+  // Spotify (or the house account if they haven't linked one) on this
+  // room's Connect endpoint.
+  const playHere = async () => {
+    say("starting…", 20_000);
+    try {
+      const res = await fetch("/api/music/play", {
+        method: "POST",
+        headers: musicHeaders(),
+        body: JSON.stringify({ room: d.room }),
+      });
+      if (!res.ok) {
+        say(await errorFrom(res, "couldn't start the music"));
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { usingHouse?: boolean } | null;
+      say(body?.usingHouse ? "playing the house Spotify here" : null, 4000);
+    } catch (e) {
+      say(networkError(e, "couldn't start the music"));
+    }
+  };
+
+  /**
+   * Hand the room to the phone's own Spotify app. The POST is keepalive so
+   * it survives the navigation that follows in the same tap — Safari blocks
+   * a window.open issued after an await, so the anchor must do the
+   * navigating while the transfer rides along beside it.
+   *
+   * The transfer can still fail (the room's device out of the picker, a
+   * revoked token), and target="_blank" leaves this page alive to say so —
+   * the note is waiting when they come back from Spotify, along with the
+   * route's manual-picker instruction.
+   */
+  const handOff = async () => {
+    try {
+      const res = await fetch("/api/music/handoff", {
+        method: "POST",
+        headers: musicHeaders(),
+        body: JSON.stringify({ room: d.room }),
+        keepalive: true,
+      });
+      if (!res.ok) {
+        say(`Spotify opened, but the ${d.room} wasn't attached — ${await errorFrom(res, "the hand-off failed")}`, 20_000);
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { transferred?: boolean; hint?: string } | null;
+      if (body && body.transferred === false && body.hint) say(body.hint, 20_000);
+    } catch (e) {
+      say(`Spotify opened, but the ${d.room} wasn't attached — ${networkError(e, "the hand-off failed")}`, 20_000);
+    }
+  };
+
+  const explainHandoff = () => {
+    say(
+      now?.configured
+        ? `Connect your own Spotify in More to open straight onto the ${d.room}. For now, tap the speaker icon in Spotify and pick the ${d.room}.`
+        : "Spotify isn't set up on this house yet — an admin can link it from More.",
+      14_000,
+    );
+  };
+
+  const toggleRoom = async (room: string, on: boolean) => {
+    if (!zoneRoom) return;
+    setRoomBusy(room);
+    say(on ? `switching the ${room} off…` : `extending to the ${room}…`, 20_000);
+    try {
+      const res = await fetch("/api/music/extend", {
+        method: "POST",
+        headers: musicHeaders(),
+        body: JSON.stringify({ from: zoneRoom, ...(on ? { remove: [room] } : { add: [room] }) }),
+      });
+      if (!res.ok) {
+        say(await errorFrom(res, "couldn't change the rooms"));
+        return;
+      }
+      const body = (await res.json()) as {
+        results?: Array<{ room: string; status: string; detail: string }>;
+        dropped?: Array<{ room: string; ok: boolean; detail: string }>;
+      };
+      const added = body.results?.[0];
+      const removed = body.dropped?.[0];
+      if (added) say(added.status === "confirmed" ? `${added.room}: ${added.detail}` : added.detail, 12_000);
+      else if (removed) say(removed.ok ? `${removed.room} switched off` : removed.detail, 12_000);
+      else say(null);
+    } catch (e) {
+      say(networkError(e, "couldn't change the rooms"));
+    } finally {
+      setRoomBusy(null);
+    }
+  };
+
+  // The status line answers "what is this room doing", the sub-line answers
+  // "whose is it, and where else is it playing" — two different questions
+  // that used to fight for one line.
+  const status = busy
+    ? "…"
+    : !d.available
+      ? "unavailable"
+      : sessionHere && here?.track
+        ? `${here.track}${here.artist ? ` — ${here.artist}` : ""}`
+        : active && (d.mediaTitle || d.source)
+          ? // What's actually playing beats the input name; both pass
+            // through prettyNowPlaying (session names → "Spotify", C4 TV
+            // inputs → "TV").
+            `${d.state} · ${prettyNowPlaying(d.mediaTitle ?? d.source ?? "")}`
+          : myMusicElsewhere
+            ? `${d.state} · your Spotify is in the ${myMusicElsewhere}`
+            : d.state;
+  const subParts = [
+    sessionHere && here && !mineHere ? here.who : null,
+    alsoIn.length ? `also in ${alsoIn.join(", ")}` : null,
+  ].filter(Boolean);
+
   return (
     <div className={`dev-block hero ${flashClass(flash)} ${d.available ? "" : "unavailable"}`}>
       <div className={`dev ${active ? "on" : ""}`}>
         <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
           {star}
-          {sessionHere && music?.artUrl && (
+          {sessionHere && here?.artUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={music.artUrl} alt="" width={40} height={40}
+            <img src={here.artUrl} alt="" width={40} height={40}
               style={{ borderRadius: 8, marginRight: 6, flexShrink: 0 }} />
           )}
           <div style={{ minWidth: 0 }}>
             <div className="nm">{label}</div>
-            <div className="st">
-              {note ??
-                (busy
-                  ? "…"
-                  : !d.available
-                    ? "unavailable"
-                    : sessionHere && music?.track
-                      ? `${music.track}${music.artist ? ` — ${music.artist}` : ""}`
-                      : active && (d.mediaTitle || d.source)
-                        ? // What's actually playing beats the input name; both
-                          // pass through prettyNowPlaying (session names →
-                          // "Spotify", C4 TV inputs → "TV").
-                          `${d.state} · ${prettyNowPlaying(d.mediaTitle ?? d.source ?? "")}`
-                        : playingElsewhere
-                          ? `${d.state} · Spotify is in the ${music!.room}`
-                          : d.state)}
-            </div>
+            <div className="st">{note ?? status}</div>
+            {!note && subParts.length > 0 && <div className="st music-sub">{subParts.join(" · ")}</div>}
           </div>
         </div>
         <div className="btn-row">
-          {sessionHere && (
+          {sessionHere && mineHere && (
             <button className="mini-btn" aria-label="Previous track" disabled={busy} onClick={() => doSkip("previous")}>
               ⏮
             </button>
@@ -1738,10 +1923,10 @@ function MediaCard({
           <button
             className="mini-btn"
             disabled={busy || !d.available}
-            // Play means MUSIC: pause/resume only govern a Spotify session
-            // that's actually here. A zone carrying TV audio (or anything
-            // else) treats Play as "bring my Spotify to this room" — a
-            // media_play at the TV feed did nothing, verifiably confusingly.
+            // Play means MUSIC: pause/resume only govern a session that's
+            // actually here. A zone carrying TV audio (or anything else)
+            // treats Play as "bring my Spotify to this room" — a media_play
+            // at the TV feed did nothing, verifiably confusingly.
             onClick={() =>
               playing
                 ? send(d.id, { command: "pause" })
@@ -1752,7 +1937,7 @@ function MediaCard({
           >
             {playing ? "Pause" : "Play"}
           </button>
-          {sessionHere && (
+          {sessionHere && mineHere && (
             <button className="mini-btn" aria-label="Next track" disabled={busy} onClick={() => doSkip("next")}>
               ⏭
             </button>
@@ -1799,6 +1984,56 @@ function MediaCard({
           }}
         />
       </div>
+      {(d.available || canExtend) && (
+        <div className="music-actions">
+          {/* Spotify has no deep link that pre-selects a speaker, so the app
+              points the account at the room over the API and the anchor does
+              the navigating — see /api/music/handoff. */}
+          {personal ? (
+            <a
+              className="mini-btn"
+              href="https://open.spotify.com"
+              target="_blank"
+              rel="noreferrer"
+              onClick={handOff}
+            >
+              Open in Spotify ↗
+            </a>
+          ) : (
+            <button className="mini-btn" onClick={explainHandoff}>Open in Spotify ↗</button>
+          )}
+          {canExtend && (
+            <button
+              className="mini-btn expander"
+              aria-expanded={showExtend}
+              onClick={() => setShowExtend((v) => !v)}
+            >
+              {alsoIn.length ? `In ${alsoIn.length + 1} rooms` : "Extend"}
+            </button>
+          )}
+        </div>
+      )}
+      {showExtend && canExtend && (
+        <div className="extend-row">
+          <div className="extend-label">Also play in</div>
+          <div className="extend-chips">
+            {otherZones.map((z) => {
+              const on = sharesWith(z);
+              return (
+                <button
+                  key={z.room}
+                  className="mini-btn"
+                  aria-pressed={on}
+                  disabled={roomBusy !== null || !z.available}
+                  onClick={() => toggleRoom(z.room, on)}
+                >
+                  {roomBusy === z.room ? "…" : z.room}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

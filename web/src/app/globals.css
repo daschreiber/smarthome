@@ -344,3 +344,18 @@ body {
   .h-back:hover, .appkey summary:hover { color: var(--ink); }
   .dev-list .dev:hover, .dev-list .dev-block:hover, .climate-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--card-line)); }
 }
+
+/* Music card: the row of things that leave the card — hand-off to the
+   phone's own Spotify, and the multi-room extend disclosure. Separated
+   from the transport row by a hairline so the card reads as "control this
+   room" above, "and elsewhere" below. */
+.music-actions {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  padding: 10px 15px 12px; border-top: 1px solid var(--card-line);
+}
+.music-actions .mini-btn { text-decoration: none; display: inline-flex; align-items: center; }
+/* Whose music it is, and where else it's playing — quieter than the track. */
+.dev .st.music-sub { opacity: 0.75; margin-top: 1px; }
+.extend-row { padding: 0 15px 12px; }
+.extend-label { font-size: var(--fs-xs); color: var(--dim); margin-bottom: 6px; }
+.extend-chips { display: flex; gap: 6px; flex-wrap: wrap; }

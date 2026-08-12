@@ -13,6 +13,9 @@ interface UiDevice {
   category: string;
   state: string;
   available: boolean;
+  /** The command routes would refuse this device (lib/reachability) —
+   * distinct from !available, which also covers transient "unknown". */
+  unreachable?: boolean;
 }
 
 export default function Systems() {
@@ -32,7 +35,16 @@ export default function Systems() {
     return () => clearInterval(t);
   }, [refresh]);
 
-  const lightsOn = devices.filter((d) => d.kind === "light" && d.group === "Lighting" && d.state === "on").length;
+  const lights = devices.filter((d) => d.kind === "light" && d.group === "Lighting");
+  const lightsOn = lights.filter((d) => d.state === "on").length;
+  // "all off" is a claim about every light — unreachable lights break it
+  // (the power-outage lesson, 2026-08-12): name them instead.
+  const lightsDown = lights.filter((d) => d.unreachable).length;
+  const lightsSub =
+    lightsDown === lights.length && lights.length > 0
+      ? "not responding"
+      : (lightsOn > 0 ? `${lightsOn} on` : "all off") +
+        (lightsDown > 0 ? ` · ${lightsDown} not responding` : "");
   const zonesOn = devices.filter(
     (d) => d.kind === "climate" && d.available && d.state !== "off" && d.state !== "unavailable",
   ).length;
@@ -41,7 +53,7 @@ export default function Systems() {
   const heatingOn = devices.filter((d) => d.kind === "heating" && d.state === "on").length;
 
   const cards = [
-    { href: "/systems/lighting", icon: BulbIcon, title: "Lighting", sub: lightsOn > 0 ? `${lightsOn} on` : "all off", on: lightsOn > 0 },
+    { href: "/systems/lighting", icon: BulbIcon, title: "Lighting", sub: lightsSub, on: lightsOn > 0 },
     { href: "/systems/climate", icon: SnowIcon, title: "Climate", sub: zonesOn > 0 ? `${zonesOn} zone${zonesOn === 1 ? "" : "s"} active` : "all off", on: zonesOn > 0 },
     { href: "/systems/heating", icon: FlameIcon, title: "Underfloor heating", sub: heatingOn > 0 ? `${heatingOn} room${heatingOn === 1 ? "" : "s"} heating` : "all off", on: heatingOn > 0 },
     { href: "/systems/shades", icon: BlindsIcon, title: "Shades", sub: `${shadesTotal} shade${shadesTotal === 1 ? "" : "s"}`, on: false },

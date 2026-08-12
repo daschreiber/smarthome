@@ -168,6 +168,13 @@ export function systemTargets(
   return targets;
 }
 
+/** Fan one command across an explicit device list — the callers that first
+ *  filter a sweep (the systems route drops unreachable devices) need to
+ *  command exactly the set they decided on, not a recomputed one. */
+export async function executeOnDevices(targets: Device[], cmd: Command): Promise<BatchResult> {
+  return runBatch(targets.map((d) => ({ target: d.id, run: () => executeOnDevice(d, cmd) })));
+}
+
 /** Fan a simple command across a system, optionally limited to given rooms. */
 export async function executeSystemCommand(
   system: SystemKey,
@@ -185,7 +192,7 @@ export async function executeSystemCommand(
     cmd = { command: "set_brightness", brightnessPct };
   }
   if (targets.length === 0) return { total: 0, failed: [{ target: system, error: "no matching devices" }] };
-  return runBatch(targets.map((d) => ({ target: d.id, run: () => executeOnDevice(d, cmd) })));
+  return executeOnDevices(targets, cmd);
 }
 
 /**

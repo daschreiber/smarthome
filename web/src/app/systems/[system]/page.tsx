@@ -25,6 +25,9 @@ interface UiDevice {
   category: string;
   state: string;
   available: boolean;
+  /** The command routes would refuse this device (lib/reachability) —
+   * distinct from !available, which also covers transient "unknown". */
+  unreachable?: boolean;
   currentTemperature: number | null;
   targetTemperature: number | null;
   hvacMode: string | null;
@@ -191,6 +194,10 @@ export default function SystemPage() {
     // C4's stuck feedback (~1% -> "open" forever) is otherwise fiction.
     system === "shades" ? coverTrust && d.state === "open" : d.state !== "off" && d.state !== "unavailable" && d.available,
   ).length;
+  // Unreachable devices are named in the header — "0 on" over a dead
+  // integration read as "all off" through a whole power-outage morning.
+  // `unreachable`, not !available: "unknown" is transient and commandable.
+  const downCount = members.filter((d) => d.unreachable).length;
 
   return (
     <main className="shell">
@@ -199,6 +206,7 @@ export default function SystemPage() {
       <p className="h-sub">
         {meta.sub} — {members.length} device{members.length === 1 ? "" : "s"}
         {system === "shades" && !coverTrust ? "" : `, ${onCount} ${system === "shades" ? "open" : "on"}`}
+        {downCount > 0 ? `, ${downCount} not responding` : ""}
       </p>
       {error && <div className="error-banner">{error}</div>}
 
@@ -225,32 +233,43 @@ export default function SystemPage() {
                   <ClimateCard key={d.id} d={d} title={d.room} busy={busy} send={deviceCommand} />
                 ))
               ) : (
-                <div key={room} className="dev">
-                  <div>
-                    <div className="nm">{room}</div>
-                    <div className={`st ${ds.some((x) => (system === "shades" ? coverTrust && x.state === "open" : x.state === "on")) ? "on" : ""}`}>
-                      {system === "shades"
-                        ? coverTrust
-                          ? `${ds.filter((x) => x.state === "open").length} of ${ds.length} open`
-                          : `${ds.length} shade${ds.length === 1 ? "" : "s"}`
-                        : `${ds.filter((x) => x.state === "on").length} of ${ds.length} on`}
+                // A room whose devices are all unreachable says so and takes
+                // no taps — "0 of 6 on" with live buttons was the outage lie.
+                (() => {
+                  const roomDown = ds.filter((x) => x.unreachable).length;
+                  const allDown = roomDown === ds.length;
+                  return (
+                    <div key={room} className={`dev ${allDown ? "unavailable" : ""}`}>
+                      <div>
+                        <div className="nm">{room}</div>
+                        <div className={`st ${ds.some((x) => (system === "shades" ? coverTrust && x.state === "open" : x.state === "on")) ? "on" : ""}`}>
+                          {allDown
+                            ? "not responding"
+                            : (system === "shades"
+                                ? coverTrust
+                                  ? `${ds.filter((x) => x.state === "open").length} of ${ds.length} open`
+                                  : `${ds.length} shade${ds.length === 1 ? "" : "s"}`
+                                : `${ds.filter((x) => x.state === "on").length} of ${ds.length} on`) +
+                              (roomDown > 0 ? ` · ${roomDown} not responding` : "")}
+                        </div>
+                      </div>
+                      <div className="btn-row">
+                        {system === "lighting" || system === "heating" ? (
+                          <>
+                            <button className="mini-btn" disabled={busy || allDown} onClick={() => systemCommand("turn_on", [room])}>On</button>
+                            <button className="mini-btn" disabled={busy || allDown} onClick={() => systemCommand("turn_off", [room])}>Off</button>
+                          </>
+                        ) : (
+                          <>
+                            <button className="mini-btn" disabled={busy || allDown} onClick={() => systemCommand("open", [room])}>Open</button>
+                            <button className="mini-btn" disabled={busy || allDown} onClick={() => systemCommand("stop", [room])}>Stop</button>
+                            <button className="mini-btn" disabled={busy || allDown} onClick={() => systemCommand("close", [room])}>Close</button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="btn-row">
-                    {system === "lighting" || system === "heating" ? (
-                      <>
-                        <button className="mini-btn" disabled={busy} onClick={() => systemCommand("turn_on", [room])}>On</button>
-                        <button className="mini-btn" disabled={busy} onClick={() => systemCommand("turn_off", [room])}>Off</button>
-                      </>
-                    ) : (
-                      <>
-                        <button className="mini-btn" disabled={busy} onClick={() => systemCommand("open", [room])}>Open</button>
-                        <button className="mini-btn" disabled={busy} onClick={() => systemCommand("stop", [room])}>Stop</button>
-                        <button className="mini-btn" disabled={busy} onClick={() => systemCommand("close", [room])}>Close</button>
-                      </>
-                    )}
-                  </div>
-                </div>
+                  );
+                })()
               ),
             )}
           </div>

@@ -20,6 +20,7 @@ import {
   noteUnverified,
   reassertCall,
 } from "@/lib/knxLights";
+import { commandEntityIds, deviceUnreachable } from "@/lib/reachability";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
 import { noiseStatusFresh, noiseTurnOff, noiseTurnOn, setNoiseVolume } from "@/lib/whitenoise";
 import { executeOnDevice } from "@/lib/execute";
@@ -301,6 +302,28 @@ export async function POST(
         );
       }
     }
+    // An entity Home Assistant reports "unavailable" cannot obey — its
+    // integration has lost the device (the Control4 link after the 2026-08-12
+    // power outage). HA still answers 200 to the service call and nothing
+    // happens, so without this check the app flashes success over a dead
+    // switch. Refuse loudly instead, naming the device. Only positive
+    // evidence refuses (lib/reachability): "unknown" and failed reads pass.
+    const targetIds = commandEntityIds(device);
+    const reads = new Map(
+      await Promise.all(
+        targetIds.map(async (id) => [id, await getState(id).catch(() => undefined)] as const),
+      ),
+    );
+    if (deviceUnreachable(device, (id) => reads.get(id))) {
+      const message = `${device.label} is not responding — Home Assistant reports it unavailable (its integration may be down)`;
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId, entityId: device.entityId,
+        command, args, ok: false, durationMs: Date.now() - started, error: message,
+        ...(device.kind === "lock" ? { security: true } : {}),
+      });
+      return NextResponse.json({ status: "failed", error: message }, { status: 503 });
+    }
+
     // A light command claims the device before it goes out: any verification
     // loop still running from an earlier tap stands down instead of
     // re-asserting a superseded intent over this one (lib/knxLights).

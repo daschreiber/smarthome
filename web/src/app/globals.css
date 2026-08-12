@@ -12,6 +12,7 @@
   --active: #8f6314;
   --glow: none;
   --danger: #c2452f;
+  --warn: #8a5a10; /* outage/degraded notices; AA on bg and cards */
   --chip: #eae6de;
   --chip-ink: #6b6458;
   --radius: 16px;
@@ -37,6 +38,7 @@
     --active: #ffb454;
     --glow: 0 0 22px rgba(255, 164, 54, 0.13);
     --danger: #d4604a;
+    --warn: #e0a458;
     --chip: #1d2733;
     --chip-ink: #8b97a5;
   }
@@ -290,6 +292,14 @@ body {
 .error-banner {
   background: color-mix(in srgb, var(--danger) 14%, var(--bg));
   border: 1px solid var(--danger); color: var(--danger);
+  padding: 12px; border-radius: 12px; margin-bottom: 14px; font-size: var(--fs-sm);
+}
+
+/* Part of the house is unreachable (an HA integration down) — a warning,
+   not an app error: the app itself is fine, the house link isn't. */
+.notice-banner {
+  background: color-mix(in srgb, var(--warn) 14%, var(--bg));
+  border: 1px solid var(--warn); color: var(--warn);
   padding: 12px; border-radius: 12px; margin-bottom: 14px; font-size: var(--fs-sm);
 }
 

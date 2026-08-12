@@ -29,6 +29,11 @@ interface UiDevice {
   requiresConfirmation: boolean;
   state: string;
   available: boolean;
+  /** HA-backed devices only: the command routes would refuse this device
+   * (entity gone or "unavailable" — lib/reachability). Distinct from
+   * !available, which also covers "unknown", a transient, still-commandable
+   * state after an HA restart. The outage UI keys on THIS. */
+  unreachable?: boolean;
   brightnessPct: number | null;
   currentTemperature: number | null;
   targetTemperature: number | null;
@@ -269,6 +274,16 @@ const GROUP_ORDER = ["Security", "Lighting", "Shades", "Climate & Comfort", "Med
  * "Media" is owner-renamed to "Music" — the section is the room's sound,
  * not a device category. The map keeps "Media" (ids/groups are data). */
 const GROUP_DISPLAY: Record<string, string> = { Media: "Music" };
+
+/** The kinds whose entities live in Home Assistant — the ones an integration
+ * outage takes down together. Placeholder cards ("waiting for the Roborock
+ * integration") announce themselves via `note` and don't count. */
+const HA_KINDS = ["light", "cover", "climate", "media_player", "heating", "vacuum", "lock"];
+
+/** This many real devices unavailable at once reads as an integration down
+ * (the Control4 link after the 2026-08-12 power cut), not a bulb misbehaving —
+ * the home view gets a banner naming it instead of a quiet sea of "all off". */
+const OUTAGE_BANNER_AT = 3;
 
 /** A room's A/C (or sauna) counts as running for the card indicators. */
 function climateActive(c: UiDevice | null): boolean {
@@ -608,12 +623,23 @@ export default function Page() {
   );
 
   const rooms = useMemo(() => {
-    const m = new Map<string, { floor: number | null; lightsOn: number; total: number; climate: UiDevice | null }>();
+    const m = new Map<
+      string,
+      { floor: number | null; lightsOn: number; lightsTotal: number; lightsDown: number; total: number; climate: UiDevice | null }
+    >();
     for (const d of devices) {
       if (!d.room || d.room === "Whole House") continue;
-      const r = m.get(d.room) ?? { floor: d.floor, lightsOn: 0, total: 0, climate: null };
+      const r = m.get(d.room) ?? { floor: d.floor, lightsOn: 0, lightsTotal: 0, lightsDown: 0, total: 0, climate: null };
       r.total += 1;
-      if (d.kind === "light" && d.state === "on") r.lightsOn += 1;
+      if (d.kind === "light") {
+        r.lightsTotal += 1;
+        if (d.state === "on") r.lightsOn += 1;
+        // Unreachable is not off: a light HA can't command must never let
+        // the room read "all off" (the power-outage lesson, 2026-08-12).
+        // Keyed on `unreachable`, not !available — a transient "unknown"
+        // after an HA restart stays commandable and must not read as down.
+        if (d.unreachable) r.lightsDown += 1;
+      }
       if (d.kind === "climate" || d.kind === "sauna") r.climate = r.climate ?? d;
       m.set(d.room, r);
     }
@@ -624,6 +650,23 @@ export default function Page() {
     () => devices.filter((d) => d.kind === "light" && d.state === "on").length,
     [devices],
   );
+  const lightsTotal = useMemo(
+    () => devices.filter((d) => d.kind === "light").length,
+    [devices],
+  );
+  const lightsDownTotal = useMemo(
+    () => devices.filter((d) => d.kind === "light" && d.unreachable).length,
+    [devices],
+  );
+
+  const devicesDown = useMemo(
+    () => devices.filter((d) => HA_KINDS.includes(d.kind) && d.unreachable && !d.note),
+    [devices],
+  );
+  const outageNotice =
+    devicesDown.length >= OUTAGE_BANNER_AT
+      ? `${devicesDown.length} devices are not responding — Home Assistant has lost contact with part of the house, so their controls won't work until its integration is back.`
+      : null;
 
   const climateOnTotal = useMemo(
     () =>
@@ -686,13 +729,17 @@ export default function Page() {
               <p className="h-sub">
                 {devices.length === 0 && !error
                   ? "Connecting…"
-                  : `${lightsOnTotal} light${lightsOnTotal === 1 ? "" : "s"} on`}
+                  : lightsDownTotal === lightsTotal && lightsTotal > 0
+                    ? "lights not responding"
+                    : `${lightsOnTotal} light${lightsOnTotal === 1 ? "" : "s"} on` +
+                      (lightsDownTotal > 0 ? ` · ${lightsDownTotal} not responding` : "")}
               </p>
             </div>
             <AwaySwitch headers={headers} />
           </div>
 
           {error && <div className="error-banner">{error}</div>}
+          {outageNotice && <div className="notice-banner">{outageNotice}</div>}
 
           {favDevices.length > 0 && (
             <>
@@ -800,7 +847,14 @@ export default function Page() {
                       </span>
                     </div>
                     <div className={`rs ${r.lightsOn > 0 ? "on" : ""}`}>
-                      {r.lightsOn > 0 ? `${r.lightsOn} light${r.lightsOn === 1 ? "" : "s"} on` : "all off"}
+                      {/* "all off" is a claim about every light — a room whose
+                          lights are unreachable gets the truth instead. */}
+                      {r.lightsOn > 0
+                        ? `${r.lightsOn} light${r.lightsOn === 1 ? "" : "s"} on`
+                        : r.lightsTotal > 0 && r.lightsDown === r.lightsTotal
+                          ? "lights not responding"
+                          : "all off"}
+                      {r.lightsDown > 0 && r.lightsDown < r.lightsTotal ? ` · ${r.lightsDown} not responding` : ""}
                       {r.climate?.currentTemperature != null ? ` · ${r.climate.currentTemperature}°` : ""}
                     </div>
                   </button>
@@ -813,7 +867,10 @@ export default function Page() {
             <a className="room-card" href="/systems/lighting" style={{ textDecoration: "none", display: "block" }}>
               <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><BulbIcon size={18} /> Lighting</div>
               <div className={`rs ${lightsOnTotal > 0 ? "on" : ""}`}>
-                {lightsOnTotal > 0 ? `${lightsOnTotal} on` : "all off"}
+                {lightsDownTotal === lightsTotal && lightsTotal > 0
+                  ? "not responding"
+                  : (lightsOnTotal > 0 ? `${lightsOnTotal} on` : "all off") +
+                    (lightsDownTotal > 0 ? ` · ${lightsDownTotal} not responding` : "")}
               </div>
             </a>
             <a className="room-card" href="/systems/climate" style={{ textDecoration: "none", display: "block" }}>
@@ -1214,6 +1271,12 @@ function RoomLightsBlock({
   const others = lights.filter((d) => !keepsOwnRow(d));
   const onCount = lights.filter((d) => d.state === "on").length;
   const anyOn = onCount > 0;
+  // A room whose lights Home Assistant can't reach must say so and refuse the
+  // tap — "off" with a live toggle over dead fixtures is how the app spent a
+  // power-outage morning claiming all was well (2026-08-12). `unreachable`,
+  // not !available: transient "unknown" states stay commandable.
+  const downCount = lights.filter((d) => d.unreachable).length;
+  const allDown = downCount === lights.length && lights.length > 0;
   const dimmers = lights.filter((d) => d.capabilities.includes("brightness"));
   // The slider reads the average of the lit dimmers (0 when everything is
   // off) — with a mixed room, "brightest light" showed 100% while half the
@@ -1229,16 +1292,23 @@ function RoomLightsBlock({
   return (
     <div className="dev-list">
       <div className={`dev-block hero ${flashClass(flash[key])}`}>
-        <div className={`dev ${anyOn ? "on" : ""}`}>
+        <div className={`dev ${anyOn ? "on" : ""} ${allDown ? "unavailable" : ""}`}>
           <div>
             <div className="nm">Room lights</div>
-            <div className="st">{isBusy ? "…" : anyOn ? `${onCount} of ${lights.length} on` : "off"}</div>
+            <div className="st">
+              {isBusy
+                ? "…"
+                : allDown
+                  ? "not responding"
+                  : (anyOn ? `${onCount} of ${lights.length} on` : "off") +
+                    (downCount > 0 ? ` · ${downCount} not responding` : "")}
+            </div>
           </div>
           <button
             className="toggle"
             aria-pressed={anyOn}
             aria-label={`${room} lights ${anyOn ? "off" : "on"}`}
-            disabled={isBusy}
+            disabled={isBusy || allDown}
             onClick={() => sendSystem("lighting", anyOn ? "turn_off" : "turn_on", room)}
           />
         </div>
@@ -1250,7 +1320,7 @@ function RoomLightsBlock({
               max={100}
               value={value}
               aria-label={`${room} lights brightness`}
-              disabled={isBusy}
+              disabled={isBusy || allDown}
               onChange={(e) => setDrag(Number(e.target.value))}
               onPointerUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
               onKeyUp={(e) => { if (e.key === "Enter") commit(Number((e.target as HTMLInputElement).value)); }}

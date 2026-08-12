@@ -13,6 +13,9 @@ interface UiDevice {
   category: string;
   state: string;
   available: boolean;
+  /** The command routes would refuse this device (lib/reachability) —
+   * distinct from !available, which also covers transient "unknown". */
+  unreachable?: boolean;
 }
 
 export default function Systems() {
@@ -36,7 +39,7 @@ export default function Systems() {
   const lightsOn = lights.filter((d) => d.state === "on").length;
   // "all off" is a claim about every light — unreachable lights break it
   // (the power-outage lesson, 2026-08-12): name them instead.
-  const lightsDown = lights.filter((d) => !d.available).length;
+  const lightsDown = lights.filter((d) => d.unreachable).length;
   const lightsSub =
     lightsDown === lights.length && lights.length > 0
       ? "not responding"

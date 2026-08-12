@@ -29,6 +29,11 @@ interface UiDevice {
   requiresConfirmation: boolean;
   state: string;
   available: boolean;
+  /** HA-backed devices only: the command routes would refuse this device
+   * (entity gone or "unavailable" — lib/reachability). Distinct from
+   * !available, which also covers "unknown", a transient, still-commandable
+   * state after an HA restart. The outage UI keys on THIS. */
+  unreachable?: boolean;
   brightnessPct: number | null;
   currentTemperature: number | null;
   targetTemperature: number | null;
@@ -629,9 +634,11 @@ export default function Page() {
       if (d.kind === "light") {
         r.lightsTotal += 1;
         if (d.state === "on") r.lightsOn += 1;
-        // Unavailable is not off: an unreachable light must never let the
-        // room read "all off" (the power-outage lesson, 2026-08-12).
-        if (!d.available) r.lightsDown += 1;
+        // Unreachable is not off: a light HA can't command must never let
+        // the room read "all off" (the power-outage lesson, 2026-08-12).
+        // Keyed on `unreachable`, not !available — a transient "unknown"
+        // after an HA restart stays commandable and must not read as down.
+        if (d.unreachable) r.lightsDown += 1;
       }
       if (d.kind === "climate" || d.kind === "sauna") r.climate = r.climate ?? d;
       m.set(d.room, r);
@@ -648,12 +655,12 @@ export default function Page() {
     [devices],
   );
   const lightsDownTotal = useMemo(
-    () => devices.filter((d) => d.kind === "light" && !d.available).length,
+    () => devices.filter((d) => d.kind === "light" && d.unreachable).length,
     [devices],
   );
 
   const devicesDown = useMemo(
-    () => devices.filter((d) => HA_KINDS.includes(d.kind) && !d.available && !d.note),
+    () => devices.filter((d) => HA_KINDS.includes(d.kind) && d.unreachable && !d.note),
     [devices],
   );
   const outageNotice =
@@ -1266,8 +1273,9 @@ function RoomLightsBlock({
   const anyOn = onCount > 0;
   // A room whose lights Home Assistant can't reach must say so and refuse the
   // tap — "off" with a live toggle over dead fixtures is how the app spent a
-  // power-outage morning claiming all was well (2026-08-12).
-  const downCount = lights.filter((d) => !d.available).length;
+  // power-outage morning claiming all was well (2026-08-12). `unreachable`,
+  // not !available: transient "unknown" states stay commandable.
+  const downCount = lights.filter((d) => d.unreachable).length;
   const allDown = downCount === lights.length && lights.length > 0;
   const dimmers = lights.filter((d) => d.capabilities.includes("brightness"));
   // The slider reads the average of the lit dimmers (0 when everything is

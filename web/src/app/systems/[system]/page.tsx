@@ -25,6 +25,9 @@ interface UiDevice {
   category: string;
   state: string;
   available: boolean;
+  /** The command routes would refuse this device (lib/reachability) —
+   * distinct from !available, which also covers transient "unknown". */
+  unreachable?: boolean;
   currentTemperature: number | null;
   targetTemperature: number | null;
   hvacMode: string | null;
@@ -193,7 +196,8 @@ export default function SystemPage() {
   ).length;
   // Unreachable devices are named in the header — "0 on" over a dead
   // integration read as "all off" through a whole power-outage morning.
-  const downCount = members.filter((d) => !d.available).length;
+  // `unreachable`, not !available: "unknown" is transient and commandable.
+  const downCount = members.filter((d) => d.unreachable).length;
 
   return (
     <main className="shell">
@@ -232,7 +236,7 @@ export default function SystemPage() {
                 // A room whose devices are all unreachable says so and takes
                 // no taps — "0 of 6 on" with live buttons was the outage lie.
                 (() => {
-                  const roomDown = ds.filter((x) => !x.available).length;
+                  const roomDown = ds.filter((x) => x.unreachable).length;
                   const allDown = roomDown === ds.length;
                   return (
                     <div key={room} className={`dev ${allDown ? "unavailable" : ""}`}>

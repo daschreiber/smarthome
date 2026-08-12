@@ -10,6 +10,7 @@ import { noiseConfigured, noiseStatus } from "@/lib/whitenoise";
 import { bedConfigured, bedSideForDeviceId } from "@/lib/eightsleep";
 import { zoneRoomFor } from "@/lib/audio";
 import { unverifiedFor } from "@/lib/knxLights";
+import { deviceUnreachable } from "@/lib/reachability";
 
 /**
  * Full visible-device snapshot joined with live HA state.
@@ -195,6 +196,13 @@ export async function GET(req: NextRequest) {
           state: climateState ?? s?.state ?? "unknown",
           available:
             climateState != null || (!!s && s.state !== "unavailable" && s.state !== "unknown"),
+          // `available` is about trusting the STATE (unknown state = nothing
+          // to display), `unreachable` about commands landing — and "unknown"
+          // is commandable (the transient state after an HA restart, see
+          // lib/reachability). The outage UI (banners, "not responding",
+          // disabled room toggles) keys on this, matching exactly what the
+          // command routes would refuse — Codex review, PR #98.
+          unreachable: deviceUnreachable(d, (id) => states.get(id) ?? null),
           brightnessPct:
             attr("brightness") != null ? Math.round((attr("brightness")! / 255) * 100) : null,
           currentTemperature: attr("current_temperature"),
@@ -327,6 +335,9 @@ export async function GET(req: NextRequest) {
           requiresConfirmation: false,
           state: "unknown",
           available: false,
+          // A feature that isn't installed yet is absent, not down — it must
+          // never trip the outage banner.
+          unreachable: false,
           brightnessPct: null,
           currentTemperature: null,
           targetTemperature: null,
@@ -363,6 +374,7 @@ export async function GET(req: NextRequest) {
         requiresConfirmation: true,
         state: "unknown",
         available: false,
+        unreachable: false, // absent feature, not an outage
         brightnessPct: null,
         currentTemperature: null,
         targetTemperature: null,

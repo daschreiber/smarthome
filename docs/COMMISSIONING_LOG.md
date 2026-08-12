@@ -422,3 +422,74 @@ light entities on the dimmers' own switch + brightness GAs would bypass the
 Control4 driver entirely — the tunnel and the pattern already exist for the
 shades (`knx/README.md`), and light actuators here *do* transmit status
 (cmd `2/0/14` → status `7/1/84`), which the shades never did.
+
+## 2026-08-12 — Control4 down after power outage; controller IP changed
+
+### Symptom
+
+A power outage (owner away from home) left every Control4-backed entity
+`unavailable` — all lights and the Control4 climate entities — while KNX
+covers, CoolMaster climate, and media players kept working. So the fault was
+isolated to Home Assistant's Control4 integration, not the controller (the
+native Control4 app worked throughout). Fixed entirely remotely via the Nabu
+Casa UI and the File editor add-on.
+
+### Two faults in sequence
+
+1. **Boot-before-internet.** The first log (09:42) showed setup crashing
+   inside `pyControl4.account._send_account_auth_request` — the cloud auth call
+   died mid-request and left the entry in a dead `setup_error` state with no
+   retry. This is the same cloud-auth fragility recorded on 2026-07-16, but
+   this time it hard-failed rather than retried. A single **reload** of the
+   config entry got past auth (internet was back by then)…
+
+2. **…which exposed an IP change.** The reload then failed with
+   `Timeout connecting to Control4 controller at 10.0.0.29`. The Core 3 had
+   taken a new DHCP lease during the outage — the exact failure the still-open
+   reservation follow-up was meant to prevent. **The Core 3 is now at
+   `10.0.0.33`** (MAC unchanged, `00:0f:ff:9f:3b:44`).
+
+### Finding the new IP remotely
+
+No device on the LAN self-announces the Core 3, there is no router integration
+in HA, and `/hassio` (add-on store) 404s on this install — so no terminal to
+scan from. Used the **Nmap Tracker** integration instead (UI-only setup, scan
+range `10.0.0.0/24`, ARP ping): it created a `device_tracker` per host with the
+`mac` attribute, and the one matching `00:0f:ff:9f:3b:44` reported
+`ip: 10.0.0.33`. Integration removed afterward.
+
+### The repoint (no Control4 password needed)
+
+HA stores the controller host **and** the homeowner credentials inside the
+config entry (`.storage/core.config_entries`). Only the `host` was stale, so a
+delete-and-re-add (which would have needed the Control4 account password and
+destroyed all the Stage 5 renames/Area assignments) was avoided. Instead a
+throwaway `command_line` sensor ran a Python one-liner that rewrote the
+Control4 entry's `host` from `10.0.0.29` → `10.0.0.33` atomically, then two
+restarts (the first runs the rewrite; config entries are only read from
+`.storage` at boot, so the second boot picks up the corrected file). Verified:
+integration back with 179 devices / 178 entities, and a KNX-proxied dimmer
+("Restroom Spots") toggled off→on end-to-end from HA. Temp sensor removed.
+
+### Guardrail added — `sensor.c4_ip_watch` + "Control4 IP drift alert"
+
+A permanent, low-risk **detector** now lives in `configuration.yaml` (validated
+clean, loaded via reload — no restart). Daily and at each HA start it ARP-scans
+for `00:0f:ff:9f:3b:44` and reports the IP; an automation fires a persistent
+notification **and** an iPhone push if the IP is ever anything other than
+`10.0.0.33`. It only detects and alerts — a human still applies the repoint —
+so no auto-rewrite/auto-restart machinery runs unattended. Currently reads
+`10.0.0.33`, silent.
+
+### Follow-ups
+
+- [ ] **DHCP reservation for the Core 3 at `10.0.0.33`** (router at
+  `10.0.0.138`, reachable only from on-site; may need the dealer). This removes
+  the failure mode entirely and makes the drift monitor a quiet backstop. This
+  supersedes the 2026-07-16 reservation follow-up, whose `10.0.0.29` is now
+  stale.
+- [ ] Revoke the long-lived access token that was shared to seed this session
+  (Profile → Security → Long-lived access tokens).
+- [ ] Post-outage, the Eight Sleep and Alexa integrations were logging
+  connection errors; expected to self-heal after the restarts — check
+  Settings → Logs if either misbehaves.

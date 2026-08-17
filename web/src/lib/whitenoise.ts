@@ -169,6 +169,11 @@ export async function noiseTurnOn(): Promise<void> {
       media_content_type: "music",
     });
   }
+  // A commanded START supersedes any earlier stop: silence after this point
+  // is no longer explained by that off. Without this, off-then-on between
+  // watcher ticks left a stale mark, and a genuinely uncommanded death
+  // within the grace window would latch instead of retry (Codex, PR #100).
+  commandedStopAtMs = null;
 }
 
 /**

@@ -171,9 +171,32 @@ export async function noiseTurnOn(): Promise<void> {
   }
 }
 
+/**
+ * When playback was last stopped ON PURPOSE through this module — the app,
+ * a scene, an automation, the assistant, or the watcher itself. The sleep
+ * watcher's early-death retry exists to fight streams that die on their own
+ * (the 2026-07-22 receiver mystery), and it discriminates by this mark: a
+ * silent stream with a commanded stop after the watcher's start is a human
+ * choice, never interference (it relit the noise in the owner's face on the
+ * 2026-08-13 morning). In-memory on purpose — single service, same as
+ * knxLights' claims; its 3-minute relevance doesn't survive a deploy anyway.
+ */
+let commandedStopAtMs: number | null = null;
+
+export function noiseStoppedAtMs(): number | null {
+  return commandedStopAtMs;
+}
+
+/** Test seam only. */
+export function resetNoiseStoppedAt(): void {
+  commandedStopAtMs = null;
+}
+
 /** Stop playback: the room's media_player goes off/standby. */
 export async function noiseTurnOff(): Promise<void> {
   await callService("media_player", "turn_off", { entity_id: noiseMediaEntity() });
+  // Only a stop that actually went out counts — a thrown call marks nothing.
+  commandedStopAtMs = Date.now();
 }
 
 export async function setNoiseType(type: NoiseType): Promise<NoiseStatus> {

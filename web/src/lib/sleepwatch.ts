@@ -6,7 +6,7 @@ import { isAway } from "./away";
 import { audit } from "./audit";
 import { getStates } from "./ha";
 import { registry } from "./registry";
-import { noiseConfigured, noiseStatusFresh, noiseTurnOff, noiseTurnOn } from "./whitenoise";
+import { noiseConfigured, noiseStatusFresh, noiseStoppedAtMs, noiseTurnOff, noiseTurnOn } from "./whitenoise";
 
 /**
  * Sleep watcher: condition-triggered white noise for the Master Bedroom.
@@ -36,15 +36,27 @@ import { noiseConfigured, noiseStatusFresh, noiseTurnOff, noiseTurnOn } from "./
  * - If the watcher started the noise and someone turns it off (bedside
  *   remote, the app) while the room still looks asleep, it LATCHES off for
  *   the night instead of re-firing 30s later. The latch clears when a
- *   cancel condition appears — a light on / a shade opening resets the
- *   night, and the next fully-met bedtime arms fresh.
+ *   LIGHT cancel appears — a 2am bathroom light resets the night, and the
+ *   next fully-met bedtime arms fresh (noise resumes after the trip).
+ * - A SHADE opening ends the NIGHT, not just the session (2026-08-13
+ *   morning): blinds up is the household's morning signal (mornings end by
+ *   blinds, never the clock — owner, 2026-07-24). The wake evidence is an
+ *   edge but arming is a level, so before this fix the watcher re-armed 30s
+ *   after a 06:50 blinds-open — dark room, inside the window — and relit
+ *   the noise over an awake household. `morning` blocks re-arming until the
+ *   window exits; light events don't clear it. Opening a shade for air at
+ *   23:00 pays the same price — the escape hatch is starting the noise by
+ *   hand, which the watcher adopts.
  * - EXCEPT within the first 3 minutes of a watcher-started stream: on
  *   2026-07-22 something turned the Yamaha off twice ~40s after the stream
  *   started. (It was blamed on a Control4 goodnight sweep at the time; the
  *   2026-07-26 c4p audit found no such sweep exists, so the true culprit —
  *   possibly the receiver itself — is unknown.) Either way the policy
  *   stands: a death that early is interference, not intent — retry (twice,
- *   then latch).
+ *   then latch). But only an UNCOMMANDED death: a stop that went through
+ *   lib/whitenoise (the app, a scene, the assistant) after our start is a
+ *   human choice, and the retry must not relight it (2026-08-13 — the app's
+ *   off was retried twice, in the owner's face, within the grace window).
  * - The TV lift going down does NOT stop the noise (it only gates arming):
  *   late-night TV with noise running is the couple's call, not ours.
  *
@@ -91,8 +103,13 @@ export interface SleepwatchState {
   enabled: boolean;
   /** The watcher started (or adopted) the currently-playing noise. */
   active: boolean;
-  /** Fired-and-manually-stopped this bedtime episode; don't re-fire. */
+  /** Fired-and-manually-stopped this bedtime episode; don't re-fire. A
+   *  light cancel clears it (the night resets); window exit clears it. */
   latched: boolean;
+  /** A shade opened — the night is OVER. Blocks re-arming until the window
+   *  exits; unlike `latched`, no cancel clears it (a light flicked on and
+   *  off at 07:30 must not resurrect bedtime). */
+  morning?: boolean;
   /** When the watcher last STARTED the stream (ms epoch); null if adopted.
    *  Grounds the early-death retry window. */
   startedAtMs?: number | null;
@@ -197,6 +214,9 @@ export function evaluateSleepwatch(opts: {
   st: SleepwatchState;
   /** House-wide Away mode (lib/away.ts): nobody is sleeping here tonight. */
   away?: boolean;
+  /** When noise was last stopped through lib/whitenoise (app/scene/assistant
+   *  command) — see noiseStoppedAtMs. Null/undefined = no commanded stop. */
+  manualStopMs?: number | null;
 }): SleepwatchDecision {
   const { hhmm, nowMs, states, playing, st } = opts;
   const get = (id: string) => states.get(id)?.state ?? "unknown";
@@ -243,11 +263,22 @@ export function evaluateSleepwatch(opts: {
     // an unreadable status must not skip the wake-up stop. The next state
     // only clears active once the stop SUCCEEDS (the tick keeps the old
     // state on action failure), so a failed stop retries every tick.
-    // A cancel condition resets the night: clear the latch so the next
-    // fully-met bedtime (tonight or tomorrow) arms fresh.
+    // A LIGHT cancel resets the night: clear the latch so the next fully-met
+    // bedtime (a 2am bathroom trip ending) arms fresh. A SHADE opening is
+    // the morning: set `morning` so nothing re-arms until the window exits —
+    // without it the watcher re-armed 30s after the 06:50 blinds-open and
+    // relit the noise over an awake room (2026-08-13). An already-set
+    // morning survives every later cancel.
     return {
       action: st.active && playing !== false ? "stop" : null,
-      next: { ...base, active: false, latched: false, startedAtMs: null, retries: 0 },
+      next: {
+        ...base,
+        active: false,
+        latched: false,
+        morning: opened.length > 0 || st.morning === true,
+        startedAtMs: null,
+        retries: 0,
+      },
       reason: why,
     };
   }
@@ -279,10 +310,18 @@ export function evaluateSleepwatch(opts: {
     // We started it and nothing is playing. Within the grace window that's
     // interference (the C4 goodnight sweep killed the Yamaha ~40s after
     // both starts on the first real night) — retry. Beyond it, someone
-    // turned it off on purpose: stand down for the night.
+    // turned it off on purpose: stand down for the night. A COMMANDED stop
+    // (through lib/whitenoise — the app, a scene, the assistant) after our
+    // start is a purpose all its own, however early: the retry exists to
+    // out-stubborn a dying receiver, never a human tapping "off"
+    // (2026-08-13 — it relit the owner's app-stop twice).
     const withinGrace =
       st.startedAtMs != null && nowMs - st.startedAtMs < RETRY_WINDOW_MS;
-    if (armed && withinGrace && (st.retries ?? 0) < MAX_RETRIES) {
+    const commandedStop =
+      opts.manualStopMs != null &&
+      st.startedAtMs != null &&
+      opts.manualStopMs >= st.startedAtMs;
+    if (armed && withinGrace && !commandedStop && (st.retries ?? 0) < MAX_RETRIES) {
       return {
         action: "start",
         next: { ...base, active: true, startedAtMs: nowMs, retries: (st.retries ?? 0) + 1 },
@@ -292,11 +331,13 @@ export function evaluateSleepwatch(opts: {
     return {
       action: null,
       next: { ...base, active: false, latched: true, startedAtMs: null },
-      reason: "noise stopped manually — latched for the night",
+      reason: commandedStop
+        ? "noise stopped by command — latched for the night"
+        : "noise stopped manually — latched for the night",
     };
   }
 
-  if (armed && !st.latched) {
+  if (armed && !st.latched && !st.morning) {
     return {
       action: "start",
       next: { ...base, active: true, startedAtMs: nowMs, retries: 0 },
@@ -304,7 +345,11 @@ export function evaluateSleepwatch(opts: {
     };
   }
 
-  return { action: null, next: base, reason: st.latched ? "latched" : "conditions not met" };
+  return {
+    action: null,
+    next: base,
+    reason: st.latched ? "latched" : st.morning ? "morning — the night re-arms after the window" : "conditions not met",
+  };
 }
 
 /**
@@ -317,7 +362,9 @@ export async function tickSleepwatch(): Promise<void> {
   if (!st.enabled || !noiseConfigured()) return;
   const { hhmm } = nowParts();
   if (!inWindow(hhmm) && !st.active) {
-    if (st.latched) saveSleepwatch({ ...st, latched: false });
+    // Window exit ends the episode: the manual latch and the morning flag
+    // both clear so the next 22:00 arms completely fresh.
+    if (st.latched || st.morning) saveSleepwatch({ ...st, latched: false, morning: false });
     return;
   }
 
@@ -347,6 +394,7 @@ export async function tickSleepwatch(): Promise<void> {
     const playing = noise ? noise.listeners > 0 : null;
     const { action, next, reason } = evaluateSleepwatch({
       hhmm, nowMs: Date.now(), states, playing, st, away: isAway(),
+      manualStopMs: noiseStoppedAtMs(),
     });
 
     if (action) {

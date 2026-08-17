@@ -5,7 +5,11 @@ import {
   noiseMediaSource,
   noiseStatus,
   noiseStatusFresh,
+  noiseStoppedAtMs,
   noiseStreamUrl,
+  noiseTurnOff,
+  noiseTurnOn,
+  resetNoiseStoppedAt,
   setNoiseType,
   setNoiseVolume,
 } from "../whitenoise";
@@ -38,6 +42,7 @@ beforeEach(() => {
   delete process.env.WHITENOISE_STREAM_URL;
   calls.length = 0;
   status = 200;
+  resetNoiseStoppedAt();
   vi.mocked(callService).mockClear();
   vi.mocked(getState).mockClear();
   vi.stubGlobal("fetch", async (url: string | URL, init?: RequestInit) => {
@@ -155,5 +160,23 @@ describe("via-HA mode (LAN add-on behind Home Assistant)", () => {
   it("fails loudly when the sensor is missing (rest sensor not configured)", async () => {
     vi.mocked(getState).mockResolvedValue(null);
     await expect(noiseStatus()).rejects.toThrow(/not found/);
+  });
+});
+
+describe("the commanded-stop mark (the sleep watcher's human/interference line)", () => {
+  it("turn_off marks the stop; turn_on supersedes it (off-then-on leaves no stale mark)", async () => {
+    expect(noiseStoppedAtMs()).toBeNull();
+    await noiseTurnOff();
+    expect(noiseStoppedAtMs()).not.toBeNull();
+    // The Codex PR #100 scenario: on again before the next watcher tick —
+    // a later uncommanded death must read as interference, not this off.
+    await noiseTurnOn();
+    expect(noiseStoppedAtMs()).toBeNull();
+  });
+
+  it("a stop that failed to send marks nothing", async () => {
+    vi.mocked(callService).mockRejectedValueOnce(new Error("HA down"));
+    await expect(noiseTurnOff()).rejects.toThrow("HA down");
+    expect(noiseStoppedAtMs()).toBeNull();
   });
 });

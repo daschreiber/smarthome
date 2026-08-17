@@ -14,7 +14,10 @@ import {
  * the watcher from ever arming on the first real night). Reading lights
  * and the TV lift never stop it; manual off latches for the night, but a
  * stream that dies right after our own start is retried (the C4 goodnight
- * sweep).
+ * sweep) — unless the stop was COMMANDED through lib/whitenoise. A shade
+ * opening ends the whole night (`morning`), not just the session — the
+ * 2026-08-13 morning taught that re-arming before 08:00 relights the noise
+ * over an awake room.
  */
 
 const IDLE: SleepwatchState = { enabled: true, active: false, latched: false };
@@ -313,7 +316,7 @@ describe("stopping — shade movement is an edge, not a level", () => {
     expect(d.action).toBeNull();
   });
 
-  it("a shade opening clears the latch like any other wake-up", () => {
+  it("a shade opening replaces a manual latch with the morning flag", () => {
     const latched: SleepwatchState = { enabled: true, active: false, latched: true };
     const st1Decision = evaluateSleepwatch({
       hhmm: "23:00", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "closed", position: 1 } }),
@@ -323,7 +326,88 @@ describe("stopping — shade movement is an edge, not a level", () => {
       hhmm: "23:05", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "open", position: 30 } }),
       playing: false, st: st1Decision.next,
     });
-    expect(d.next.latched).toBe(false);
+    expect(d.next).toMatchObject({ latched: false, morning: true });
+  });
+});
+
+describe("morning — a shade opening ends the night (2026-08-13)", () => {
+  const ACTIVE: SleepwatchState = { enabled: true, active: true, latched: false, startedAtMs: NOW - 8 * 3_600_000 };
+  const [shade] = coverEntities();
+
+  /** The reported morning: noise playing, blinds go up at 06:50. */
+  function wake(): SleepwatchState {
+    const baseline = evaluateSleepwatch({
+      hhmm: "06:49", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "closed", position: 1 } }),
+      playing: true, st: ACTIVE,
+    });
+    const d = evaluateSleepwatch({
+      hhmm: "06:50", nowMs: NOW, states: bedtimeStates({ [shade]: { state: "opening", position: 20 } }),
+      playing: true, st: baseline.next,
+    });
+    expect(d.action).toBe("stop");
+    expect(d.next).toMatchObject({ active: false, morning: true });
+    return d.next;
+  }
+
+  it("does NOT re-arm 30s later over a dark room still inside the window", () => {
+    const woke = wake();
+    // The exact failure: 06:53, lights off, lift stowed, in window — the
+    // old watcher read this as a fresh bedtime and relit the noise.
+    const d = evaluateSleepwatch({ hhmm: "06:53", nowMs: NOW + 180_000, states: bedtimeStates(), playing: false, st: woke });
+    expect(d.action).toBeNull();
+    expect(d.reason).toContain("morning");
+  });
+
+  it("a light flicking on and off at 07:30 does not resurrect bedtime", () => {
+    const woke = wake();
+    const [light] = watchedLightEntities();
+    const on = evaluateSleepwatch({
+      hhmm: "07:30", nowMs: NOW + 2_400_000, states: bedtimeStates({ [light]: "on" }), playing: false, st: woke,
+    });
+    expect(on.next.morning).toBe(true); // the light cancel must not clear it
+    const off = evaluateSleepwatch({ hhmm: "07:32", nowMs: NOW + 2_520_000, states: bedtimeStates(), playing: false, st: on.next });
+    expect(off.action).toBeNull();
+  });
+
+  it("a light-only cancel still resets the night — noise resumes after a 2am bathroom trip", () => {
+    const [light] = watchedLightEntities();
+    const on = evaluateSleepwatch({
+      hhmm: "02:00", nowMs: NOW, states: bedtimeStates({ [light]: "on" }), playing: true, st: ACTIVE,
+    });
+    expect(on.action).toBe("stop");
+    expect(on.next.morning).toBeFalsy();
+    const off = evaluateSleepwatch({ hhmm: "02:10", nowMs: NOW + 600_000, states: bedtimeStates(), playing: false, st: on.next });
+    expect(off.action).toBe("start");
+  });
+
+  it("manually started noise during the morning is still adopted (the escape hatch)", () => {
+    const woke = wake();
+    const d = evaluateSleepwatch({ hhmm: "07:00", nowMs: NOW + 600_000, states: bedtimeStates(), playing: true, st: woke });
+    expect(d.action).toBeNull();
+    expect(d.next.active).toBe(true);
+  });
+});
+
+describe("commanded stops are never interference (2026-08-13)", () => {
+  const JUST_STARTED: SleepwatchState = { enabled: true, active: true, latched: false, startedAtMs: NOW - 40_000, retries: 0 };
+
+  it("an app/scene/assistant stop within the grace window latches instead of retrying", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "06:55", nowMs: NOW, states: bedtimeStates(), playing: false, st: JUST_STARTED,
+      manualStopMs: NOW - 10_000, // stopped after our start
+    });
+    expect(d.action).toBeNull();
+    expect(d.next).toMatchObject({ active: false, latched: true });
+    expect(d.reason).toContain("command");
+  });
+
+  it("a stale mark from an earlier episode does not suppress the retry", () => {
+    const d = evaluateSleepwatch({
+      hhmm: "22:52", nowMs: NOW, states: bedtimeStates(), playing: false, st: JUST_STARTED,
+      manualStopMs: NOW - 3_600_000, // yesterday's wake-stop, before our start
+    });
+    expect(d.action).toBe("start");
+    expect(d.next.retries).toBe(1);
   });
 });
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import NavBar from "../NavBar";
 import { appKeyHeaders } from "@/lib/appKey";
+import { systemSummary } from "@/lib/systemSummary";
 import { BlindsIcon, BulbIcon, FlameIcon, SnowIcon } from "../icons";
 
 /** Systems index: one card per house-wide function, with live counts. */
@@ -35,27 +36,30 @@ export default function Systems() {
     return () => clearInterval(t);
   }, [refresh]);
 
+  // "all off" is a claim about every device in the system — unreachable ones
+  // break it (the power-outage lesson, 2026-08-12): lib/systemSummary names
+  // them instead, here and on the Home view from the same helper.
   const lights = devices.filter((d) => d.kind === "light" && d.group === "Lighting");
   const lightsOn = lights.filter((d) => d.state === "on").length;
-  // "all off" is a claim about every light — unreachable lights break it
-  // (the power-outage lesson, 2026-08-12): name them instead.
   const lightsDown = lights.filter((d) => d.unreachable).length;
-  const lightsSub =
-    lightsDown === lights.length && lights.length > 0
-      ? "not responding"
-      : (lightsOn > 0 ? `${lightsOn} on` : "all off") +
-        (lightsDown > 0 ? ` · ${lightsDown} not responding` : "");
-  const zonesOn = devices.filter(
-    (d) => d.kind === "climate" && d.available && d.state !== "off" && d.state !== "unavailable",
+  const zones = devices.filter((d) => d.kind === "climate");
+  const zonesOn = zones.filter(
+    (d) => d.available && d.state !== "off" && d.state !== "unavailable",
   ).length;
+  const zonesDown = zones.filter((d) => d.unreachable).length;
   // Count only — C4 cover state is permanently "open" (broken feedback).
   const shadesTotal = devices.filter((d) => d.kind === "cover").length;
-  const heatingOn = devices.filter((d) => d.kind === "heating" && d.state === "on").length;
+  const heating = devices.filter((d) => d.kind === "heating");
+  const heatingOn = heating.filter((d) => d.state === "on").length;
+  const heatingDown = heating.filter((d) => d.unreachable).length;
 
   const cards = [
-    { href: "/systems/lighting", icon: BulbIcon, title: "Lighting", sub: lightsSub, on: lightsOn > 0 },
-    { href: "/systems/climate", icon: SnowIcon, title: "Climate", sub: zonesOn > 0 ? `${zonesOn} zone${zonesOn === 1 ? "" : "s"} active` : "all off", on: zonesOn > 0 },
-    { href: "/systems/heating", icon: FlameIcon, title: "Underfloor heating", sub: heatingOn > 0 ? `${heatingOn} room${heatingOn === 1 ? "" : "s"} heating` : "all off", on: heatingOn > 0 },
+    { href: "/systems/lighting", icon: BulbIcon, title: "Lighting",
+      sub: systemSummary(lightsOn, lights.length, lightsDown, (n) => `${n} on`), on: lightsOn > 0 },
+    { href: "/systems/climate", icon: SnowIcon, title: "Climate",
+      sub: systemSummary(zonesOn, zones.length, zonesDown, (n) => `${n} zone${n === 1 ? "" : "s"} active`), on: zonesOn > 0 },
+    { href: "/systems/heating", icon: FlameIcon, title: "Underfloor heating",
+      sub: systemSummary(heatingOn, heating.length, heatingDown, (n) => `${n} room${n === 1 ? "" : "s"} heating`), on: heatingOn > 0 },
     { href: "/systems/shades", icon: BlindsIcon, title: "Shades", sub: `${shadesTotal} shade${shadesTotal === 1 ? "" : "s"}`, on: false },
   ];
 

@@ -7,6 +7,7 @@ import { BlindsIcon, BulbIcon, FlameIcon, GridIcon, LockIcon, MapIcon, SnowIcon 
 import { canProgram as roleCanProgram } from "@/lib/permissions";
 import { appKeyHeaders } from "@/lib/appKey";
 import { errorFrom, networkError } from "@/lib/fetchError";
+import { systemSummary } from "@/lib/systemSummary";
 import ClimateCard from "./ClimateCard";
 
 /**
@@ -267,6 +268,9 @@ interface FloorModeInfo {
   mode: "heat" | "cool" | null;
   pending: "heat" | "cool" | null;
   error: string | null;
+  /** The KNX changeover relay is unavailable — Control4 is down, so the
+   *  mode is neither readable nor switchable. */
+  unreachable?: boolean;
 }
 
 const GROUP_ORDER = ["Security", "Lighting", "Shades", "Climate & Comfort", "Media", "Utilities", "Appliances"];
@@ -675,6 +679,14 @@ export default function Page() {
       ).length,
     [devices],
   );
+  const climateTotal = useMemo(
+    () => devices.filter((d) => d.kind === "climate").length,
+    [devices],
+  );
+  const climateDownTotal = useMemo(
+    () => devices.filter((d) => d.kind === "climate" && d.unreachable).length,
+    [devices],
+  );
 
   // Count by default: the Control4 covers' position feedback is stuck near
   // 1%, so every cover reports "open" forever — the same broken signal that
@@ -691,6 +703,14 @@ export default function Page() {
 
   const heatingOnTotal = useMemo(
     () => devices.filter((d) => d.kind === "heating" && d.state === "on").length,
+    [devices],
+  );
+  const heatingTotal = useMemo(
+    () => devices.filter((d) => d.kind === "heating").length,
+    [devices],
+  );
+  const heatingDownTotal = useMemo(
+    () => devices.filter((d) => d.kind === "heating" && d.unreachable).length,
     [devices],
   );
 
@@ -791,7 +811,11 @@ export default function Page() {
                   ? `switching floor ${floor} to ${fm.pending === "heat" ? "heating" : "cooling"}…`
                   : fm?.mode
                     ? `floor ${floor} is on ${fm.mode === "heat" ? "heating" : "cooling"}`
-                    : `floor ${floor} mode unknown`}
+                    : fm?.unreachable
+                      // Not the same as "unknown": the relay is gone with the
+                      // rest of Control4, so the changeover cannot run at all.
+                      ? `floor ${floor} mode not responding`
+                      : `floor ${floor} mode unknown`}
                 {!fm?.pending && fm?.error ? " · last switch failed" : ""}
               </div>
             </div>
@@ -800,7 +824,11 @@ export default function Page() {
                 <button
                   key={m}
                   aria-pressed={fmShown === m}
-                  disabled={!!busy[`mode:${floor}`] || !!fm?.pending}
+                  // A changeover with a dead relay is not a no-op: it still
+                  // cycles the sacrificial CoolMaster unit for 13s and flips
+                  // nothing. The server refuses it (lib/changeover); the
+                  // button refuses to ask.
+                  disabled={!!busy[`mode:${floor}`] || !!fm?.pending || !!fm?.unreachable}
                   onClick={() => {
                     if (fmShown === m) return;
                     if (
@@ -867,22 +895,21 @@ export default function Page() {
             <a className="room-card" href="/systems/lighting" style={{ textDecoration: "none", display: "block" }}>
               <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><BulbIcon size={18} /> Lighting</div>
               <div className={`rs ${lightsOnTotal > 0 ? "on" : ""}`}>
-                {lightsDownTotal === lightsTotal && lightsTotal > 0
-                  ? "not responding"
-                  : (lightsOnTotal > 0 ? `${lightsOnTotal} on` : "all off") +
-                    (lightsDownTotal > 0 ? ` · ${lightsDownTotal} not responding` : "")}
+                {systemSummary(lightsOnTotal, lightsTotal, lightsDownTotal, (n) => `${n} on`)}
               </div>
             </a>
             <a className="room-card" href="/systems/climate" style={{ textDecoration: "none", display: "block" }}>
               <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><SnowIcon size={18} /> Climate</div>
               <div className={`rs ${climateOnTotal > 0 ? "on" : ""}`}>
-                {climateOnTotal > 0 ? `${climateOnTotal} zone${climateOnTotal === 1 ? "" : "s"} active` : "all off"}
+                {systemSummary(climateOnTotal, climateTotal, climateDownTotal,
+                  (n) => `${n} zone${n === 1 ? "" : "s"} active`)}
               </div>
             </a>
             <a className="room-card" href="/systems/heating" style={{ textDecoration: "none", display: "block" }}>
               <div className="rn" style={{ display: "flex", alignItems: "center", gap: 7 }}><FlameIcon size={18} /> Underfloor heating</div>
               <div className={`rs ${heatingOnTotal > 0 ? "on" : ""}`}>
-                {heatingOnTotal > 0 ? `${heatingOnTotal} room${heatingOnTotal === 1 ? "" : "s"}` : "all off"}
+                {systemSummary(heatingOnTotal, heatingTotal, heatingDownTotal,
+                  (n) => `${n} room${n === 1 ? "" : "s"}`)}
               </div>
             </a>
             <a className="room-card" href="/systems/shades" style={{ textDecoration: "none", display: "block" }}>

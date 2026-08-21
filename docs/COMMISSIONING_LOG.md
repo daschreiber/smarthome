@@ -493,3 +493,112 @@ so no auto-rewrite/auto-restart machinery runs unattended. Currently reads
 - [ ] Post-outage, the Eight Sleep and Alexa integrations were logging
   connection errors; expected to self-heal after the restarts — check
   Settings → Logs if either misbehaves.
+
+## 2026-08-21 — Second power outage, same fault; recovery made one command
+
+### Symptom
+
+The same signature as 2026-08-12, nine days later: the app reported **139
+devices not responding**, the header read "lights not responding", every
+underfloor-heating valve and both KNX changeover relays were `unavailable`,
+while the CoolMaster A/C ("4 zones active"), the native KNX shades and the
+media players carried on. Owner's message: "a power outage again left the
+system not working... you did a fix last time, do it again."
+
+The cause is not in doubt and never was: the **DHCP reservation follow-up for
+the Core 3 was still open**, so a power cut can hand the controller a new
+lease while Home Assistant's Control4 entry keeps dialling the old address.
+The 2026-08-12 entry predicted this failure in the sentence that opened the
+follow-up.
+
+### Live repair was not possible from this session
+
+The cloud session's egress proxy refuses `*.ui.nabu.casa` outright (policy
+denial, HTTP 403 to CONNECT), so the owner-supplied Nabu Casa URL and admin
+token could not be used from here — unlike 2026-08-12, when the session could
+reach the Green. Nothing was routed around; the token was reported as needing
+revocation instead. **The repair therefore has to run from a machine that can
+see the house** — the dev Mac on the LAN, or anywhere the Nabu Casa URL
+resolves.
+
+So the deliverable became the thing that makes "do it again" not need a
+session at all.
+
+### `tools/c4_recover.py` — the whole 2026-08-12 investigation, as one command
+
+```
+export HA_URL=http://10.0.0.69:8123   # or the Nabu Casa URL
+export HA_TOKEN=<admin long-lived token>
+python3 tools/c4_recover.py diagnose      # read-only
+python3 tools/c4_recover.py recover --yes
+```
+
+It walks the same two faults in the same order — reload the config entry
+(boot-before-internet kills the Control4 cloud auth and leaves the entry in
+`setup_error`), then repoint the host if the reload times out — and refuses
+to guess: with no observed IP it says so and points at Nmap Tracker; with the
+configured host already matching where the controller answers, it says this
+is not a drift and to check the Core 3 itself. Writes need `--yes`;
+`diagnose` touches nothing. 30 stdlib tests (`tools/test_c4_recover.py`)
+drive the whole tree against a fake Home Assistant on localhost, including
+the write-clobbered-by-a-save case that made the manual fix need two boots.
+
+The host rewrite stays surgical for the same reason as last time: the config
+entry holds the Control4 credentials and, through the entity registry, all
+184 Stage 5 renames and Area assignments. `ha/c4_repoint.py` changes the one
+`host` field, atomically, after a timestamped backup, and refuses anything it
+does not recognise — never a delete-and-re-add.
+
+### Guardrail rebuilt to survive its own fix
+
+The 2026-08-12 drift alert compared the scanned IP to a **hardcoded
+`10.0.0.33`** — correct until the first repoint, after which it cries wolf
+forever or needs hand-editing mid-outage. Replaced (`ha/c4_recovery.yaml`) by
+a pair of sensors and a template binary sensor that compare **where the
+controller answers ARP** (`sensor.c4_ip_watch`) against **the host inside the
+config entry** (`sensor.c4_configured_host`), so a repoint re-baselines the
+alert by itself. Still detect-only: nothing rewrites or restarts unattended.
+`ha/c4_scan.py` does the MAC lookup with a UDP sweep plus `/proc/net/arp` —
+no root, no nmap, no add-on store (which 404s on this install).
+
+Install is one paste-and-reload, `ha/README.md`. Until it is installed the
+recovery tool still diagnoses fully — it reads the stale host out of the
+integration's own "Timeout connecting to Control4 controller at ..." error —
+and prints the File-editor procedure with the addresses filled in.
+
+### Two app lies the outage exposed
+
+Both visible in the owner's screenshot, both the same class as the ones fixed
+on 2026-08-12, both in surfaces that pass had not reached:
+
+- **"Underfloor heating — all off"** while all 14 valve relays were
+  unreachable. `lib/systemSummary.ts` now owns the tile line for Lighting,
+  Climate and Underfloor heating on both the Home view and the Systems index,
+  so a system that cannot answer says **"not responding"** and a partial
+  outage is named alongside the live count. One helper, six call sites, six
+  tests — the three tiles can no longer disagree about the same house.
+- **The A/C mode toggle still took taps** with its changeover relay dead
+  ("floor 6 mode unknown", Cool | Heat live). That is not a harmless no-op:
+  HA answers 200 for an unavailable entity, so the 13-second installer
+  sequence would still command the sacrificial CoolMaster unit (alive on its
+  own bridge), flip nothing, and audit `ok: true`. `startChangeover` now
+  reads the relay first and refuses (503, not 409, when it is an outage
+  rather than a busy floor); `/api/home` publishes
+  `floorModes[n].unreachable`; the card says "floor 6 mode not responding"
+  and disables both buttons. The refusal keeps the reachability rule — only
+  positive evidence blocks, so a failed read or a transient `unknown` after a
+  restart still commands.
+
+### Follow-ups
+
+- [ ] **DHCP reservation for the Core 3** at the router (`10.0.0.138`,
+  dealer-managed, on-site only). Third time asking. Everything above is a
+  workaround for not having it.
+- [ ] Install the HA-side bundle (`ha/README.md`) and delete the old
+  "Control4 IP drift alert" automation, or the house alerts twice.
+- [ ] **Revoke the long-lived token shared into this session** — it went into
+  a chat transcript and was never usable from here (Profile → Security →
+  Long-lived access tokens).
+- [ ] Run `python3 tools/c4_recover.py recover --yes` from the Mac and record
+  the outcome here — including the Core 3's new address, so the next reader
+  knows where it landed.

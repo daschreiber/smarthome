@@ -22,7 +22,14 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "invalid request" }, { status: 400 });
   const { floor, mode } = parsed.data;
 
-  const result = startChangeover(floor, mode, auth.user);
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 409 });
+  // 409 for "one at a time", 503 for "the relay is offline" — the second is
+  // the house being down, not the request being wrong.
+  const result = await startChangeover(floor, mode, auth.user);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: result.reason === "unreachable" ? 503 : 409 },
+    );
+  }
   return NextResponse.json({ ok: true, status: "started" });
 }

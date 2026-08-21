@@ -49,8 +49,16 @@ The one bulk read the UI polls (~3s). Returns:
   (lib/knxLights). The card drops its optimistic overlay and says the light
   didn't answer. Retires itself once the light reaches the wanted state or
   after 90s.
-- `floorModes`: `{ "5"|"6": { mode: "heat"|"cool"|null, pending, error } }`
-  — read off the KNX changeover relays (on = heating).
+- `unreachable` (every HA-backed device): every entity the device's command
+  would target reads `unavailable`, or is gone from HA entirely — so a
+  command cannot land (lib/reachability). Distinct from `!available`, which
+  also covers the transient `unknown` after an HA restart: that stays
+  commandable. The outage UI keys on this, and it matches exactly what the
+  command routes refuse.
+- `floorModes`: `{ "5"|"6": { mode: "heat"|"cool"|null, pending, error,
+  unreachable } }` — read off the KNX changeover relays (on = heating).
+  `unreachable` separates "the relay reported something unexpected" from
+  "the relay went down with Control4"; only the second disables the toggle.
 - 502 when HA is unreachable.
 
 ### `GET /api/health`
@@ -110,7 +118,10 @@ resulting truth.
 Per-floor heat/cool changeover: `{ floor: 5|6, mode: "heat"|"cool" }`.
 Returns `{ ok, status: "started" }` immediately; the ~13s Control4-derived
 relay sequence runs server-side (one per floor at a time — 409 if already
-switching). Progress/result read from `/api/home` `floorModes`.
+switching). **503** when the floor's changeover relay is unreachable: with
+Control4 down the sequence would still cycle the sacrificial CoolMaster unit,
+flip nothing, and report success. Progress/result read from `/api/home`
+`floorModes`.
 
 ### `GET | POST /api/favorites`
 Per-user favorite device ids. POST `{ deviceId }` toggles; both return

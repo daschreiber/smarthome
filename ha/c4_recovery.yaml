@@ -1,0 +1,99 @@
+# Control4 outage recovery + IP-drift guardrail.
+#
+# Paste this block into /config/configuration.yaml on the Green (File editor
+# add-on), alongside c4_scan.py and c4_repoint.py in /config. See ha/README.md.
+#
+# It replaces the 2026-08-12 guardrail, whose alert compared the scanned IP to
+# a HARDCODED 10.0.0.33 — correct exactly until the next repoint, after which
+# it either cries wolf forever or has to be hand-edited under stress. This
+# version compares the address the controller answers at to the address the
+# config entry is actually dialling, so a repoint re-baselines it by itself
+# and there is no literal left to go stale.
+#
+# It still only DETECTS. Nothing here rewrites a config entry or restarts Home
+# Assistant on its own — a human (or tools/c4_recover.py, run deliberately)
+# applies the repoint.
+
+# The repoint itself, exposed as a service so it can be driven from the API.
+# `ip` is passed as service data: {"ip": "10.0.0.42"}.
+shell_command:
+  c4_repoint: "python3 /config/c4_repoint.py {{ ip }}"
+
+command_line:
+  # Where the Core 3 answers ARP right now. Twice a day and at every HA start
+  # — the outage window is a boot, so a start-time scan is the one that
+  # matters. (Pre-2023.6 installs used `sensor: - platform: command_line`.)
+  - sensor:
+      name: C4 IP watch
+      unique_id: c4_ip_watch
+      command: "python3 /config/c4_scan.py 00:0f:ff:9f:3b:44"
+      scan_interval: 43200
+
+  # Where Home Assistant thinks it is — read straight out of the config entry,
+  # which is the only place the truth lives.
+  - sensor:
+      name: C4 configured host
+      unique_id: c4_configured_host
+      scan_interval: 3600
+      command: >-
+        python3 -c "import json;
+        e=json.load(open('/config/.storage/core.config_entries'))['data']['entries'];
+        print(next((x['data'].get('host','none') for x in e if x.get('domain')=='control4'),'none'))"
+
+template:
+  - binary_sensor:
+      - name: C4 IP drift
+        unique_id: c4_ip_drift
+        device_class: problem
+        # Only positive evidence raises the alarm (the knxLights rule): both
+        # readings must be real addresses AND disagree. An "unknown" from a
+        # scan that found nothing is not drift — the controller may simply be
+        # off, and a nightly false alarm trains you to ignore the real one.
+        state: >-
+          {% set seen = states('sensor.c4_ip_watch') %}
+          {% set want = states('sensor.c4_configured_host') %}
+          {{ seen not in ['unknown','unavailable','none','']
+             and want not in ['unknown','unavailable','none','']
+             and seen != want }}
+        attributes:
+          observed: "{{ states('sensor.c4_ip_watch') }}"
+          configured: "{{ states('sensor.c4_configured_host') }}"
+
+# `automation manual_c4:` is a labelled second automation block, so this
+# coexists with the UI-managed `automation: !include automations.yaml`.
+# DELETE the old "Control4 IP drift alert" automation when installing this,
+# or the house alerts twice.
+automation manual_c4:
+  - alias: Control4 IP drift alert
+    id: c4_ip_drift_alert
+    description: >-
+      The Core 3 is answering at an address the Control4 integration is not
+      dialling — the 2026-08-12 and 2026-08-21 failure, caught before anyone
+      taps a light. Fix with: python3 tools/c4_recover.py recover --yes
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.c4_ip_drift
+        to: "on"
+        for: "00:05:00"   # ride out a scan that catches a half-finished boot
+    action:
+      - action: persistent_notification.create
+        data:
+          title: Control4 controller has moved
+          notification_id: c4_ip_drift
+          message: >-
+            The Core 3 answers at {{ state_attr('binary_sensor.c4_ip_drift','observed') }}
+            but Home Assistant is dialling
+            {{ state_attr('binary_sensor.c4_ip_drift','configured') }}.
+            Lights and underfloor heating will stop responding until the config
+            entry is repointed (docs/OUTAGE_RECOVERY.md).
+      # Rename to whichever notify.mobile_app_* service this house already
+      # uses; `continue_on_error` keeps the persistent notification useful if
+      # the phone service is gone.
+      - action: notify.mobile_app_iphone
+        continue_on_error: true
+        data:
+          title: Control4 controller has moved
+          message: >-
+            Now at {{ state_attr('binary_sensor.c4_ip_drift','observed') }},
+            HA still dialling {{ state_attr('binary_sensor.c4_ip_drift','configured') }}.

@@ -8,7 +8,7 @@ through the File editor add-on.
 | File | Where it goes | What it is |
 | --- | --- | --- |
 | `c4_scan.py` | `/config/c4_scan.py` | Finds a device's current IP by MAC (UDP sweep + `/proc/net/arp`), with no add-ons, no root and no nmap. |
-| `c4_repoint.py` | `/config/c4_repoint.py` | Rewrites the Control4 config entry's host in place, atomically, keeping credentials and every Stage 5 rename. |
+| `c4_repoint.py` | `/config/c4_repoint.py` | Rewrites the Control4 config entry's host in place, atomically, keeping credentials and every Stage 5 rename. Finds the address itself with `--mac`, or takes one on the command line. |
 | `c4_recovery.yaml` | block in `configuration.yaml` | The `shell_command` that drives the repoint, the two watch sensors, and the self-baselining IP-drift alert. |
 | `homekit_covers.yaml` | block in `configuration.yaml` | Deprecated 2026-07-26; see the file's own header. |
 
@@ -29,6 +29,18 @@ One-time, ~5 minutes, no restart needed until the last step.
    `notify.mobile_app_*` this house uses.
 5. **Developer tools → YAML → Check configuration**, then **Reload** template
    entities and command_line, or restart once.
+
+Do not add a template to the `shell_command` while merging. Home Assistant
+runs a templated `shell_command` through a shell, which would hand every
+service caller — including the non-admin app token — arbitrary command
+execution in the HA container. The service is deliberately a fixed argv that
+resolves the controller by MAC and takes no input
+(docs/SECURITY_AND_OPERATIONS.md §7). To repoint at an address the scan
+cannot see, run it directly instead:
+
+```
+python3 /config/c4_repoint.py 10.0.0.42
+```
 
 Verify: `sensor.c4_ip_watch` and `sensor.c4_configured_host` should read the
 same address, and `binary_sensor.c4_ip_drift` should be `off`.

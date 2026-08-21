@@ -143,6 +143,22 @@ def control4_light_entities():
     return [r["entity_id"] for r in rows if r.get("domain") == "light"]
 
 
+# A device or a KNX channel can die on its own; the integration takes the
+# whole house with it. The line between them is a ratio, not "every single
+# one": the entity map can carry a row the integration no longer owns, and one
+# stale row must not stop a real recovery.
+OUTAGE_RATIO = 0.8
+
+
+def outage_verdict(down, total):
+    """healthy | house-wide | partial | unknown — the one place that decides."""
+    if not total:
+        return "unknown"
+    if down == 0:
+        return "healthy"
+    return "house-wide" if down / total >= OUTAGE_RATIO else "partial"
+
+
 def health(ha):
     """How much of Control4 is answering, as a (down, total) count."""
     states = ha.states()
@@ -214,22 +230,29 @@ def diagnose(ha):
         for line in c4_errors:
             print(f"  {line[:160]}")
 
-    healthy = total > 0 and down == 0
+    verdict = outage_verdict(down, total)
+    healthy = verdict == "healthy"
     drifted = bool(ip and host and ip != host)
     print()
-    if healthy:
+    if healthy and drifted:
+        print("VERDICT: Control4 is up, but the two address readings disagree")
+        print(f"         (answering at {ip}, entry dialling {host}). Nothing is broken yet,")
+        print("         so nothing is changed here — re-check before repointing a working house.")
+    elif healthy:
         print("VERDICT: Control4 is up. Nothing to recover.")
+    elif verdict == "partial":
+        print(f"VERDICT: {down} of {total} lights are unavailable — a partial fault, not the")
+        print("         whole integration. Look at those devices before touching the entry.")
+        if drifted:
+            print(f"         (the address readings also disagree: {host} vs {ip}.)")
     elif drifted:
         print(f"VERDICT: the Core 3 moved — {host} -> {ip}. The entry needs a repoint.")
         print(f"         run: c4_recover.py repoint --ip {ip} --yes")
-    elif down == total and total:
+    else:
         print("VERDICT: Control4 is down house-wide.")
         print("         run: c4_recover.py recover --yes   (reload first, repoint if that times out)")
-    else:
-        print(f"VERDICT: {down} of {total} lights are unavailable — a partial fault, not the")
-        print("         whole integration. Look at those devices before touching the entry.")
     return {"down": down, "total": total, "entry_id": entry_id, "host": host,
-            "ip": ip, "healthy": healthy, "drifted": drifted}
+            "ip": ip, "healthy": healthy, "drifted": drifted, "verdict": verdict}
 
 
 def reload_entry(ha, entry_id, polls=9, every=5):
@@ -298,10 +321,15 @@ def repoint(ha, ip, attempts=2):
     .storage on its own schedule: if it saves between our write and the
     restart, our edit is gone. The 2026-08-12 recovery needed two boots for
     the same reason. The second attempt is the belt, not the norm."""
+    before, _ = configured_host(ha)
     for attempt in range(1, attempts + 1):
         print(f"repointing the {DOMAIN} entry to {ip} (attempt {attempt}/{attempts}) …")
         try:
-            out = ha.call(*REPOINT_SERVICE, {"ip": ip})
+            # No service data: the shell_command is a fixed argv that resolves
+            # the controller's address from ARP itself, precisely so nothing a
+            # caller sends can reach a shell (ha/c4_recovery.yaml). `ip` here
+            # is what we EXPECT it to land on, and what we verify below.
+            out = ha.call(*REPOINT_SERVICE, {})
             print(f"  {out.strip()[:200] or 'shell_command accepted'}")
         except HaError as exc:
             if "not found" in str(exc).lower() or "400" in str(exc):
@@ -322,14 +350,32 @@ def repoint(ha, ip, attempts=2):
             # problem any more — the controller itself isn't answering.
             print("  host is correct but Control4 still won't set up.")
             return False
+        if host and host != before and valid_ip(host):
+            # A third address: the service repoints to whatever owns the Core
+            # 3's MAC, so this means the scan saw something else entirely.
+            # Retrying would just write it again.
+            print(f"  the entry landed on {host}, not the {ip} this run expected.")
+            return False
+        # Host unchanged — the write was accepted and then lost to one of
+        # Home Assistant's own .storage saves. That is the case worth retrying.
     return False
 
 
-def recover(ha, yes):
+def recover(ha, yes, force=False):
     state = diagnose(ha)
     print()
     if state["healthy"]:
         return 0
+    # A reload drops every Control4 device for a few seconds and a repoint
+    # restarts Home Assistant outright. Neither is a proportionate answer to
+    # one dead channel, and diagnose has just said so — so don't do it behind
+    # its own advice (Codex review, PR #101).
+    if state["verdict"] == "partial" and not force:
+        print(f"Refusing: {state['down']} of {state['total']} lights are down, which is a")
+        print("partial fault. Reloading the entry would interrupt every device that is")
+        print("still working, and a repoint would restart Home Assistant. Fix the named")
+        print("devices, or pass --force if you are sure the integration is the problem.")
+        return 2
     if not state["entry_id"]:
         print("Cannot continue: no Control4 config entry found. Pass --entry-id, or check")
         print("Settings → Devices & Services to confirm the integration is still added.")
@@ -377,9 +423,14 @@ def main():
     ap.add_argument("--url", default=os.environ.get("HA_URL"))
     ap.add_argument("--token", default=os.environ.get("HA_TOKEN"))
     ap.add_argument("--entry-id", help="skip config-entry lookup")
-    ap.add_argument("--ip", help="repoint: the controller's new address")
+    ap.add_argument("--ip", help="repoint: the address to expect the entry to land on "
+                                 "(the service resolves it by MAC; to force a different "
+                                 "one, run ha/c4_repoint.py on the Green directly)")
     ap.add_argument("--yes", action="store_true",
                     help="actually change things (without it, everything is a dry run)")
+    ap.add_argument("--force", action="store_true",
+                    help="recover: act even on a partial fault, where most devices "
+                         "are still working")
     args = ap.parse_args()
 
     if not args.url or not args.token:
@@ -415,7 +466,7 @@ def main():
                 return 0
             manual_repoint(configured_host(ha)[0], ip)
             return 1
-        return recover(ha, args.yes)
+        return recover(ha, args.yes, args.force)
     except HaError as exc:
         sys.exit(str(exc))
 

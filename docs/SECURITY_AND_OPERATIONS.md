@@ -85,6 +85,24 @@ Assistant's `coolmaster` integration uses. The app never talks to it directly
 (only via Home Assistant), but treat LAN access as HVAC control: keep guests
 on a guest SSID, and never port-forward 10102.
 
+### Home Assistant `shell_command`: never templated
+
+Home Assistant renders service data into a `shell_command` and then runs the
+result **through a shell**; a command with no template is exec'd as argv
+instead. So any `{{ … }}` in a `shell_command` is arbitrary command execution
+inside the HA container for anyone who can call the service — and §6 above is
+exactly why that matters here: HA has no per-service permissions for regular
+users, so the non-admin `smarthome-app` token, which lives in an
+internet-facing app's environment, can reach every service.
+
+The Control4 repoint service (`ha/c4_recovery.yaml`) is written to that rule:
+a fixed argv with the Core 3's MAC as a literal, and `c4_repoint.py` resolves
+the address from the ARP table itself. It takes no caller input at all, so the
+worst any caller can do is point the config entry at the machine that owns
+that MAC — which is the only thing it is for, and a no-op when it is already
+the host. Repointing at an address the scan cannot see is a deliberate
+by-hand act: run the script on the Green directly.
+
 ## 8. Logging
 
 Record:

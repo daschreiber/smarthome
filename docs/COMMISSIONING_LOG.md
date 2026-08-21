@@ -589,6 +589,38 @@ on 2026-08-12, both in surfaces that pass had not reached:
   positive evidence blocks, so a failed read or a transient `unknown` after a
   restart still commands.
 
+### Two fixes from the Codex review (PR #101)
+
+- **The repoint service was a shell.** `shell_command: c4_repoint: "python3
+  /config/c4_repoint.py {{ ip }}"` looked like a parameter and was not: Home
+  Assistant renders service data into a `shell_command` and runs the result
+  through a shell, so `{"ip": "10.0.0.42; …"}` was arbitrary command execution
+  in the HA container — reachable by anything that can call a service,
+  including the non-admin `smarthome-app` token that lives in an
+  internet-facing app's environment. The script's own IP validation was
+  downstream of the split and never saw it. Fixed by removing the template
+  entirely: the service is a fixed argv, `--mac 00:0f:ff:9f:3b:44`, and
+  `c4_repoint.py` resolves the address from the ARP table itself. It now takes
+  no caller input at all, so the worst it can do is point the entry at the
+  machine owning that MAC — and it is a no-op when that is already the host.
+  Repointing somewhere the scan cannot see is a deliberate by-hand act. Rule
+  recorded in SECURITY_AND_OPERATIONS §7, and a test asserts the YAML never
+  regrows a `{{`.
+
+- **`recover` acted behind its own advice.** `diagnose` said "a partial fault,
+  not the whole integration — look at those devices before touching the
+  entry", and then `recover --yes` reloaded the entry anyway, because it only
+  stopped for a fully healthy house. Both now share one `outage_verdict`:
+  healthy / house-wide / partial, with house-wide at 80%+ of the Control4
+  lights down rather than every last one (the entity map can carry a row the
+  integration no longer owns, and one stale light must not block a real
+  recovery). A partial fault is refused unless `--force`.
+
+Also from re-reading the diff: the changeover's new reachability read is an
+`await`, which opened a window where two taps could both start a sequence on
+one floor — the claim is now taken before the read. And `c4_scan.py` derives
+the subnet from the Green's own address instead of assuming `10.0.0`.
+
 ### Follow-ups
 
 - [ ] **DHCP reservation for the Core 3** at the router (`10.0.0.138`,

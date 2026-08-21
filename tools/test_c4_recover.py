@@ -48,27 +48,42 @@ NEW_HOST = "10.0.0.42"
 class FakeHouse:
     """The Green, as far as this tool can tell.
 
-    `lights_up` is the only thing that matters to the caller; the fake moves
-    it exactly when the real one would — on a reload that gets past cloud
-    auth, or on a restart once the entry's host finally matches where the
-    controller answers.
+    `down` is how many of the Control4 lights are unavailable — all of them by
+    default, which is what an integration outage looks like. The fake clears
+    it exactly when the real one would: on a reload that gets past cloud auth,
+    or on a restart once the entry's host finally matches where the controller
+    answers.
     """
 
-    def __init__(self, *, lights_up=False, host=OLD_HOST, observed=NEW_HOST,
-                 reload_fixes=False, has_shell_command=True, clobber_writes=0):
-        self.lights_up = lights_up
+    def __init__(self, *, down=None, host=OLD_HOST, observed=NEW_HOST,
+                 controller_at=None, reload_fixes=False, has_shell_command=True,
+                 clobber_writes=0):
+        self.down = len(LIGHTS) if down is None else down
         self.host = host
-        self.observed = observed
+        self.observed = observed          # what the ARP scan reports
+        self._controller_at = controller_at
         self.reload_fixes = reload_fixes
         self.has_shell_command = has_shell_command
         self.clobber_writes = clobber_writes  # HA saving .storage over our edit
         self.calls = []
 
+    @property
+    def lights_up(self):
+        return self.down == 0
+
+    @property
+    def controller_at(self):
+        """Where the controller REALLY is — normally whatever the scan
+        reports, including when a test moves it mid-run. They part company
+        only when a test says so, to model a scan latching onto some other
+        machine."""
+        return self._controller_at or self.observed
+
     def service(self, domain, service, data):
         self.calls.append((domain, service, data))
         if (domain, service) == ("homeassistant", "reload_config_entry"):
             if self.reload_fixes:
-                self.lights_up = True
+                self.down = 0
             return 200, "[]"
         if (domain, service) == ("shell_command", "c4_repoint"):
             if not self.has_shell_command:
@@ -76,18 +91,20 @@ class FakeHouse:
             if self.clobber_writes > 0:
                 self.clobber_writes -= 1  # write accepted, then lost to a save
                 return 200, "[]"
-            self.host = data.get("ip")
+            # The real service takes no data: it resolves the controller by
+            # MAC and points the entry there. Anything sent is ignored.
+            self.host = self.observed
             return 200, "[]"
         if (domain, service) == ("homeassistant", "restart"):
-            if self.host == self.observed:
-                self.lights_up = True
+            if self.host == self.controller_at:
+                self.down = 0
             return 200, "[]"
         return 200, "[]"
 
     def states(self):
         out = [{"entity_id": e,
-                "state": "off" if self.lights_up else "unavailable",
-                "attributes": {}} for e in LIGHTS]
+                "state": "unavailable" if i < self.down else "off",
+                "attributes": {}} for i, e in enumerate(LIGHTS)]
         out.append({"entity_id": c4.IP_SENSOR, "state": self.observed or "unknown",
                     "attributes": {}})
         out.append({"entity_id": c4.HOST_SENSOR, "state": self.host or "none",
@@ -180,7 +197,7 @@ def run_cli(url, *args):
 
 class DiagnoseTest(unittest.TestCase):
     def test_healthy_house_needs_nothing(self):
-        with serving(FakeHouse(lights_up=True, host=NEW_HOST)) as url:
+        with serving(FakeHouse(down=0, host=NEW_HOST)) as url:
             code, out = run_cli(url, "diagnose")
         self.assertEqual(code, 0)
         self.assertIn("Control4 is up", out)
@@ -199,15 +216,30 @@ class DiagnoseTest(unittest.TestCase):
         self.assertIn("recover --yes", out)
 
     def test_a_few_dead_lights_is_not_an_integration_outage(self):
-        house = FakeHouse(lights_up=True, host=OLD_HOST, observed=OLD_HOST)
-        real_states = house.states
-        house.states = lambda: [
-            dict(s, state="unavailable") if s["entity_id"] == LIGHTS[0] else s
-            for s in real_states()
-        ]
-        with serving(house) as url:
+        with serving(FakeHouse(down=1, host=OLD_HOST, observed=OLD_HOST)) as url:
             code, out = run_cli(url, "diagnose")
         self.assertIn("partial fault", out)
+
+    def test_a_partial_fault_reads_as_partial_even_when_addresses_disagree(self):
+        with serving(FakeHouse(down=1, host=OLD_HOST, observed=NEW_HOST)) as url:
+            code, out = run_cli(url, "diagnose")
+        self.assertIn("partial fault", out)
+        self.assertIn("also disagree", out)
+
+    def test_a_handful_of_stragglers_is_still_a_house_wide_outage(self):
+        """The entity map can carry a row the integration no longer owns; one
+        stale light must not read as "partial" and block a real recovery."""
+        with serving(FakeHouse(down=len(LIGHTS) - 3, host=OLD_HOST,
+                               observed=OLD_HOST)) as url:
+            code, out = run_cli(url, "diagnose")
+        self.assertIn("down house-wide", out)
+
+    def test_a_working_house_with_disagreeing_sensors_is_not_touched(self):
+        with serving(FakeHouse(down=0, host=OLD_HOST, observed=NEW_HOST)) as url:
+            code, out = run_cli(url, "diagnose")
+        self.assertIn("Control4 is up", out)
+        self.assertIn("disagree", out)
+        self.assertNotIn("VERDICT: the Core 3 moved", out)
 
     def test_falls_back_to_the_error_log_when_the_host_sensor_is_absent(self):
         """The guardrail's host sensor is new; the integration has always
@@ -255,7 +287,9 @@ class RecoverTest(unittest.TestCase):
         self.assertEqual(house.host, NEW_HOST)
         self.assertEqual([(d, s) for d, s, _ in house.calls],
                          [("shell_command", "c4_repoint"), ("homeassistant", "restart")])
-        self.assertEqual(house.calls[0][2], {"ip": NEW_HOST})
+        # Nothing caller-controlled reaches the shell_command: the service
+        # resolves the controller by MAC itself (Codex review, PR #101).
+        self.assertEqual(house.calls[0][2], {})
 
     def test_reload_that_uncovers_a_drift_then_repoints(self):
         """The 2026-08-12 sequence exactly: the reload gets past cloud auth
@@ -284,6 +318,17 @@ class RecoverTest(unittest.TestCase):
         self.assertEqual(house.host, NEW_HOST)
         self.assertEqual(sum(1 for d, s, _ in house.calls if s == "restart"), 2)
 
+    def test_landing_on_a_third_address_stops_rather_than_rewriting(self):
+        """The service points at whatever owns the MAC. If that turns out to
+        be somewhere neither expected nor previous, retrying just writes it
+        again — say so instead."""
+        house = FakeHouse(host=OLD_HOST, observed="10.0.0.77", controller_at=NEW_HOST)
+        with serving(house) as url:
+            code, out = run_cli(url, "repoint", "--ip", NEW_HOST, "--yes")
+        self.assertEqual(code, 1)
+        self.assertIn("landed on 10.0.0.77", out)
+        self.assertEqual(sum(1 for _, s, _ in house.calls if s == "c4_repoint"), 1)
+
     def test_without_the_shell_command_it_prints_the_by_hand_procedure(self):
         house = FakeHouse(host=OLD_HOST, observed=NEW_HOST, has_shell_command=False)
         with serving(house) as url:
@@ -310,8 +355,25 @@ class RecoverTest(unittest.TestCase):
         self.assertIn("not an IP drift", out)
         self.assertIn("native Control4 app", out)
 
+    def test_refuses_a_partial_fault_rather_than_reloading_the_house(self):
+        """diagnose says "look at those devices"; recover must not then reload
+        the whole integration behind its own advice."""
+        house = FakeHouse(down=1, host=OLD_HOST, observed=NEW_HOST)
+        with serving(house) as url:
+            code, out = run_cli(url, "recover", "--yes")
+        self.assertEqual(code, 2)
+        self.assertIn("partial fault", out)
+        self.assertEqual(house.calls, [])
+
+    def test_force_overrides_the_partial_refusal(self):
+        house = FakeHouse(down=1, host=OLD_HOST, observed=NEW_HOST)
+        with serving(house) as url:
+            code, out = run_cli(url, "recover", "--yes", "--force")
+        self.assertEqual(code, 0)
+        self.assertEqual(house.host, NEW_HOST)
+
     def test_a_healthy_house_is_left_alone(self):
-        house = FakeHouse(lights_up=True, host=NEW_HOST)
+        house = FakeHouse(down=0, host=NEW_HOST, observed=NEW_HOST)
         with serving(house) as url:
             code, out = run_cli(url, "recover", "--yes")
         self.assertEqual(code, 0)
@@ -351,6 +413,37 @@ class RepointScriptTest(unittest.TestCase):
              contextlib.redirect_stdout(out):
             return repoint.main(), out.getvalue()
 
+    def test_finds_the_controller_by_mac_and_points_at_it(self):
+        """How the shell_command invokes it: no caller input at all, so
+        nothing a service caller sends can reach a shell."""
+        with mock.patch.object(repoint, "resolve", return_value=(NEW_HOST, None)):
+            code, out = self.run_it("--mac", "00:0f:ff:9f:3b:44")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.entry()["data"]["host"], NEW_HOST)
+        self.assertIn(f"{OLD_HOST} -> {NEW_HOST}", out)
+
+    def test_a_mac_that_does_not_answer_changes_nothing(self):
+        with mock.patch.object(repoint, "resolve", return_value=(None, "no answer")):
+            code, out = self.run_it("--mac", "00:0f:ff:9f:3b:44")
+        self.assertEqual(code, 1)
+        self.assertIn("refused", out)
+        self.assertEqual(self.entry()["data"]["host"], OLD_HOST)
+
+    def test_wants_exactly_one_of_host_or_mac(self):
+        for args in ((), (NEW_HOST, "--mac", "00:0f:ff:9f:3b:44")):
+            code, out = self.run_it(*args)
+            self.assertEqual(code, 1, args)
+            self.assertIn("exactly one", out)
+        self.assertEqual(self.entry()["data"]["host"], OLD_HOST)
+
+    def test_a_resolved_address_is_validated_too(self):
+        """The scan reads /proc/net/arp; a garbled line must not be written."""
+        with mock.patch.object(repoint, "resolve", return_value=("not-an-ip", None)):
+            code, out = self.run_it("--mac", "00:0f:ff:9f:3b:44")
+        self.assertEqual(code, 1)
+        self.assertIn("refused", out)
+        self.assertEqual(self.entry()["data"]["host"], OLD_HOST)
+
     def entry(self, domain="control4"):
         return next(e for e in self.read()["data"]["entries"] if e["domain"] == domain)
 
@@ -384,7 +477,11 @@ class RepointScriptTest(unittest.TestCase):
         self.assertEqual([f for f in os.listdir(self.dir) if ".bak-" in f], [])
 
     def test_refuses_anything_that_is_not_an_address(self):
-        for bad in ("", "10.0.0", "999.1.1.1", "10.0.0.1; rm -rf /", "localhost"):
+        # "10.0.0.1; …" is the shell-injection payload the service can no
+        # longer carry (Codex review, PR #101). Defence in depth: even reached
+        # by hand, the script writes nothing.
+        for bad in ("", "10.0.0", "999.1.1.1", "10.0.0.1; rm -rf /", "localhost",
+                    "$(id)", "10.0.0.1 && curl evil"):
             code, out = self.run_it(bad)
             self.assertEqual(code, 1, bad)
             self.assertIn("refused", out)
@@ -455,7 +552,38 @@ class ScanScriptTest(unittest.TestCase):
         self.assertEqual(out.getvalue().strip(), "10.0.0.42")
 
 
+class RecoveryYamlTest(unittest.TestCase):
+    """The service definition itself, since a template there is a shell."""
+
+    def setUp(self):
+        with open(os.path.join(ROOT, "ha", "c4_recovery.yaml")) as handle:
+            self.text = handle.read()
+        self.command = next(
+            line.split(":", 1)[1].strip().strip('"')
+            for line in self.text.splitlines()
+            if line.strip().startswith("c4_repoint:")
+        )
+
+    def test_the_shell_command_carries_no_template(self):
+        """Home Assistant runs a templated shell_command through a shell, so
+        any {{ }} here is a command-execution hole for every service caller."""
+        self.assertNotIn("{{", self.command)
+        self.assertNotIn("{%", self.command)
+
+    def test_it_resolves_the_controller_by_mac_instead(self):
+        self.assertIn("--mac", self.command)
+        self.assertIn(c4.CORE3_MAC, self.command)
+
+
 class HelperTest(unittest.TestCase):
+    def test_outage_verdict_separates_a_dead_device_from_a_dead_integration(self):
+        self.assertEqual(c4.outage_verdict(0, 144), "healthy")
+        self.assertEqual(c4.outage_verdict(1, 144), "partial")
+        self.assertEqual(c4.outage_verdict(70, 144), "partial")
+        self.assertEqual(c4.outage_verdict(140, 144), "house-wide")
+        self.assertEqual(c4.outage_verdict(144, 144), "house-wide")
+        self.assertEqual(c4.outage_verdict(0, 0), "unknown")
+
     def test_valid_ip(self):
         self.assertTrue(c4.valid_ip("10.0.0.33"))
         for bad in ("10.0.0.256", "10.0.0", "", None, "ten.zero.zero.one"):

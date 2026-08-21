@@ -53,6 +53,13 @@ second:
 Recovery is proven when the Control4 integration is back at **179 devices /
 178 entities** and a light toggles from the app.
 
+`recover` refuses to act on a **partial** fault — most lights still working,
+a handful down. Reloading the entry would interrupt every device that is fine
+and a repoint restarts Home Assistant, neither of which is a proportionate
+answer to one dead KNX channel. `diagnose` names the failing devices; fix
+those, or pass `--force` if you are certain the integration is the problem.
+A house-wide outage (80%+ of the Control4 lights down) needs no override.
+
 ### Never delete and re-add the integration
 
 The config entry holds the controller host, the homeowner's Control4 account
@@ -77,8 +84,10 @@ When the HA-side bundle isn't installed, or the API route is unavailable:
    reports the current IP. Remove the integration afterwards.
 2. **Reload first.** Settings → Devices & Services → Control4 → ⋮ → Reload. If
    the entities come back, you are done.
-3. **Repoint.** File editor add-on → `/config/configuration.yaml`, add a
-   throwaway `command_line` sensor whose command rewrites the entry's host
+3. **Repoint.** With the HA-side bundle installed this is just
+   `python3 /config/c4_repoint.py 10.0.0.42` followed by one restart. Without
+   it: File editor add-on → `/config/configuration.yaml`, add a throwaway
+   `command_line` sensor whose command rewrites the entry's host
    (`tools/c4_recover.py repoint` prints this one-liner with the addresses
    filled in), then **restart Home Assistant twice** — the first boot runs the
    rewrite, and config entries are only read from `.storage` at boot, so the

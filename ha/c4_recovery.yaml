@@ -15,9 +15,22 @@
 # applies the repoint.
 
 # The repoint itself, exposed as a service so it can be driven from the API.
-# `ip` is passed as service data: {"ip": "10.0.0.42"}.
+#
+# DO NOT put a template in this command. Home Assistant renders service data
+# into a shell_command and then runs it THROUGH A SHELL; a caller passing
+# `10.0.0.42; <anything>` would get arbitrary command execution inside the HA
+# container, and every account that can call a service could reach it —
+# including the non-admin smarthome-app token that lives in the app's
+# environment. Without a template HA execs the argv directly, no shell.
+#
+# So the service takes no input at all: `--mac` makes c4_repoint.py resolve
+# the address from the ARP table itself. The only thing this service can ever
+# do is point the config entry at whatever machine owns the Core 3's MAC, and
+# it is a no-op when that is already the host. To repoint at an address the
+# scan cannot see, run the script directly instead:
+#   python3 /config/c4_repoint.py 10.0.0.42
 shell_command:
-  c4_repoint: "python3 /config/c4_repoint.py {{ ip }}"
+  c4_repoint: "python3 /config/c4_repoint.py --mac 00:0f:ff:9f:3b:44"
 
 command_line:
   # Where the Core 3 answers ARP right now. Twice a day and at every HA start

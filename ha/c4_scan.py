@@ -18,6 +18,8 @@ raw sockets. Roughly a second of traffic, twice a day.
 
     python3 c4_scan.py 00:0f:ff:9f:3b:44 [10.0.0]
 
+The subnet defaults to this machine's own /24.
+
 Prints the IP, or "unknown" if the MAC did not answer — never an error, so
 the sensor always has a clean state.
 """
@@ -31,6 +33,21 @@ ARP_TABLE = "/proc/net/arp"
 DISCARD_PORT = 9  # RFC 863; nothing has to be listening for ARP to resolve
 EMPTY_MAC = "00:00:00:00:00:00"
 MAC_RE = re.compile(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
+DEFAULT_PREFIX = "10.0.0"  # the house network, if we cannot work it out
+
+
+def subnet_prefix():
+    """This machine's own /24, so the sweep follows the house rather than a
+    hardcoded guess. Connecting a UDP socket sends nothing — it just asks the
+    kernel which local address would carry the route."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 53))
+        return sock.getsockname()[0].rsplit(".", 1)[0]
+    except OSError:
+        return DEFAULT_PREFIX
+    finally:
+        sock.close()
 
 
 def sweep(prefix):
@@ -67,7 +84,7 @@ def main():
     if not MAC_RE.match(mac):
         print("unknown")
         return 0
-    prefix = sys.argv[2].strip() if len(sys.argv) > 2 else "10.0.0"
+    prefix = sys.argv[2].strip() if len(sys.argv) > 2 else subnet_prefix()
 
     # Already in the table from ordinary traffic? Then no sweep is needed.
     found = arp_lookup(mac)

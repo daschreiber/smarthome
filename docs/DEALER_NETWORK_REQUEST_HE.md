@@ -5,7 +5,8 @@
 > Assistant Green (`10.0.0.69`), plus owner-level admin access to the router at
 > `10.0.0.138`. Background: `docs/OUTAGE_RECOVERY.md`. This is the fix that
 > ends the failure mode; everything in the repo around it is a workaround for
-> not having it.
+> not having it. Also published as a shareable RTL page:
+> https://claude.ai/code/artifact/674eceb0-85c9-4387-aa73-bebf15d2941a
 
 **מה צריך לעשות:** שלושה דברים, בביקור אחד, כולם בראוטר בכתובת `10.0.0.138`.
 **כמה זמן:** כרבע שעה.
@@ -57,7 +58,7 @@
 ## הערות טכניות
 
 - **לא** להגדיר כתובת סטטית על הבקר עצמו *בנוסף* להקצאה בראוטר. אחד מהשניים
-  בלבד. ההקצאה בראוטר עדיפה, כדי שלא ייווצר שכפול כתובות מול טווח ה‑DHCP.
+  בלבד. ההקצאה בראוטר עדיפה, כדי שלא תיווצר התנגשות כתובות מול טווח ה‑DHCP.
 - אין צורך לגעת בשום הגדרה אחרת של Control4 — לא בפרויקט, לא בחשבון ולא ברישוי.
 - בסיום: לאתחל את הבקר ולוודא שהוא חוזר לאותה כתובת.
 

@@ -1,5 +1,6 @@
-import { callService } from "./ha";
+import { callService, getState } from "./ha";
 import { audit } from "./audit";
+import { entityUnreachable } from "./reachability";
 
 /**
  * Per-floor heat/cool changeover. Each floor's central VRF unit follows a
@@ -49,15 +50,39 @@ export function changeoverStatus(floor: Floor): {
  * the client sees progress via the relay state and `pending` in /api/home).
  * One changeover per floor at a time.
  */
-export function startChangeover(
+export async function startChangeover(
   floor: Floor,
   mode: FloorMode,
   user: string,
-): { ok: true } | { ok: false; error: string } {
+): Promise<{ ok: true } | { ok: false; error: string; reason: "busy" | "unreachable" }> {
   if (pending.has(floor)) {
-    return { ok: false, error: `floor ${floor} changeover already in progress` };
+    return {
+      ok: false,
+      reason: "busy",
+      error: `floor ${floor} changeover already in progress`,
+    };
   }
+  // Claim the floor BEFORE the read below: the await is a window in which a
+  // second tap would otherwise pass the check above, and two interleaved
+  // relay sequences on one floor is precisely what "one at a time" exists to
+  // prevent. Same rule as the light re-assert loop — claim, then go out.
   pending.set(floor, mode);
+
+  // The changeover relay is a KNX channel proxied through Control4 — the
+  // first thing a power cut takes out (2026-08-12). HA answers 200 to a
+  // service call against an `unavailable` entity, so without this check the
+  // sequence still runs: it cycles the sacrificial CoolMaster unit (which
+  // survives the outage on its own bridge) for 13s, flips nothing, and
+  // audits `ok: true`. A dead switch refuses the tap — lib/reachability.
+  const relay = await getState(FLOORS[floor].relay).catch(() => undefined);
+  if (entityUnreachable(relay)) {
+    pending.delete(floor);
+    return {
+      ok: false,
+      reason: "unreachable",
+      error: `floor ${floor} changeover relay is not responding — the mode can't be switched until Home Assistant has the house back`,
+    };
+  }
   lastError.delete(floor);
   void run(floor, mode, user);
   return { ok: true };

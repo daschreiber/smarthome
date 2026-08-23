@@ -10,7 +10,7 @@ import { noiseConfigured, noiseStatus } from "@/lib/whitenoise";
 import { bedConfigured, bedSideForDeviceId } from "@/lib/eightsleep";
 import { zoneRoomFor } from "@/lib/audio";
 import { unverifiedFor } from "@/lib/knxLights";
-import { deviceUnreachable } from "@/lib/reachability";
+import { deviceUnreachable, entityUnreachable } from "@/lib/reachability";
 
 /**
  * Full visible-device snapshot joined with live HA state.
@@ -408,6 +408,10 @@ export async function GET(req: NextRequest) {
 
     // Per-floor heat/cool mode, read straight off the hidden KNX changeover
     // relays (on = heating) plus any changeover currently running.
+    // `unreachable` separates the two ways `mode` comes back null: a relay
+    // reporting something unexpected (genuinely unknown) versus a relay HA
+    // has lost with the rest of Control4. The second one must not offer a
+    // Cool|Heat tap the house cannot honour (2026-08-21 outage).
     const floorModes = Object.fromEntries(
       ([5, 6] as const).map((f) => {
         const status = changeoverStatus(f);
@@ -417,6 +421,7 @@ export async function GET(req: NextRequest) {
             mode: modeFromRelayState(states.get(relayEntityId(f))?.state),
             pending: status.pending,
             error: status.lastError,
+            unreachable: entityUnreachable(states.get(relayEntityId(f)) ?? null),
           },
         ];
       }),

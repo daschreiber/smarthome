@@ -59,7 +59,7 @@ conditions matter more than the actions:
 | Fires on | `homeassistant.start`, after a 3-minute settle | `binary_sensor.c4_ip_drift` on for 30 minutes |
 | Does | Refreshes both address sensors, then reloads the config entry up to 3× at 8-minute spacing | Rewrites the entry's host via `shell_command.c4_repoint`, then restarts |
 | Refuses unless | Control4 entities exist in the registry | 80%+ of them are `unavailable`, both addresses are real IPv4 and disagree, and no auto-repoint in the last 6 hours |
-| Notifies | Only if all three reloads failed | Before acting, and again if the rewrite exits non-zero |
+| Notifies | Only if all three reloads failed — plus the confirmation for a repoint that worked, on the way back up | `repointing now` before, then `auto-repoint failed` if the rewrite exits non-zero |
 
 Three things to know about the shape of it:
 
@@ -74,6 +74,14 @@ Three things to know about the shape of it:
   would rewrite-and-reboot forever. `input_datetime.c4_last_auto_repoint` is
   stamped *before* the rewrite, so a repoint that dies half way still burns
   the window.
+- **No message claims success before the rewrite has happened.** The repoint
+  script ends at `homeassistant.restart` and never returns, and persistent
+  notifications do not survive a restart — so a "repointed" message sent from
+  there would be both premature and, on the path where it was true, erased
+  seconds later. It sends `repointing now` instead, and the confirmation comes
+  from `c4_reload_after_boot` on the way back up. Every message on this fault
+  shares one push `tag`, so the phone always holds the latest one rather than
+  a stack ending in the most optimistic.
 
 `input_boolean.c4_self_heal` switches both off from the phone. Turn it off
 before any deliberate maintenance that makes the house look like an outage —

@@ -647,14 +647,52 @@ class SelfHealYamlTest(unittest.TestCase):
         self.assertIn("homeassistant.update_entity", actions)
         self.assertIn("sensor.c4_ip_watch", actions)
 
+    def branch(self):
+        """The reload automation's health fork: (healthy sequence, default)."""
+        chosen = next(a for a in self.autos["c4_reload_after_boot"]["action"]
+                      if "choose" in a)
+        return chosen["choose"][0], chosen["default"]
+
     def test_the_reload_leaves_a_healthy_house_alone(self):
         """A reload blips all 179 devices and spends a Control4 cloud auth
-        call, so a routine restart must stop before the retry loop."""
-        actions = self.autos["c4_reload_after_boot"]["action"]
-        loop_at = next(i for i, a in enumerate(actions) if "repeat" in a)
-        guards = [a for a in actions[:loop_at] if "condition" in a]
-        self.assertTrue(guards, "nothing stops the loop on a healthy restart")
-        self.assertIn(">= 0.8", json.dumps(guards))
+        call, so the retry loop must be unreachable on a routine restart."""
+        healthy, default = self.branch()
+        self.assertIn("< 0.8", json.dumps(healthy["conditions"]))
+        self.assertNotIn("reload_config_entry", json.dumps(healthy["sequence"]))
+        self.assertIn("reload_config_entry", json.dumps(default))
+
+    def test_the_repoint_claims_nothing_before_it_has_rewritten_anything(self):
+        """The runbook sends a reader to these notifications to decide whether
+        the house is fixed. One that says so before `c4_repoint.py` has even
+        run stops the troubleshooting of a house that is still down."""
+        actions = self.autos["c4_auto_repoint"]["action"]
+        shell_at = next(i for i, a in enumerate(actions)
+                        if a.get("action") == "shell_command.c4_repoint")
+        before = json.dumps(actions[:shell_at])
+        for claim in ("repointed automatically", "Restarting HA", "is back"):
+            self.assertNotIn(claim, before)
+        self.assertIn("repointing now", before.lower(),
+                      "the attempt still has to be announced")
+
+    def test_a_failed_repoint_corrects_the_phone_not_just_the_dashboard(self):
+        """A persistent notification can be replaced by id; a push cannot, so
+        without a second push the phone keeps the optimistic one."""
+        branch = next(a for a in self.autos["c4_auto_repoint"]["action"] if "if" in a)
+        pushed = [a for a in branch["else"] if a["action"].startswith("notify.")]
+        self.assertTrue(pushed, "failure never reaches the phone")
+        self.assertEqual(pushed[0]["data"]["data"]["tag"], "c4_auto_repoint",
+                         "without a shared tag it stacks instead of replacing")
+
+    def test_a_successful_repoint_is_confirmed_after_the_restart(self):
+        """`homeassistant.restart` ends that script, and persistent
+        notifications do not survive it — so the only place success can be
+        reported from is the automation that runs on the next boot."""
+        healthy, _ = self.branch()
+        blob = json.dumps(healthy["sequence"])
+        self.assertIn("c4_last_auto_repoint", json.dumps(
+            self.autos["c4_reload_after_boot"]["action"]))
+        self.assertIn("after_repoint", blob)
+        self.assertIn("Control4 is back", blob)
 
     def test_no_template_can_divide_by_an_empty_entity_list(self):
         """`ents | count` is a divisor in four places; on a rebuilt Green it

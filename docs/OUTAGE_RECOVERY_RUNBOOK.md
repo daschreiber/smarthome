@@ -48,11 +48,24 @@ Because the bundle is installed, **§3 is now the whole repair**. §5 exists onl
 for the case where someone has rebuilt the Green.
 
 **Before you start: check whether it already fixed itself.** The self-heal
-takes up to 27 minutes for fault 1 and up to about an hour for fault 2. Look
-for a `Control4 repointed automatically` or `Control4 did not come back`
-notification first — the first means you are done except for recording the new
-address in the commissioning log, and the second means the automations have
-already spent their attempts and you are starting from a known place.
+takes up to 27 minutes for fault 1 and up to about an hour for fault 2. Read
+the last notification on the phone before touching anything — they all carry
+the same tag, so the one still showing is the current truth:
+
+| Last message | What it means | What you do |
+| --- | --- | --- |
+| `Control4 — repointing now` | Mid-repair, nothing concluded. | Wait ~5 minutes for it to be replaced. |
+| `Control4 is back` | The repoint worked and HA came back on the new address. | Record the address in the commissioning log. Nothing else. |
+| `Control4 auto-repoint failed` | `c4_repoint.py` exited non-zero; **nothing was written and nothing restarted.** | §3, by hand. The exit code is in the message. |
+| `Control4 did not come back` | Three reloads over 27 minutes did not clear it. | §3. If the message also says a repoint had just been applied, the address is not the problem — go to §4 and verify. |
+| *nothing* | The self-heal never ran, or is switched off. | Check `input_boolean.c4_self_heal`, then §3. |
+
+Note what is **not** in that list: there is no "repointed successfully"
+message from the repoint automation itself. It ends at
+`homeassistant.restart` and never returns, and persistent notifications do not
+survive a restart — so success is reported on the way back up, by
+`c4_reload_after_boot`, and its absence after a `repointing now` means the
+restart did not complete.
 
 ---
 

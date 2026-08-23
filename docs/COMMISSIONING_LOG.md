@@ -729,3 +729,39 @@ it is now written out ready to hand over in Hebrew:
 - [ ] **Revoke the long-lived token shared into the 2026-08-21 session.** Still
   open, still in a chat transcript (Profile → Security → Long-lived access
   tokens).
+
+### Amendment, same day — the notifications lied about their own success
+
+Codex caught it on review, and it was real: the repoint automation sent
+"Control4 repointed automatically" **before** running `c4_repoint.py`. On a
+non-zero exit the house was still down while the phone said it had been fixed
+— and the runbook had just been written to send a reader to exactly that
+notification to decide whether they were done.
+
+Following it up exposed a second one underneath. Persistent notifications live
+in memory and do not survive a restart, so on the path where the repoint
+*worked* that message was erased seconds after it was created. The runbook was
+pointing at something that could only ever be visible when it was wrong.
+
+The fix is structural rather than a reordering, because
+`homeassistant.restart` ends that script and never returns — there is no point
+inside it where success can honestly be reported:
+
+- The repoint now sends `Control4 — repointing now`, an attempt, not a result.
+- Failure replaces it with `Control4 auto-repoint failed`, carrying the exit
+  code, on both the dashboard and the phone. The phone needed its own
+  correction: a persistent notification can be replaced by id, a push cannot,
+  so all four messages now share one push `tag` and the latest replaces the
+  last rather than stacking under it.
+- Success is reported on the way back up, by `c4_reload_after_boot`, which
+  reads `input_datetime.c4_last_auto_repoint` to recognise that this boot was
+  the repoint's own restart. That reading has to happen before the retry loop
+  — twenty-seven minutes later it would be outside its own fifteen-minute
+  window.
+- The reload automation's health check became a `choose` to make room for it,
+  which is also how a healthy routine restart still stays silent.
+
+The runbook now carries a table of the four messages and what each one means,
+including the one that says a repoint had just been applied and did not help —
+which is the signal that the address is not the problem. Three tests added
+(56 total), both new guards mutation-checked.

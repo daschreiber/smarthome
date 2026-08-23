@@ -63,6 +63,11 @@ second:
 Recovery is proven when the Control4 integration is back at **179 devices /
 178 entities** and a light toggles from the app.
 
+Since 2026-08-23 the house also attempts this by itself — see **Preventing
+it** below. If you arrive at a house that has already recovered, look for the
+`Control4 repointed automatically` notification: it names the new address,
+which still needs recording in the commissioning log.
+
 `recover` refuses to act on a **partial** fault — most lights still working,
 a handful down. Reloading the entry would interrupt every device that is fine
 and a repoint restarts Home Assistant, neither of which is a proportionate
@@ -108,14 +113,26 @@ to shortcut any of this; File editor is what there is.
 
 ## Preventing it
 
-- [ ] **DHCP reservation for the Core 3** at the router (`10.0.0.138`,
-  dealer-managed, reachable only on-site). This is the fix that ends the
-  failure mode; everything above is a workaround for not having it. Open since
-  2026-07-16, and the reason 2026-08-21 happened at all.
+- [ ] **DHCP reservations at the router** (`10.0.0.138`, dealer-managed,
+  reachable only on-site) for the Core 3 **and** the Green, plus owner-level
+  admin access to that router. This is the fix that ends the failure mode;
+  everything above is a workaround for not having it. Open since 2026-07-16,
+  and the reason 2026-08-12 and 2026-08-21 happened at all. Hand the dealer
+  [`docs/DEALER_NETWORK_REQUEST_HE.md`](DEALER_NETWORK_REQUEST_HE.md).
+- [ ] **UPS on the comms cabinet** — fibre ONT, router, switch and Green on
+  one line-interactive unit. A short cut then never reboots the Green, so
+  fault 1 never happens; a long one at least brings the network up before HA.
+  It is also the only thing that addresses the collateral: the same 2026-08-21
+  boot left 28 Alexa entities, 6 Cast players and Eight Sleep broken, and none
+  of that is Control4.
 - [x] **Drift detector** (`ha/c4_recovery.yaml`): compares the ARP-observed
-  address to the configured host and alerts when they disagree. It detects
-  only — a human applies the repoint — and it re-baselines itself after one,
-  unlike the 2026-08-12 version with `10.0.0.33` hardcoded in the automation.
+  address to the configured host and alerts when they disagree. It re-baselines
+  itself after a repoint, unlike the 2026-08-12 version with `10.0.0.33`
+  hardcoded in the automation.
+- [x] **Self-heal** (2026-08-23, `ha/c4_recovery.yaml`, see `ha/README.md`):
+  `c4_reload_after_boot` clears fault 1 unattended, `c4_auto_repoint` clears
+  fault 2 and restarts. Insurance, not a substitute for the reservation — it
+  is what keeps the house up if a router swap ever loses it.
 
 ## What the app does while it is down
 

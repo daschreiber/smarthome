@@ -110,7 +110,9 @@ Current references:
 - [Commissioning log](docs/COMMISSIONING_LOG.md) — the running as-built record
 - [Power-outage recovery](docs/OUTAGE_RECOVERY.md) — when Control4 comes back
   last: how to recognise it, and `tools/c4_recover.py` to fix it
-  ([prompt for a computer-control session](docs/OUTAGE_RECOVERY_PROMPT.md))
+  ([one-shot runbook](docs/OUTAGE_RECOVERY_RUNBOOK.md) ·
+  [prompt for a computer-control session](docs/OUTAGE_RECOVERY_PROMPT.md) ·
+  [dealer request, Hebrew](docs/DEALER_NETWORK_REQUEST_HE.md))
 - [Home Assistant side](ha/README.md) — the files that live on the Green
 - [Deploy to Railway](docs/DEPLOY_RAILWAY.md) — deployment + the env var table
 - [KNX shades](knx/README.md) — the shade migration, GA map, monitor tooling

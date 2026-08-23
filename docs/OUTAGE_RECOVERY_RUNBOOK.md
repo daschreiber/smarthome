@@ -35,8 +35,24 @@ Installed on the Green as of 2026-08-21 (the "HA-side bundle"):
 | `binary_sensor.c4_ip_drift` | On when both read real addresses and they disagree. |
 | `automation.control4_ip_drift_alert` | Persistent notification + phone push, 5-minute debounce. |
 
+Added 2026-08-23 — the house now attempts both repairs itself:
+
+| File / entity | Purpose |
+| --- | --- |
+| `automation.control4_self_heal_reload_after_a_boot_before_internet_failure` | Fault 1. On start: refresh both address sensors, then reload the entry up to 3× at 8-minute spacing. |
+| `automation.control4_self_heal_repoint_after_a_dhcp_lease_change` | Fault 2. Drift on for 30 min + 80%+ down + two real disagreeing addresses → repoint and restart, once per 6 hours. |
+| `input_boolean.c4_self_heal` | Kill switch for both. Turn it **off** before deliberate maintenance that makes the house look like an outage. |
+| `input_datetime.c4_last_auto_repoint` | The six-hour brake, stamped before the rewrite so it survives the restart. |
+
 Because the bundle is installed, **§3 is now the whole repair**. §5 exists only
 for the case where someone has rebuilt the Green.
+
+**Before you start: check whether it already fixed itself.** The self-heal
+takes up to 27 minutes for fault 1 and up to about an hour for fault 2. Look
+for a `Control4 repointed automatically` or `Control4 did not come back`
+notification first — the first means you are done except for recording the new
+address in the commissioning log, and the second means the automations have
+already spent their attempts and you are starting from a known place.
 
 ---
 
@@ -341,11 +357,18 @@ On this HA build the `config_entries/remove` websocket command returns
 ## 9. The fix that ends this
 
 - [ ] **DHCP reservation for `00:0f:ff:9f:3b:44`** on the router at
-  `10.0.0.138`. Dealer-managed, reachable only on-site. Open since 2026-07-16,
-  and the direct cause of both 2026-08-12 and 2026-08-21.
+  `10.0.0.138`, and one for the Green at `10.0.0.69`, and owner-level admin
+  access to that router. Dealer-managed, reachable only on-site. Open since
+  2026-07-16, and the direct cause of both 2026-08-12 and 2026-08-21. The
+  request is written out ready to hand over, in Hebrew:
+  [`DEALER_NETWORK_REQUEST_HE.md`](DEALER_NETWORK_REQUEST_HE.md).
+- [ ] **UPS on the comms cabinet** (ONT, router, switch, Green). Ends fault 1
+  for any cut shorter than the runtime, and it is the only fix that also
+  covers the collateral — Alexa, Cast and Eight Sleep all broke on the same
+  2026-08-21 boot and none of them are in this runbook.
 
-Everything in this document is a workaround for not having that reservation.
-It is a well-instrumented workaround now — `binary_sensor.c4_ip_drift`
-re-baselines itself after any repoint and pushes to the phone within five
-minutes — but the drift will keep happening on every power cut until the
-controller's lease is pinned.
+Everything in this document is a workaround for not having those. It is a
+well-instrumented workaround now, and since 2026-08-23 an automatic one — but
+the drift will keep happening on every power cut until the lease is pinned,
+and self-heal that runs on every outage is a fire alarm that keeps going off,
+not a building that stopped catching fire.

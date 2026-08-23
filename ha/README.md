@@ -9,7 +9,7 @@ through the File editor add-on.
 | --- | --- | --- |
 | `c4_scan.py` | `/config/c4_scan.py` | Finds a device's current IP by MAC (UDP sweep + `/proc/net/arp`), with no add-ons, no root and no nmap. |
 | `c4_repoint.py` | `/config/c4_repoint.py` | Rewrites the Control4 config entry's host in place, atomically, keeping credentials and every Stage 5 rename. Finds the address itself with `--mac`, or takes one on the command line. |
-| `c4_recovery.yaml` | block in `configuration.yaml` | The `shell_command` that drives the repoint, the two watch sensors, and the self-baselining IP-drift alert. |
+| `c4_recovery.yaml` | block in `configuration.yaml` | The `shell_command` that drives the repoint, the two watch sensors, the self-baselining IP-drift alert, and the two self-heal automations. |
 | `homekit_covers.yaml` | block in `configuration.yaml` | Deprecated 2026-07-26; see the file's own header. |
 
 ## Installing the Control4 recovery bundle
@@ -27,8 +27,11 @@ One-time, ~5 minutes, no restart needed until the last step.
    automation would now alert in parallel — and wrongly, after any repoint.
 4. **Rename the push service** in the automation's second action to whichever
    `notify.mobile_app_*` this house uses.
-5. **Developer tools → YAML → Check configuration**, then **Reload** template
-   entities and command_line, or restart once.
+5. **Developer tools → YAML → Check configuration**, then restart once. A
+   reload is no longer enough: the block now defines `input_boolean` and
+   `input_datetime` helpers, and those are only created at boot.
+6. **Turn `input_boolean.c4_self_heal` on.** It defaults to off after a fresh
+   install, and nothing below acts while it is off.
 
 Do not add a template to the `shell_command` while merging. Home Assistant
 runs a templated `shell_command` through a shell, which would hand every
@@ -45,7 +48,40 @@ python3 /config/c4_repoint.py 10.0.0.42
 Verify: `sensor.c4_ip_watch` and `sensor.c4_configured_host` should read the
 same address, and `binary_sensor.c4_ip_drift` should be `off`.
 
-From then on, an outage is one command from anywhere the Green is reachable:
+## The self-heal automations
+
+Added 2026-08-23, after the third occurrence. They act unattended, so the
+conditions matter more than the actions:
+
+| | `c4_reload_after_boot` | `c4_auto_repoint` |
+| --- | --- | --- |
+| Fault | Cloud auth died while the fibre was still coming up | Core 3 took a new DHCP lease |
+| Fires on | `homeassistant.start`, after a 3-minute settle | `binary_sensor.c4_ip_drift` on for 30 minutes |
+| Does | Refreshes both address sensors, then reloads the config entry up to 3× at 8-minute spacing | Rewrites the entry's host via `shell_command.c4_repoint`, then restarts |
+| Refuses unless | Control4 entities exist in the registry | 80%+ of them are `unavailable`, both addresses are real IPv4 and disagree, and no auto-repoint in the last 6 hours |
+| Notifies | Only if all three reloads failed | Before acting, and again if the rewrite exits non-zero |
+
+Three things to know about the shape of it:
+
+- **The eight-minute spacing is not padding.** `apis.control4.com` rate-limits
+  fast retries and then drops connections in a way that looks exactly like
+  wrong credentials (2026-07-16). One attempt, then wait.
+- **The repoint waits out the reload.** Its 30-minute hold is longer than the
+  reload's 27-minute budget on purpose — overlapping them would restart the
+  house in the middle of a recovery that was about to work by itself.
+- **The six-hour brake survives the restart it causes.** Without it, a
+  controller that answers ARP at an address it cannot actually be reached on
+  would rewrite-and-reboot forever. `input_datetime.c4_last_auto_repoint` is
+  stamped *before* the rewrite, so a repoint that dies half way still burns
+  the window.
+
+`input_boolean.c4_self_heal` switches both off from the phone. Turn it off
+before any deliberate maintenance that makes the house look like an outage —
+pulling the Core 3's power, moving it between switch ports, or a KNX
+commissioning session that takes the lights down.
+
+`tools/c4_recover.py` is unchanged and still the deliberate, human-driven
+path. An outage is one command from anywhere the Green is reachable:
 
 ```
 export HA_URL=http://10.0.0.69:8123        # or the Nabu Casa URL

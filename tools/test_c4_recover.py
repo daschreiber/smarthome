@@ -24,6 +24,11 @@ import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest import mock
 
+try:                       # optional: the structural YAML assertions below
+    import yaml            # degrade to skips rather than break stdlib-only.
+except ImportError:        # pragma: no cover
+    yaml = None
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
@@ -573,6 +578,97 @@ class RecoveryYamlTest(unittest.TestCase):
     def test_it_resolves_the_controller_by_mac_instead(self):
         self.assertIn("--mac", self.command)
         self.assertIn(c4.CORE3_MAC, self.command)
+
+
+class SelfHealYamlTest(unittest.TestCase):
+    """The self-heal automations act unattended: they reload a config entry,
+    rewrite `.storage` and restart the house. These are the conditions that
+    keep that from happening on anything except the one fault it is for."""
+
+    @classmethod
+    def setUpClass(cls):
+        if yaml is None:
+            raise unittest.SkipTest("pyyaml not installed")
+        with open(os.path.join(ROOT, "ha", "c4_recovery.yaml")) as handle:
+            cls.doc = yaml.safe_load(handle)
+        autos = []
+        for key, value in cls.doc.items():
+            if key.split()[0] == "automation":
+                autos.extend(value)
+        cls.autos = {a["id"]: a for a in autos}
+
+    def conditions(self, automation_id):
+        return json.dumps(self.autos[automation_id].get("condition", []))
+
+    def test_both_self_heal_automations_are_gated_on_the_kill_switch(self):
+        """One toggle in the app has to be able to stop all of this."""
+        for auto_id in ("c4_reload_after_boot", "c4_auto_repoint"):
+            self.assertIn("input_boolean.c4_self_heal", self.conditions(auto_id), auto_id)
+
+    def test_the_repoint_refuses_anything_short_of_a_house_wide_outage(self):
+        """A partial fault plus a stale scan must not restart the house — the
+        same line tools/c4_recover.py refuses without --force."""
+        self.assertIn(">= 0.8", self.conditions("c4_auto_repoint"))
+
+    def test_the_repoint_is_rate_limited_across_restarts(self):
+        """Without this, a controller answering ARP at an address it cannot
+        actually be reached on rewrites and reboots forever."""
+        conditions = self.conditions("c4_auto_repoint")
+        self.assertIn("input_datetime.c4_last_auto_repoint", conditions)
+        self.assertIn("21600", conditions)
+        stamp = json.dumps(self.autos["c4_auto_repoint"]["action"][0])
+        self.assertIn("input_datetime.set_datetime", stamp,
+                      "the window must be burned before the restart, not after")
+
+    def test_the_repoint_waits_out_the_reload_before_it_acts(self):
+        """Overlap would restart the house in the middle of a recovery that
+        was about to work on its own."""
+        held = self.autos["c4_auto_repoint"]["trigger"][0]["for"]
+        hours, minutes, seconds = (int(p) for p in held.split(":"))
+        wait = hours * 3600 + minutes * 60 + seconds
+        reload_budget = 3 * 60 + 3 * 8 * 60      # settle + three attempts
+        self.assertGreater(wait, reload_budget)
+
+    def test_the_repoint_only_restarts_when_the_rewrite_succeeded(self):
+        branch = next(a for a in self.autos["c4_auto_repoint"]["action"] if "if" in a)
+        self.assertIn("returncode == 0", json.dumps(branch["if"]))
+        self.assertIn("homeassistant.restart", json.dumps(branch["then"]))
+        self.assertNotIn("homeassistant.restart", json.dumps(branch["else"]))
+
+    def test_the_reload_cannot_index_an_empty_entity_list(self):
+        """The reload target is `integration_entities('control4') | first`; on
+        a rebuilt Green that list is empty and `first` would raise."""
+        self.assertIn("count > 0", self.conditions("c4_reload_after_boot"))
+
+    def test_the_reload_refreshes_the_address_sensors_before_anything_reads_them(self):
+        """A 12-hour scan_interval means a post-boot reading can be hours old,
+        or empty from a scan that ran while the network was coming up."""
+        actions = json.dumps(self.autos["c4_reload_after_boot"]["action"])
+        self.assertIn("homeassistant.update_entity", actions)
+        self.assertIn("sensor.c4_ip_watch", actions)
+
+    def test_the_reload_leaves_a_healthy_house_alone(self):
+        """A reload blips all 179 devices and spends a Control4 cloud auth
+        call, so a routine restart must stop before the retry loop."""
+        actions = self.autos["c4_reload_after_boot"]["action"]
+        loop_at = next(i for i, a in enumerate(actions) if "repeat" in a)
+        guards = [a for a in actions[:loop_at] if "condition" in a]
+        self.assertTrue(guards, "nothing stops the loop on a healthy restart")
+        self.assertIn(">= 0.8", json.dumps(guards))
+
+    def test_no_template_can_divide_by_an_empty_entity_list(self):
+        """`ents | count` is a divisor in four places; on a rebuilt Green it
+        is zero and the whole automation dies on a template error."""
+        blob = json.dumps(self.autos["c4_reload_after_boot"]) + json.dumps(
+            self.autos["c4_auto_repoint"])
+        for fragment in blob.split("/ (ents | count)")[:-1]:
+            tail = fragment[-260:]
+            self.assertTrue(
+                "count > 0" in tail or "count == 0" in tail,
+                "unguarded division:" + tail)
+
+    def test_every_automation_id_is_unique(self):
+        self.assertEqual(len(self.autos), 3)
 
 
 class HelperTest(unittest.TestCase):

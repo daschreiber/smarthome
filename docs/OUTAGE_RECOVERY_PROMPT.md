@@ -1,5 +1,11 @@
 # Prompt: recover Control4 after a power outage
 
+> **Superseded 2026-08-21.** The HA-side bundle is now installed on the Green,
+> so the repoint no longer needs the File-editor detour this prompt describes.
+> Use [`OUTAGE_RECOVERY_RUNBOOK.md`](OUTAGE_RECOVERY_RUNBOOK.md), which also
+> covers the browser-only route for when no terminal can be driven.
+
+
 Copy everything below the line into a computer-control session (Claude Cowork
 or similar) running **on the Mac**, which — unlike a cloud session — can reach
 the Home Assistant Green.

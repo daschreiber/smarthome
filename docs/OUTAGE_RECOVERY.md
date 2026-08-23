@@ -3,6 +3,16 @@
 The house has lost Control4 to a power cut twice — 2026-08-12 and 2026-08-21 —
 with the same signature both times. This is the runbook for the third time.
 
+> **Start here instead when the house is down:**
+> [`OUTAGE_RECOVERY_RUNBOOK.md`](OUTAGE_RECOVERY_RUNBOOK.md) — self-contained,
+> start to finish, including the browser-only route.
+>
+> Since 2026-08-21 the HA-side bundle **is installed** on the Green
+> (`c4_scan.py`, `c4_repoint.py`, `shell_command.c4_repoint`, the two watch
+> sensors and `binary_sensor.c4_ip_drift`), so the "Doing it by hand" section
+> below is now a fallback for a rebuilt Green, not the normal path. The Core 3
+> is currently at **`10.0.0.38`**.
+
 ## Recognising it
 
 The app says a large number of devices are not responding, and the split is

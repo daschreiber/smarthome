@@ -1,11 +1,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  TV_ENTITY, evaluateTvFollow, liftDownFromState, loadLiftwatch, saveLiftwatch, tvDevice,
-  type LiftwatchState,
+  TV_ENTITY, evaluateTvFollow, liftDownFromState, loadLiftwatch, saveLiftwatch, tickLiftwatch,
+  tvDevice, type LiftwatchState,
 } from "../liftwatch";
+import { getState } from "../ha";
+import { executeOnDevice } from "../execute";
+
+vi.mock("../ha", () => ({ getState: vi.fn() }));
+vi.mock("../execute", () => ({ executeOnDevice: vi.fn() }));
+vi.mock("../audit", () => ({ audit: vi.fn() }));
 
 /**
  * The TV follower's contract: the Master Bedroom TV mirrors the ceiling
@@ -72,6 +78,37 @@ describe("relay polarity", () => {
     for (const s of ["unavailable", "unknown", "", undefined, null]) {
       expect(liftDownFromState(s)).toBeNull();
     }
+  });
+});
+
+describe("tick vs. a concurrent pause", () => {
+  beforeEach(() => {
+    vi.mocked(getState).mockReset();
+    vi.mocked(executeOnDevice).mockReset();
+  });
+
+  it("a pause flipped while HA was being polled wins — no command, no un-pause", async () => {
+    saveLiftwatch({ enabled: true, lastDown: false });
+    vi.mocked(getState).mockImplementation(async () => {
+      // The admin pauses (resetting the baseline, exactly as the API route
+      // does) while the getState request is in flight.
+      saveLiftwatch({ enabled: false, lastDown: null });
+      return { state: "on" } as never;
+    });
+    await tickLiftwatch();
+    expect(executeOnDevice).not.toHaveBeenCalled();
+    expect(loadLiftwatch()).toEqual({ enabled: false, lastDown: null });
+  });
+
+  it("an ordinary edge still commands the TV and advances the baseline", async () => {
+    saveLiftwatch({ enabled: true, lastDown: false });
+    vi.mocked(getState).mockResolvedValue({ state: "on" } as never);
+    await tickLiftwatch();
+    expect(executeOnDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: TV_ENTITY }),
+      { command: "turn_on" },
+    );
+    expect(loadLiftwatch()).toEqual({ enabled: true, lastDown: true });
   });
 });
 

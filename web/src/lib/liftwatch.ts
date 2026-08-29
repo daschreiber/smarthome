@@ -114,8 +114,7 @@ export function evaluateTvFollow(
 /** Scheduler hook — called every 30s tick. Cheap when the TV isn't in the
  *  registry or the rule is paused. */
 export async function tickLiftwatch(): Promise<void> {
-  const st = loadLiftwatch();
-  if (!st.enabled || !liftwatchAvailable()) return;
+  if (!loadLiftwatch().enabled || !liftwatchAvailable()) return;
 
   let down: boolean | null = null;
   try {
@@ -125,6 +124,12 @@ export async function tickLiftwatch(): Promise<void> {
     down = null;
   }
 
+  // Re-read AFTER the await: a pause flipped while the HA request was in
+  // flight must win — evaluating (and saving) the pre-request state would
+  // silently undo the pause and command the TV on a tick the admin already
+  // stopped (Codex review, 2026-08-29).
+  const st = loadLiftwatch();
+  if (!st.enabled) return;
   const { action, next } = evaluateTvFollow(down, st);
   // Persist the baseline BEFORE acting: a crash mid-command must not
   // replay the edge (and double-audit) on the next tick.

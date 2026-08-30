@@ -707,17 +707,20 @@ had. It now names the house's real service, `notify.mobile_app_daniel_iphone_17`
 ### This is insurance, not the fix
 
 Self-heal that runs on every outage is a fire alarm that keeps going off, not a
-building that stopped catching fire. The permanent fix is still the router, and
-it is now written out ready to hand over in Hebrew:
-`docs/DEALER_NETWORK_REQUEST_HE.md`.
+building that stopped catching fire. The permanent fix is still the router: a
+DHCP reservation for every device this stack reaches at a fixed address, all
+seven of them, listed in `docs/OUTAGE_RECOVERY.md`.
 
 ### Follow-ups
 
-- [ ] **DHCP reservations at the router** (`10.0.0.138`) for the Core 3
-  (`00:0f:ff:9f:3b:44` → `10.0.0.38`) **and** for the Green (`10.0.0.69`), plus
-  owner-level admin access to that router. Fourth time asking. The router being
-  dealer-managed and on-site-only is the reason a five-minute change has cost
-  three outages — treat the access request as the real deliverable.
+- [ ] **DHCP reservations at the router** (`10.0.0.138`) for all seven devices
+  this stack reaches at a fixed address — the Core 3
+  (`00:0f:ff:9f:3b:44` → `10.0.0.38`), the Green (`10.0.0.69`), the KNX IP
+  interface (`10.0.0.70`), the CoolMaster bridge (`10.0.0.90`) and the three
+  Yamahas (`10.0.0.35`, `10.0.0.14`, `10.0.0.76`) — plus owner-level admin
+  access to that router. Fourth time asking. The router being dealer-managed
+  and on-site-only is the reason a five-minute change has cost three outages —
+  treat the access request as the real deliverable.
 - [ ] **UPS on the comms cabinet** — ONT, router, switch, Green. Ends fault 1
   for any cut shorter than its runtime, and it is the only fix that also covers
   the collateral: the 2026-08-21 boot left 28 Alexa entities, 6 Cast players

@@ -369,12 +369,14 @@ On this HA build the `config_entries/remove` websocket command returns
 
 ## 9. The fix that ends this
 
-- [ ] **DHCP reservation for `00:0f:ff:9f:3b:44`** on the router at
-  `10.0.0.138`, and one for the Green at `10.0.0.69`, and owner-level admin
+- [ ] **DHCP reservations on the router at `10.0.0.138`** for all seven
+  devices this stack reaches at a fixed address — the Core 3
+  (`00:0f:ff:9f:3b:44` → `10.0.0.38`), the Green (`10.0.0.69`), the KNX IP
+  interface (`10.0.0.70`), the CoolMaster bridge (`10.0.0.90`) and the three
+  Yamahas (`10.0.0.35`, `10.0.0.14`, `10.0.0.76`) — plus owner-level admin
   access to that router. Dealer-managed, reachable only on-site. Open since
   2026-07-16, and the direct cause of both 2026-08-12 and 2026-08-21. The
-  request is written out ready to hand over, in Hebrew:
-  [`DEALER_NETWORK_REQUEST_HE.md`](DEALER_NETWORK_REQUEST_HE.md).
+  table is in [`OUTAGE_RECOVERY.md`](OUTAGE_RECOVERY.md).
 - [ ] **UPS on the comms cabinet** (ONT, router, switch, Green). Ends fault 1
   for any cut shorter than the runtime, and it is the only fix that also
   covers the collateral — Alexa, Cast and Eight Sleep all broke on the same

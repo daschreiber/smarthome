@@ -114,11 +114,24 @@ to shortcut any of this; File editor is what there is.
 ## Preventing it
 
 - [ ] **DHCP reservations at the router** (`10.0.0.138`, dealer-managed,
-  reachable only on-site) for the Core 3 **and** the Green, plus owner-level
-  admin access to that router. This is the fix that ends the failure mode;
-  everything above is a workaround for not having it. Open since 2026-07-16,
-  and the reason 2026-08-12 and 2026-08-21 happened at all. Hand the dealer
-  [`docs/DEALER_NETWORK_REQUEST_HE.md`](DEALER_NETWORK_REQUEST_HE.md).
+  reachable only on-site), plus owner-level admin access to that router. This
+  is the fix that ends the failure mode; everything above is a workaround for
+  not having it. Open since 2026-07-16, and the reason 2026-08-12 and
+  2026-08-21 happened at all. Every device this stack reaches at a fixed
+  address needs one — not just the two that have bitten so far:
+
+  | Device | Address |
+  | --- | --- |
+  | Control4 Core 3 (`00:0f:ff:9f:3b:44`) | `10.0.0.38` |
+  | Home Assistant Green | `10.0.0.69` |
+  | KNX IP interface — the shades | `10.0.0.70` |
+  | CoolMaster bridge — A/C and heating | `10.0.0.90` |
+  | Yamaha RX-V6A — master bedroom | `10.0.0.35` |
+  | Yamaha RX-V6A — lounge | `10.0.0.14` |
+  | Yamaha RX-V4A — den | `10.0.0.76` |
+
+  A reservation is made in the router only. A second, static address set on the
+  device itself collides with it.
 - [ ] **UPS on the comms cabinet** — fibre ONT, router, switch and Green on
   one line-interactive unit. A short cut then never reboots the Green, so
   fault 1 never happens; a long one at least brings the network up before HA.

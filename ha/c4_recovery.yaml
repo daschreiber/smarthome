@@ -224,7 +224,7 @@ automation manual_c4_selfheal:
                     integration is up. Record the new address in
                     docs/COMMISSIONING_LOG.md. The permanent fix is still a
                     DHCP reservation for 00:0f:ff:9f:3b:44 on the router —
-                    docs/DEALER_NETWORK_REQUEST_HE.md.
+                    see docs/OUTAGE_RECOVERY.md.
               - action: notify.mobile_app_daniel_iphone_17
                 continue_on_error: true
                 data:

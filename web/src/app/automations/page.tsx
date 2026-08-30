@@ -658,6 +658,7 @@ export default function Automations() {
       </p>
       <SleepSense away={away} />
       <SaunaFollower />
+      <TvFollower />
       <div className="section-label">Auto-off timers</div>
       <p className="h-sub" style={{ marginTop: -2 }}>
         Whenever the device turns on — from any switch, scene, or app — it turns itself off after
@@ -1137,6 +1138,61 @@ function SaunaFollower() {
         className="toggle"
         aria-pressed={st.enabled}
         aria-label={`Sauna follower ${st.enabled ? "on" : "paused"}`}
+        disabled={busy || !st.canToggle}
+        onClick={toggle}
+      />
+    </div>
+  );
+}
+
+/**
+ * The TV follower's card: the Master Bedroom TV runs in unison with its
+ * ceiling lift — a standing house rule triggered by the lift relay's STATE,
+ * which the step builder can't express. Server logic lives in lib/liftwatch;
+ * this card only reads status and flips enabled.
+ */
+function TvFollower() {
+  const [st, setSt] = useState<{
+    enabled: boolean; available: boolean; canToggle: boolean;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/liftwatch", { headers: appKeyHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setSt)
+      .catch(() => setSt(null));
+  }, []);
+
+  // Absent hardware = absent card (the TV left the entity map).
+  if (!st || !st.available) return null;
+
+  const toggle = () => {
+    setBusy(true);
+    fetch("/api/liftwatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...appKeyHeaders() },
+      body: JSON.stringify({ enabled: !st.enabled }),
+    })
+      .then((r) => r.json())
+      .then((out) => { if (out.ok) setSt({ ...st, enabled: out.enabled }); })
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className={`dev${st.enabled ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="nm">TV follower — bedroom lift</div>
+        <div className="st">
+          {st.enabled
+            ? "lift comes down → TV on · lift goes up → TV off · however the lift was moved — keypad, app, or Control4 · turning the TV off by remote with the lift down is left alone"
+            : "paused"}
+        </div>
+      </div>
+      <button
+        className="toggle"
+        aria-pressed={st.enabled}
+        aria-label={`TV follower ${st.enabled ? "on" : "paused"}`}
         disabled={busy || !st.canToggle}
         onClick={toggle}
       />

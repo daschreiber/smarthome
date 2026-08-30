@@ -88,8 +88,10 @@ export const CLOSET_LIGHTS = new Set([
 
 export const TV_LIFT_ENTITY = "light.knx_switch_mbr_tv_lift";
 /** Relay state that means "lift stowed for sleep" ("up" per the household).
- *  If the polarity turns out inverted, set SLEEPWATCH_LIFT_STATE=on. */
-function liftSleepState(): string {
+ *  If the polarity turns out inverted, set SLEEPWATCH_LIFT_STATE=on.
+ *  Shared with the TV follower (lib/liftwatch), whose "down" is the other
+ *  state — one knob, so the two rules can never disagree. */
+export function liftSleepState(): string {
   return process.env.SLEEPWATCH_LIFT_STATE || "off";
 }
 

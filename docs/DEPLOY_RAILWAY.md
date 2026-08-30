@@ -69,10 +69,11 @@ network-scoped, only the login restriction was.
    | `EMAIL_FROM` | optional — sender for reset emails, needs a verified domain on Resend |
    | `AWAY_PATH` | `/data/away.json` — the Away switch's state file |
    | `SAUNAWATCH_PATH` | `/data/saunawatch.json` — the sauna-follower watcher's state file |
+   | `LIFTWATCH_PATH` | `/data/liftwatch.json` — the TV follower's state file (MBR TV mirrors the ceiling lift's edges: down → on, up → off; toggle on the Automations screen). Must live on the volume or every redeploy loses the edge baseline AND a deliberately paused follower comes back on |
    | `SAUNA_AC_TEMP` | optional — Master Bathroom A/C setpoint while the sauna heats (default 18) |
    | `SAUNA_AC_FAN` | optional — fan mode for the sauna follower (default `high`) |
    | `COVER_STATE_TRUSTED` | `1` — shade positions come from the native KNX covers and are real; the UI shows sliders/state instead of best-effort buttons (set on Railway 2026-07-26, `knx/README.md` item 8) |
-   | `SLEEPWATCH_LIFT_STATE` | optional — HA state that pauses the sleep watcher (default `off`) |
+   | `SLEEPWATCH_LIFT_STATE` | optional — lift relay state that means "stowed" (default `off`); shared polarity knob for the sleep watcher and the TV follower |
    | `EIGHTSLEEP_LEFT_TARGET_ENTITY` / `EIGHTSLEEP_RIGHT_TARGET_ENTITY` | Eight Sleep per-side temperature `number.*` entities — a side configured = a bed card side in the app (`docs/EIGHT_SLEEP_SETUP.md`) |
    | `EIGHTSLEEP_LEFT_PRESENCE_ENTITY` / `EIGHTSLEEP_RIGHT_PRESENCE_ENTITY` | optional — per-side presence `binary_sensor.*` entities (display-only) |
    | `EIGHTSLEEP_LEFT_LABEL` / `EIGHTSLEEP_RIGHT_LABEL` | optional — card labels (default "Bed — left/right side") |

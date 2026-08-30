@@ -738,3 +738,25 @@ way up. That makes level semantics safe for the off direction.
   evidence to bring.
 - [ ] `LIFTWATCH_PATH=/data/liftwatch.json` on Railway (runbook table) —
   still worth setting so baselines and a paused toggle survive deploys.
+
+## 2026-08-30 — REVERTED: the held-power-press escalation (PR #105)
+
+Owner report after #105 deployed: on OPENING, the lift itself oscillated —
+partially closing and reopening repeatedly for ~4–5 minutes before
+settling — and the off-on-close problem was still not solved. Owner
+called for the build to be undone; #105 is reverted (PR #106), returning
+the follower to the #104 behavior (plain `media_player.turn_off`,
+edge + bounded enforcement).
+
+Note for the next attempt: nothing in the reverted code commands the lift
+relay — the follower only ever addresses `media_player.55_qled` /
+`remote.55_qled`. The leading theory is INDIRECT: the held power press
+made the TV emit power/HDMI-CEC events that Control4 — which may still
+carry its own old TV↔lift coupling programming — reacted to by driving
+the lift. If true, (a) the "dead" C4 lift programming is not dead, just
+one-directional or broken, and the REAL fix may be repairing it C4-side
+(or removing it and keeping the app rule); (b) any TV power path that C4
+observes can feed back into the lift, so future off-mechanism changes
+need the lift watched during the test. Before any further change: pull
+the Activity rows (`lift_tv_off` attempt/method/error) from the failed
+test, and establish in C4 Composer what lift/TV programming still exists.

@@ -3,7 +3,7 @@ import { writeJsonFile } from "./store";
 import path from "node:path";
 import { audit } from "./audit";
 import { executeOnDevice } from "./execute";
-import { getState } from "./ha";
+import { callService, getState } from "./ha";
 import { registry, type Device } from "./registry";
 import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
 
@@ -36,6 +36,11 @@ import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
  *   ceiling is never a human's choice, so re-asserting here fights a
  *   failure, not a person. This also covers the restart hole: a baseline
  *   re-learned with the lift already up no longer strands a playing TV.
+ *   The retries ESCALATE (the KNX dimmer pattern — attempt 2+ changes the
+ *   command's shape): attempt 1 is media_player.turn_off, whose short
+ *   power press only blinks this Samsung's screen (field report
+ *   2026-08-30); attempts 2+ send a held power key through the TV's
+ *   remote entity — the press that actually powers the panel down.
  * - Unknown is not "up": an unreadable lift state holds the last known
  *   baseline instead of inventing an edge. Same rule after a restart: the
  *   first readable state only sets the baseline, it never acts — a deploy
@@ -106,6 +111,27 @@ export function liftwatchAvailable(): boolean {
 export function liftDownFromState(state: string | undefined | null): boolean | null {
   if (state !== "on" && state !== "off") return null;
   return state !== liftSleepState();
+}
+
+/** The TV's remote entity (same samsungtv integration), for the escalated
+ *  off. Empty LIFTWATCH_TV_REMOTE disables escalation entirely. */
+export function tvRemoteEntity(): string {
+  return process.env.LIFTWATCH_TV_REMOTE ?? "remote.55_qled";
+}
+
+/** The key the escalated off sends. Samsung's short KEY_POWER press is a
+ *  toggle-ish blink on the QLED family (field report 2026-08-30: screen
+ *  flashes, stays on); a HELD power press is the full power-off. If this
+ *  model wants the discrete key instead, set LIFTWATCH_OFF_KEY=KEY_POWEROFF. */
+export function offKey(): string {
+  return process.env.LIFTWATCH_OFF_KEY || "KEY_POWER";
+}
+
+/** Seconds the escalated off holds the key (0 = plain press). */
+export function offHoldSecs(): number {
+  const raw = Number(process.env.LIFTWATCH_OFF_HOLD_SECS);
+  const s = Number.isFinite(raw) ? raw : 3;
+  return Math.min(10, Math.max(0, s));
 }
 
 /** TV power from the media_player's state. Anything a powered TV reports
@@ -190,19 +216,42 @@ export async function tickLiftwatch(): Promise<void> {
   const dev = tvDevice()!;
   const started = Date.now();
   let error: string | undefined;
+  let method = "media_player";
   try {
-    await executeOnDevice(dev, { command: action === "tv_on" ? "turn_on" : "turn_off" });
+    if (action === "tv_on") {
+      await executeOnDevice(dev, { command: "turn_on" });
+    } else {
+      // Attempt 1 is the integration's own turn_off. If the TV still reads
+      // on a tick later, the command shape ESCALATES — same pattern as the
+      // KNX dimmer retries (attempt 2+ names brightness_pct): a held
+      // power-key press through the TV's remote entity, which is what
+      // fully powers this Samsung down where the short press only blinks
+      // the screen (field report 2026-08-30). A fixed, code-owned service
+      // call, not a passthrough; skipped when the remote entity is absent
+      // (older HA) or LIFTWATCH_TV_REMOTE is emptied.
+      const remote = attempt >= 2 ? tvRemoteEntity() : "";
+      const remoteUsable =
+        remote !== "" && (await getState(remote).catch(() => null)) !== null;
+      if (remoteUsable) {
+        method = "remote_hold";
+        const data: Record<string, unknown> = { entity_id: remote, command: offKey() };
+        if (offHoldSecs() > 0) data.hold_secs = offHoldSecs();
+        await callService("remote", "send_command", data);
+      } else {
+        await executeOnDevice(dev, { command: "turn_off" });
+      }
+    }
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
   }
   audit({
     ts: new Date().toISOString(), user: "liftwatch", deviceId: "automations",
     entityId: "liftwatch", command: action === "tv_on" ? "lift_tv_on" : "lift_tv_off",
-    args: action === "tv_on" ? { lift: "down" } : { lift: "up", attempt },
+    args: action === "tv_on" ? { lift: "down" } : { lift: "up", attempt, method },
     ok: !error, durationMs: Date.now() - started, error,
   });
   console.log(
-    `[liftwatch] lift ${action === "tv_on" ? "down → TV on" : `up → TV off (attempt ${attempt}/${MAX_OFF_ATTEMPTS})`}` +
+    `[liftwatch] lift ${action === "tv_on" ? "down → TV on" : `up → TV off (attempt ${attempt}/${MAX_OFF_ATTEMPTS}, ${method})`}` +
     (error ? ` FAILED: ${error}` : ""),
   );
 }

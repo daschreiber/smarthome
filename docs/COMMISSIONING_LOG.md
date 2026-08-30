@@ -738,3 +738,46 @@ way up. That makes level semantics safe for the off direction.
   evidence to bring.
 - [ ] `LIFTWATCH_PATH=/data/liftwatch.json` on Railway (runbook table) —
   still worth setting so baselines and a paused toggle survive deploys.
+
+## 2026-08-30 — TV follower field test 2: the off must be a HELD power press
+
+### Owner report (after PR #104 deployed)
+
+The off is now being sent — the screen visibly flashes when the lift goes
+up — but the TV does not fully power off.
+
+### Diagnosis
+
+`media_player.turn_off` on the `samsungtv` integration sends a SHORT
+power-key press over the network. On this QLED family a short press
+blinks/toggles rather than powering the panel down — the household's
+"off" is the HELD power press (or the discrete `KEY_POWEROFF`), which HA
+can send through the integration's `remote` entity
+(`remote.send_command` with `hold_secs`).
+
+### Fix
+
+The off-enforcement retries now ESCALATE, mirroring the KNX dimmer
+pattern (attempt 2+ changes the command's shape, see the 2026-07 retry
+notes): attempt 1 stays `media_player.turn_off`; attempts 2+ send
+`remote.send_command` on `remote.55_qled` with `KEY_POWER` held 3s —
+env-tunable (`LIFTWATCH_TV_REMOTE` / `LIFTWATCH_OFF_KEY` /
+`LIFTWATCH_OFF_HOLD_SECS`), and skipped with a clean fallback to
+`turn_off` when the remote entity doesn't exist (older HA) or the
+variable is emptied. Every attempt's audit row now names its `method`
+(`media_player` vs `remote_hold`), so Activity shows exactly which press
+finally sticks. This is a fixed, code-owned service call, not a generic
+passthrough — the no-passthrough rule (API_CONTRACT safety rules) is
+about caller-supplied service names, which this does not accept.
+
+### Verify on site
+
+- [ ] Raise the lift with the TV playing: expect the flash (attempt 1,
+  `media_player`) and then, ~30s later, a real power-down (attempt 2,
+  `remote_hold`). Activity carries both rows.
+- [ ] If attempt 2 errors with entity-not-found, the HA install predates
+  the samsungtv remote platform — check Developer Tools → States for
+  `remote.55_qled` (the escalation auto-falls back meanwhile).
+- [ ] If the held press still doesn't stick, set
+  `LIFTWATCH_OFF_KEY=KEY_POWEROFF` on Railway — no redeploy needed
+  beyond the variable change.

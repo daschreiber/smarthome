@@ -239,6 +239,23 @@ describe("off escalation (the 2026-08-30 flash-but-stays-on Samsung)", () => {
     expect(executeOnDevice).toHaveBeenCalled();
   });
 
+  it("a pause flipped while the remote was being probed wins — no held press", async () => {
+    saveLiftwatch({ enabled: true, lastDown: false, offAttempts: 1 });
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      if (id === TV_LIFT_ENTITY) return { state: "off" } as never;
+      if (id === tvRemoteEntity()) {
+        // The admin pauses while the probe is in flight.
+        saveLiftwatch({ enabled: false, lastDown: null });
+        return { state: "off" } as never;
+      }
+      return { state: "on" } as never;
+    });
+    await tickLiftwatch();
+    expect(callService).not.toHaveBeenCalled();
+    expect(executeOnDevice).not.toHaveBeenCalled();
+    expect(loadLiftwatch()).toEqual({ enabled: false, lastDown: null });
+  });
+
   it("key and hold are env-tunable, hold clamped and droppable", async () => {
     expect(offKey()).toBe("KEY_POWER");
     process.env.LIFTWATCH_OFF_KEY = "KEY_POWEROFF";

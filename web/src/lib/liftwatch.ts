@@ -232,6 +232,10 @@ export async function tickLiftwatch(): Promise<void> {
       const remote = attempt >= 2 ? tvRemoteEntity() : "";
       const remoteUsable =
         remote !== "" && (await getState(remote).catch(() => null)) !== null;
+      // The probe is one more awaited request: a pause flipped while it
+      // was in flight must win here too, same as after the state polls
+      // (Codex review, 2026-08-30).
+      if (remote !== "" && !loadLiftwatch().enabled) return;
       if (remoteUsable) {
         method = "remote_hold";
         const data: Record<string, unknown> = { entity_id: remote, command: offKey() };

@@ -681,3 +681,60 @@ can't disagree.
   Samsung's own network wake (Wake-on-LAN from the `samsungtv`
   integration) is unverified — check the audit row and the TV's network
   standby setting.
+
+## 2026-08-30 — TV follower field test: off side hardened
+
+### Owner report (first live cycle after PR #103 deployed)
+
+Lowering the lift turns the TV on. Raising it does NOT turn the TV off —
+not while rising, and apparently not once stowed either: on the next
+lowering the TV "seems to have just come on", i.e. it had been playing
+inside the ceiling the whole time.
+
+### Diagnosis
+
+The off side was edge-only, so it acted exactly once, on the transition
+it happened to observe — and there were two ways to lose that one shot,
+either sufficient to explain the report:
+
+- **The deploy raced the test.** The merge itself triggered a Railway
+  deploy right around the live test, and a restart mid-episode re-learns
+  the baseline: first readable state is "baseline only, never an action",
+  so a relay already reading "off" when the app came back stranded the TV
+  on with no edge ever to fire. (Without `LIFTWATCH_PATH` on the volume,
+  every deploy also wipes the baseline.)
+- **A single failed/ignored `media_player.turn_off`** spent the edge with
+  no retry.
+
+What the report also establishes, usefully: the relay LATCHES while the
+lift is down (had it rested "off" mid-viewing, our own next tick would
+have read an on→off edge and killed the TV a minute after lowering —
+never observed), so "relay off" genuinely means the lift is up or on its
+way up. That makes level semantics safe for the off direction.
+
+### Fix (asymmetric semantics)
+
+- ON stays an edge: exactly once per lowering; a remote-control off with
+  the lift down is never fought.
+- OFF is the edge PLUS bounded enforcement: while the lift is up and the
+  TV still affirmatively reads "on", the follower keeps commanding
+  turn_off — MAX_OFF_ATTEMPTS (3) per stow episode, one per tick, every
+  attempt audited with its number, then it stands down until the next
+  lowering resets the budget. Rationale: a TV that is ON inside the
+  ceiling is never a human's choice, so re-asserting fights a failure,
+  not a person. This also closes the restart hole (a baseline re-learned
+  as "up" no longer strands a playing TV) and out-stubborns a dropped
+  network command.
+- The tick now reads both entities (`Promise.allSettled` — each read
+  fails alone); the enforcement never acts on an unknown TV state.
+
+### Verify on site
+
+- [ ] Raise the lift with the TV playing: it should switch off within
+  ~35s of the relay flipping (Activity: `lift_tv_off`, `attempt: 1`).
+- [ ] If attempts 1–3 all show errors in Activity, the Samsung is
+  refusing network `turn_off` — that becomes an integration question
+  (KEY_POWER handling / network standby), and the audit rows are the
+  evidence to bring.
+- [ ] `LIFTWATCH_PATH=/data/liftwatch.json` on Railway (runbook table) —
+  still worth setting so baselines and a paused toggle survive deploys.

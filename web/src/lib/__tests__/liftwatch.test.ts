@@ -4,13 +4,14 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MAX_OFF_ATTEMPTS, TV_ENTITY, evaluateTvFollow, liftDownFromState, loadLiftwatch,
-  saveLiftwatch, tickLiftwatch, tvDevice, tvOnFromState, type LiftwatchState,
+  offHoldSecs, offKey, saveLiftwatch, tickLiftwatch, tvDevice, tvOnFromState,
+  tvRemoteEntity, type LiftwatchState,
 } from "../liftwatch";
 import { TV_LIFT_ENTITY } from "../sleepwatch";
-import { getState } from "../ha";
+import { callService, getState } from "../ha";
 import { executeOnDevice } from "../execute";
 
-vi.mock("../ha", () => ({ getState: vi.fn() }));
+vi.mock("../ha", () => ({ getState: vi.fn(), callService: vi.fn() }));
 vi.mock("../execute", () => ({ executeOnDevice: vi.fn() }));
 vi.mock("../audit", () => ({ audit: vi.fn() }));
 
@@ -28,6 +29,9 @@ beforeEach(() => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "liftwatch-test-"));
   process.env.LIFTWATCH_PATH = path.join(dir, "liftwatch.json");
   delete process.env.SLEEPWATCH_LIFT_STATE;
+  delete process.env.LIFTWATCH_TV_REMOTE;
+  delete process.env.LIFTWATCH_OFF_KEY;
+  delete process.env.LIFTWATCH_OFF_HOLD_SECS;
 });
 
 const DOWN: LiftwatchState = { enabled: true, lastDown: true, offAttempts: 0 };
@@ -177,6 +181,97 @@ describe("tick vs. a concurrent pause", () => {
       { command: "turn_off" },
     );
     expect(loadLiftwatch()).toEqual({ enabled: true, lastDown: false, offAttempts: 1 });
+  });
+});
+
+describe("off escalation (the 2026-08-30 flash-but-stays-on Samsung)", () => {
+  beforeEach(() => {
+    vi.mocked(getState).mockReset();
+    vi.mocked(callService).mockReset();
+    vi.mocked(executeOnDevice).mockReset();
+  });
+
+  /** Relay up, TV playing; the remote entity resolves unless nulled. */
+  const states = (remoteExists: boolean) => async (id: string) => {
+    if (id === TV_LIFT_ENTITY) return { state: "off" } as never;
+    if (id === tvRemoteEntity()) return (remoteExists ? { state: "off" } : null) as never;
+    return { state: "on" } as never;
+  };
+
+  it("attempt 1 stays the integration's own turn_off", async () => {
+    saveLiftwatch({ enabled: true, lastDown: true, offAttempts: 0 });
+    vi.mocked(getState).mockImplementation(states(true));
+    await tickLiftwatch();
+    expect(executeOnDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: TV_ENTITY }),
+      { command: "turn_off" },
+    );
+    expect(callService).not.toHaveBeenCalled();
+  });
+
+  it("attempt 2 escalates to a held power key through the remote entity", async () => {
+    saveLiftwatch({ enabled: true, lastDown: false, offAttempts: 1 });
+    vi.mocked(getState).mockImplementation(states(true));
+    await tickLiftwatch();
+    expect(callService).toHaveBeenCalledWith("remote", "send_command", {
+      entity_id: tvRemoteEntity(), command: "KEY_POWER", hold_secs: 3,
+    });
+    expect(executeOnDevice).not.toHaveBeenCalled();
+    expect(loadLiftwatch().offAttempts).toBe(2);
+  });
+
+  it("no remote entity (older HA, or LIFTWATCH_TV_REMOTE emptied) falls back to turn_off", async () => {
+    saveLiftwatch({ enabled: true, lastDown: false, offAttempts: 1 });
+    vi.mocked(getState).mockImplementation(states(false));
+    await tickLiftwatch();
+    expect(callService).not.toHaveBeenCalled();
+    expect(executeOnDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: TV_ENTITY }),
+      { command: "turn_off" },
+    );
+
+    vi.mocked(executeOnDevice).mockClear();
+    process.env.LIFTWATCH_TV_REMOTE = "";
+    saveLiftwatch({ enabled: true, lastDown: false, offAttempts: 1 });
+    vi.mocked(getState).mockImplementation(states(true));
+    await tickLiftwatch();
+    expect(callService).not.toHaveBeenCalled();
+    expect(executeOnDevice).toHaveBeenCalled();
+  });
+
+  it("a pause flipped while the remote was being probed wins — no held press", async () => {
+    saveLiftwatch({ enabled: true, lastDown: false, offAttempts: 1 });
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      if (id === TV_LIFT_ENTITY) return { state: "off" } as never;
+      if (id === tvRemoteEntity()) {
+        // The admin pauses while the probe is in flight.
+        saveLiftwatch({ enabled: false, lastDown: null });
+        return { state: "off" } as never;
+      }
+      return { state: "on" } as never;
+    });
+    await tickLiftwatch();
+    expect(callService).not.toHaveBeenCalled();
+    expect(executeOnDevice).not.toHaveBeenCalled();
+    expect(loadLiftwatch()).toEqual({ enabled: false, lastDown: null });
+  });
+
+  it("key and hold are env-tunable, hold clamped and droppable", async () => {
+    expect(offKey()).toBe("KEY_POWER");
+    process.env.LIFTWATCH_OFF_KEY = "KEY_POWEROFF";
+    expect(offKey()).toBe("KEY_POWEROFF");
+    expect(offHoldSecs()).toBe(3);
+    process.env.LIFTWATCH_OFF_HOLD_SECS = "99";
+    expect(offHoldSecs()).toBe(10);
+    process.env.LIFTWATCH_OFF_HOLD_SECS = "0";
+    expect(offHoldSecs()).toBe(0);
+    // hold 0 sends a plain press: no hold_secs in the payload.
+    saveLiftwatch({ enabled: true, lastDown: false, offAttempts: 1 });
+    vi.mocked(getState).mockImplementation(states(true));
+    await tickLiftwatch();
+    expect(callService).toHaveBeenCalledWith("remote", "send_command", {
+      entity_id: tvRemoteEntity(), command: "KEY_POWEROFF",
+    });
   });
 });
 

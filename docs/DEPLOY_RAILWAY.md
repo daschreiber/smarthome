@@ -70,6 +70,7 @@ network-scoped, only the login restriction was.
    | `AWAY_PATH` | `/data/away.json` — the Away switch's state file |
    | `SAUNAWATCH_PATH` | `/data/saunawatch.json` — the sauna-follower watcher's state file |
    | `LIFTWATCH_PATH` | `/data/liftwatch.json` — the TV follower's state file (MBR TV mirrors the ceiling lift's edges: down → on, up → off; toggle on the Automations screen). Must live on the volume or every redeploy loses the edge baseline AND a deliberately paused follower comes back on |
+   | `LIFTWATCH_TV_REMOTE` / `LIFTWATCH_OFF_KEY` / `LIFTWATCH_OFF_HOLD_SECS` | optional — the follower's escalated off (attempts 2+): a held power key via the TV's remote entity (defaults `remote.55_qled` / `KEY_POWER` / `3`); the short press `turn_off` sends only blinks the Samsung. Empty `LIFTWATCH_TV_REMOTE` disables escalation; try `KEY_POWEROFF` if the held press doesn't stick |
    | `SAUNA_AC_TEMP` | optional — Master Bathroom A/C setpoint while the sauna heats (default 18) |
    | `SAUNA_AC_FAN` | optional — fan mode for the sauna follower (default `high`) |
    | `COVER_STATE_TRUSTED` | `1` — shade positions come from the native KNX covers and are real; the UI shows sliders/state instead of best-effort buttons (set on Railway 2026-07-26, `knx/README.md` item 8) |

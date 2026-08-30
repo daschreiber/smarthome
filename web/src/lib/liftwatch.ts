@@ -21,18 +21,26 @@ import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
  * user-authored automation: the trigger is the lift relay's STATE, which
  * the step builder can't express. Evaluated on the scheduler's 30s tick.
  *
- * Deliberate semantics, same philosophy as the rest of the house:
- * - EDGES only, never levels: the follower reacts to the lift CHANGING
- *   position. Someone who turns the TV off by remote with the lift still
- *   down (or on while it's stowed) is a human making a choice — the
- *   follower never re-asserts against them.
+ * Deliberate semantics, same philosophy as the rest of the house — but
+ * ASYMMETRIC after the first field test (owner, 2026-08-30: lowering
+ * turned the TV on, raising left it playing inside the ceiling through a
+ * full up-and-down cycle — a single missed or failed off-edge, and edge-
+ * only semantics had no second chance):
+ * - The ON side is an EDGE, never a level: the TV comes on exactly once
+ *   per lowering. Someone who turns it off by remote with the lift still
+ *   down is a human making a choice — the follower never relights it.
+ * - The OFF side is the edge PLUS bounded level enforcement: while the
+ *   lift is up and the TV still reads "on", keep commanding off — up to
+ *   MAX_OFF_ATTEMPTS per stow, one per tick, every attempt audited, then
+ *   stand down until the lift next comes down. A TV that is ON inside the
+ *   ceiling is never a human's choice, so re-asserting here fights a
+ *   failure, not a person. This also covers the restart hole: a baseline
+ *   re-learned with the lift already up no longer strands a playing TV.
  * - Unknown is not "up": an unreadable lift state holds the last known
  *   baseline instead of inventing an edge. Same rule after a restart: the
  *   first readable state only sets the baseline, it never acts — a deploy
- *   mid-movie must not power-cycle the TV.
- * - A failed TV command spends the edge anyway (no per-tick retry storm at
- *   the bedside); the audit row is the trail. The next lift move tries
- *   again by nature.
+ *   mid-movie must not power-cycle the TV. (The off-enforcement needs the
+ *   TV to affirmatively read "on"; unknown TV state never triggers it.)
  *
  * Polarity rides the same knob as Sleep sense: SLEEPWATCH_LIFT_STATE names
  * the relay state that means "stowed" (default "off" — proven nightly by
@@ -51,9 +59,18 @@ export interface LiftwatchState {
   /** Last KNOWN lift position (true = down); null = no baseline yet
    *  (fresh install or restart before the first readable state). */
   lastDown: boolean | null;
+  /** turn_off attempts spent this stow (lift-up) episode; reset whenever
+   *  the lift is down. Bounds the off-enforcement. */
+  offAttempts?: number;
 }
 
 const DEFAULT_STATE: LiftwatchState = { enabled: true, lastDown: null };
+
+/** Off commands per stow episode: the up-edge spends the first, and the
+ *  enforcement spends the rest while the TV still reads "on". Enough to
+ *  out-stubborn a dropped network command, small enough that a truly
+ *  unreachable TV gets three audit rows, not a nightly war. */
+export const MAX_OFF_ATTEMPTS = 3;
 
 function storePath(): string {
   return process.env.LIFTWATCH_PATH || path.join(process.cwd(), "liftwatch.json");
@@ -91,24 +108,54 @@ export function liftDownFromState(state: string | undefined | null): boolean | n
   return state !== liftSleepState();
 }
 
+/** TV power from the media_player's state. Anything a powered TV reports
+ *  counts as on; "off"/"standby" is off; unavailable/unknown is null —
+ *  the enforcement only ever acts on an affirmative "on". */
+export function tvOnFromState(state: string | undefined | null): boolean | null {
+  if (state == null) return null;
+  if (["on", "playing", "paused", "idle", "buffering"].includes(state)) return true;
+  if (state === "off" || state === "standby") return false;
+  return null;
+}
+
 export type TvFollowAction = "tv_on" | "tv_off" | null;
 
 /**
- * Pure edge detector — all I/O stays in tickLiftwatch. `down` is the
- * lift's position, or null when the relay state was unreadable.
+ * Pure decision function — all I/O stays in tickLiftwatch. `down` is the
+ * lift's position and `tvOn` the TV's power, each null when unreadable.
  */
 export function evaluateTvFollow(
   down: boolean | null,
+  tvOn: boolean | null,
   st: LiftwatchState,
 ): { action: TvFollowAction; next: LiftwatchState } {
   if (down === null) return { action: null, next: st }; // hold on missing data
   if (st.lastDown === null) {
-    // First readable state: baseline only. A restart with the lift down
-    // must not re-command a TV someone already turned off.
-    return { action: null, next: { ...st, lastDown: down } };
+    // First readable state: baseline only, never an action. With the lift
+    // down that protects a TV someone already turned off; with it up, a
+    // stranded-on TV is caught by the enforcement on the NEXT tick — one
+    // readable lift state as baseline keeps a flapping relay from acting.
+    return { action: null, next: { ...st, lastDown: down, offAttempts: 0 } };
   }
-  if (down === st.lastDown) return { action: null, next: st };
-  return { action: down ? "tv_on" : "tv_off", next: { ...st, lastDown: down } };
+  if (down) {
+    // Down: the up→down edge turns the TV on, once; a new stow episode
+    // gets a fresh attempt budget.
+    return {
+      action: st.lastDown ? null : "tv_on",
+      next: { ...st, lastDown: true, offAttempts: 0 },
+    };
+  }
+  // Up: the down→up edge spends the first off attempt; while the TV still
+  // affirmatively reads "on" (never on unknown), the enforcement spends
+  // the rest — a TV inside the ceiling is never meant to be on.
+  const attempts = st.offAttempts ?? 0;
+  if (st.lastDown || (tvOn === true && attempts < MAX_OFF_ATTEMPTS)) {
+    return {
+      action: "tv_off",
+      next: { ...st, lastDown: false, offAttempts: attempts + 1 },
+    };
+  }
+  return { action: null, next: { ...st, lastDown: false } };
 }
 
 /** Scheduler hook — called every 30s tick. Cheap when the TV isn't in the
@@ -116,26 +163,30 @@ export function evaluateTvFollow(
 export async function tickLiftwatch(): Promise<void> {
   if (!loadLiftwatch().enabled || !liftwatchAvailable()) return;
 
-  let down: boolean | null = null;
-  try {
-    const s = await getState(TV_LIFT_ENTITY);
-    down = liftDownFromState(s?.state);
-  } catch {
-    down = null;
-  }
+  // Each read fails alone: a TV briefly unreachable must not blind the
+  // lift edge, and vice versa.
+  const [liftRes, tvRes] = await Promise.allSettled([
+    getState(TV_LIFT_ENTITY),
+    getState(TV_ENTITY),
+  ]);
+  const down =
+    liftRes.status === "fulfilled" ? liftDownFromState(liftRes.value?.state) : null;
+  const tvOn = tvRes.status === "fulfilled" ? tvOnFromState(tvRes.value?.state) : null;
 
-  // Re-read AFTER the await: a pause flipped while the HA request was in
-  // flight must win — evaluating (and saving) the pre-request state would
-  // silently undo the pause and command the TV on a tick the admin already
-  // stopped (Codex review, 2026-08-29).
+  // Re-read AFTER the awaits: a pause flipped while the HA requests were
+  // in flight must win — evaluating (and saving) the pre-request state
+  // would silently undo the pause and command the TV on a tick the admin
+  // already stopped (Codex review, 2026-08-29).
   const st = loadLiftwatch();
   if (!st.enabled) return;
-  const { action, next } = evaluateTvFollow(down, st);
-  // Persist the baseline BEFORE acting: a crash mid-command must not
-  // replay the edge (and double-audit) on the next tick.
-  if (next.lastDown !== st.lastDown) saveLiftwatch(next);
+  const { action, next } = evaluateTvFollow(down, tvOn, st);
+  // Persist the baseline AND the spent attempt BEFORE acting: a crash
+  // mid-command must not replay the edge (and double-audit) on the next
+  // tick, and the attempt budget must burn down even through crashes.
+  if (JSON.stringify(next) !== JSON.stringify(st)) saveLiftwatch(next);
   if (!action) return;
 
+  const attempt = next.offAttempts ?? 0;
   const dev = tvDevice()!;
   const started = Date.now();
   let error: string | undefined;
@@ -147,11 +198,11 @@ export async function tickLiftwatch(): Promise<void> {
   audit({
     ts: new Date().toISOString(), user: "liftwatch", deviceId: "automations",
     entityId: "liftwatch", command: action === "tv_on" ? "lift_tv_on" : "lift_tv_off",
-    args: { lift: action === "tv_on" ? "down" : "up" },
+    args: action === "tv_on" ? { lift: "down" } : { lift: "up", attempt },
     ok: !error, durationMs: Date.now() - started, error,
   });
   console.log(
-    `[liftwatch] lift ${action === "tv_on" ? "down → TV on" : "up → TV off"}` +
+    `[liftwatch] lift ${action === "tv_on" ? "down → TV on" : `up → TV off (attempt ${attempt}/${MAX_OFF_ATTEMPTS})`}` +
     (error ? ` FAILED: ${error}` : ""),
   );
 }

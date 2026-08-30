@@ -739,45 +739,24 @@ way up. That makes level semantics safe for the off direction.
 - [ ] `LIFTWATCH_PATH=/data/liftwatch.json` on Railway (runbook table) —
   still worth setting so baselines and a paused toggle survive deploys.
 
-## 2026-08-30 — TV follower field test 2: the off must be a HELD power press
+## 2026-08-30 — REVERTED: the held-power-press escalation (PR #105)
 
-### Owner report (after PR #104 deployed)
+Owner report after #105 deployed: on OPENING, the lift itself oscillated —
+partially closing and reopening repeatedly for ~4–5 minutes before
+settling — and the off-on-close problem was still not solved. Owner
+called for the build to be undone; #105 is reverted (PR #106), returning
+the follower to the #104 behavior (plain `media_player.turn_off`,
+edge + bounded enforcement).
 
-The off is now being sent — the screen visibly flashes when the lift goes
-up — but the TV does not fully power off.
-
-### Diagnosis
-
-`media_player.turn_off` on the `samsungtv` integration sends a SHORT
-power-key press over the network. On this QLED family a short press
-blinks/toggles rather than powering the panel down — the household's
-"off" is the HELD power press (or the discrete `KEY_POWEROFF`), which HA
-can send through the integration's `remote` entity
-(`remote.send_command` with `hold_secs`).
-
-### Fix
-
-The off-enforcement retries now ESCALATE, mirroring the KNX dimmer
-pattern (attempt 2+ changes the command's shape, see the 2026-07 retry
-notes): attempt 1 stays `media_player.turn_off`; attempts 2+ send
-`remote.send_command` on `remote.55_qled` with `KEY_POWER` held 3s —
-env-tunable (`LIFTWATCH_TV_REMOTE` / `LIFTWATCH_OFF_KEY` /
-`LIFTWATCH_OFF_HOLD_SECS`), and skipped with a clean fallback to
-`turn_off` when the remote entity doesn't exist (older HA) or the
-variable is emptied. Every attempt's audit row now names its `method`
-(`media_player` vs `remote_hold`), so Activity shows exactly which press
-finally sticks. This is a fixed, code-owned service call, not a generic
-passthrough — the no-passthrough rule (API_CONTRACT safety rules) is
-about caller-supplied service names, which this does not accept.
-
-### Verify on site
-
-- [ ] Raise the lift with the TV playing: expect the flash (attempt 1,
-  `media_player`) and then, ~30s later, a real power-down (attempt 2,
-  `remote_hold`). Activity carries both rows.
-- [ ] If attempt 2 errors with entity-not-found, the HA install predates
-  the samsungtv remote platform — check Developer Tools → States for
-  `remote.55_qled` (the escalation auto-falls back meanwhile).
-- [ ] If the held press still doesn't stick, set
-  `LIFTWATCH_OFF_KEY=KEY_POWEROFF` on Railway — no redeploy needed
-  beyond the variable change.
+Note for the next attempt: nothing in the reverted code commands the lift
+relay — the follower only ever addresses `media_player.55_qled` /
+`remote.55_qled`. The leading theory is INDIRECT: the held power press
+made the TV emit power/HDMI-CEC events that Control4 — which may still
+carry its own old TV↔lift coupling programming — reacted to by driving
+the lift. If true, (a) the "dead" C4 lift programming is not dead, just
+one-directional or broken, and the REAL fix may be repairing it C4-side
+(or removing it and keeping the app rule); (b) any TV power path that C4
+observes can feed back into the lift, so future off-mechanism changes
+need the lift watched during the test. Before any further change: pull
+the Activity rows (`lift_tv_off` attempt/method/error) from the failed
+test, and establish in C4 Composer what lift/TV programming still exists.

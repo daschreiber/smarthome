@@ -166,6 +166,12 @@ Sauna follower (room A/C mirrors the sauna's power edges). GET:
 (canProgram): `{ enabled }` — re-enabling resets the baseline so it never
 acts on a stale edge.
 
+### `GET | POST /api/liftwatch`
+TV follower (the Master Bedroom TV mirrors its ceiling lift's edges:
+lift down → TV on, lift up → TV off). GET: `{ enabled, available,
+canToggle }`. POST (canProgram): `{ enabled }` — re-enabling resets the
+baseline so it never acts on a stale edge.
+
 ### `GET | POST /api/sleepwatch`
 Sleep sense (white noise; home-only by design — stands down while Away).
 GET: `{ enabled, active, away, configured, room, window, watchedLights,

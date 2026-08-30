@@ -6,6 +6,7 @@ import { automationActiveNow, isAway } from "./away";
 import { executeAction, executeOnDevice, stepHoldLights } from "./execute";
 import { dueTimers, listTimers } from "./timers";
 import { tickSaunawatch } from "./saunawatch";
+import { tickLiftwatch } from "./liftwatch";
 import { loadSleepwatch, tickSleepwatch } from "./sleepwatch";
 import { getStates } from "./ha";
 import { sunEvents } from "./sun";
@@ -102,6 +103,11 @@ export async function tick(): Promise<void> {
     await tickSaunawatch();
   } catch (err) {
     console.error("[scheduler] saunawatch tick failed:", err);
+  }
+  try {
+    await tickLiftwatch();
+  } catch (err) {
+    console.error("[scheduler] liftwatch tick failed:", err);
   }
 }
 

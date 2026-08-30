@@ -634,3 +634,50 @@ the subnet from the Green's own address instead of assuming `10.0.0`.
 - [ ] Run `python3 tools/c4_recover.py recover --yes` from the Mac and record
   the outcome here — including the Core 3's new address, so the next reader
   knows where it landed.
+
+## 2026-08-29 — TV follower: the MBR TV mirrors its ceiling lift again
+
+### Owner report
+
+The master-bedroom TV has always come on when its ceiling lift lowered and
+gone off when the lift went back up. It now does neither.
+
+### Findings
+
+- The old link never lived in this stack: no HA automation, no app rule,
+  nothing in the repo implements it. It was evidently Control4-side
+  programming (like the retired shade automations), and whatever broke it
+  is not visible from here — the repo can't say whether it was the August
+  outage, a Director change, or a dealer edit.
+- Everything needed to own the rule ourselves is already proven in
+  production: the lift relay is `light.knx_switch_mbr_tv_lift`, whose state
+  Sleep sense has armed on nightly since July (so the Control4 integration
+  reports it regardless of what moved the lift — keypad, app, or C4
+  programming, ~3.7s feedback lag). The TV is `media_player.55_qled`
+  (Samsung), which advertises `turn_on`/`turn_off`
+  (supported_features 152461).
+
+### Fix
+
+**`lib/liftwatch.ts` — "TV follower — bedroom lift"**, a standing house
+rule on the scheduler's 30s tick, modeled on the Sauna follower: edges
+only (lift up→down commands `media_player.turn_on`, down→up `turn_off`),
+unknown relay state holds instead of inventing an edge, the first readable
+state after a restart is a baseline and never an action, and a human's
+remote-control choice mid-session is never fought. Card + toggle on the
+Automations page ("If → then"), switchboard at `/api/liftwatch`, state in
+`liftwatch.json` (`LIFTWATCH_PATH`). Relay polarity rides the same
+`SLEEPWATCH_LIFT_STATE` knob as Sleep sense — one knob, the two rules
+can't disagree.
+
+### Verify on site (can't be proven from this cloud session)
+
+- [ ] Lower the lift: TV should be on within ~35s of the relay flipping
+  (30s tick + feedback lag). Raise it: TV off the same way. Activity logs
+  `lift_tv_on` / `lift_tv_off` either way, with the error if the command
+  failed.
+- [ ] If the TV does NOT wake: the 2026-07-22 note that hid the MBR media
+  cards ("zone rejects turn_on") was about the Control4 zone, but the
+  Samsung's own network wake (Wake-on-LAN from the `samsungtv`
+  integration) is unverified — check the audit row and the TV's network
+  standby setting.

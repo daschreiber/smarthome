@@ -9,7 +9,7 @@ through the File editor add-on.
 | --- | --- | --- |
 | `c4_scan.py` | `/config/c4_scan.py` | Finds a device's current IP by MAC (UDP sweep + `/proc/net/arp`), with no add-ons, no root and no nmap. |
 | `c4_repoint.py` | `/config/c4_repoint.py` | Rewrites the Control4 config entry's host in place, atomically, keeping credentials and every Stage 5 rename. Finds the address itself with `--mac`, or takes one on the command line. |
-| `c4_recovery.yaml` | block in `configuration.yaml` | The `shell_command` that drives the repoint, the two watch sensors, the self-baselining IP-drift alert, and the two self-heal automations. |
+| `c4_recovery.yaml` | block in `configuration.yaml` | The `shell_command`s that drive the repoints, the watch sensors, the self-baselining IP-drift alerts, and the self-heal automations — for the Control4 Core 3 and, since 2026-09-03, the CoolMaster bridge. |
 | `homekit_covers.yaml` | block in `configuration.yaml` | Deprecated 2026-07-26; see the file's own header. |
 
 ## Installing the Control4 recovery bundle
@@ -83,7 +83,27 @@ Three things to know about the shape of it:
   shares one push `tag`, so the phone always holds the latest one rather than
   a stack ending in the most optimistic.
 
-`input_boolean.c4_self_heal` switches both off from the phone. Turn it off
+### CoolMaster (2026-09-03)
+
+The same drift fault for the other box whose integration dials a stored
+address and cannot follow a move. Three more automations in
+`automation manual_cm_selfheal:`, driven by `sensor.cm_ip_watch`,
+`sensor.cm_configured_host` and `binary_sensor.cm_ip_drift`:
+
+| | Does |
+| --- | --- |
+| `cm_ip_drift_alert` | Detects, 5-minute debounce. |
+| `cm_auto_repoint` | Acts: same conditions as `c4_auto_repoint`, a 35-minute hold, and it stands down while `binary_sensor.c4_ip_drift` is on — so when both boxes move on one boot the Control4 repoint goes first and this one fires on the boot that follows. Never two restarts racing. |
+| `cm_after_boot` | Refreshes both CoolMaster sensors three minutes into every boot, and if that boot was the repoint's own restart, reports the outcome. |
+
+Same kill switch. The bridge is local, so there is no cloud-auth reload to
+mirror; only the repoint. Installing it is a merge, not a paste: two
+`- sensor:` items into the existing `command_line:` list, one `- name:` into
+the existing `template:` binary_sensor list, one `cm_repoint:` line under
+`shell_command:`, one helper under `input_datetime:`, and the whole
+`automation manual_cm_selfheal:` block appended.
+
+`input_boolean.c4_self_heal` switches all of it off from the phone. Turn it off
 before any deliberate maintenance that makes the house look like an outage —
 pulling the Core 3's power, moving it between switch ports, or a KNX
 commissioning session that takes the lights down.

@@ -127,7 +127,7 @@ to shortcut any of this; File editor is what there is.
   | Control4 Core 3 | `00:0f:ff:9f:3b:44` | `10.0.0.38` | **done** (Bezeq, 2026-09-03); MAC verified on-site |
   | Home Assistant Green | `20:f8:3b:03:d4:19` | `10.0.0.69` | **wrong** — Bezeq reserved `f8:3b:03:d4:19:20`, the same six octets rotated by one. No device has that MAC, so the Green is not reserved; it has only kept its lease. Needs correcting. |
   | KNX IP interface — the shades | `00:1e:06:4b:80:08`, confirmed: answers KNXnet/IP search as `1.1.127`; a CDInnovation "Maestro" gateway | `10.0.0.70` | not requested yet |
-  | CoolMaster bridge — A/C and heating | `28:3b:96:11:60:51`, verified | `10.0.0.90` | not requested yet |
+  | CoolMaster bridge — A/C and heating | `28:3b:96:11:60:51`, verified | `10.0.0.90` | not requested yet; the self-heal repoints it (2026-09-03, `cm_auto_repoint`) |
   | Yamaha RX-V6A — master bedroom | `c0:d7:aa:8e:5d:b0`, verified via its YXC API | `10.0.0.7` — was `10.0.0.35` when added on 2026-07-23; DHCP moved it and HA's MusicCast integration followed by SSDP | not requested yet |
   | Yamaha RX-V6A — lounge | `4c:22:f3:a4:9e:9c`, verified via its YXC API | `10.0.0.4` — was `10.0.0.14` when added; same story | not requested yet |
   | Yamaha RX-V4A — den | `4c:22:f3:72:54:e3`, verified via its YXC API | `10.0.0.76` | not requested yet |
@@ -140,8 +140,9 @@ to shortcut any of this; File editor is what there is.
   integrations dial a stored address and do not follow. MusicCast (the three
   Yamahas) rediscovers by SSDP and does — both RX-V6As moved without anyone
   noticing. The KNX gateway answers KNXnet/IP search requests, so HA's
-  "automatic" connection mode is available for it; CoolMaster has no
-  discovery at all.
+  "automatic" connection mode is available for it. CoolMaster has no
+  discovery at all, so as of 2026-09-03 it gets the same find-by-MAC repoint
+  self-heal as the Core 3 (`ha/c4_recovery.yaml`, `cm_auto_repoint`).
 - [ ] **UPS on the comms cabinet** — fibre ONT, router, switch and Green on
   one line-interactive unit. A short cut then never reboots the Green, so
   fault 1 never happens; a long one at least brings the network up before HA.
@@ -156,7 +157,11 @@ to shortcut any of this; File editor is what there is.
   installed on the Green and armed 2026-09-03): `c4_reload_after_boot` clears
   fault 1 unattended, `c4_auto_repoint` clears fault 2 and restarts.
   Insurance, not a substitute for the reservation — it is what keeps the house
-  up if a router swap ever loses it.
+  up if a router swap ever loses it. Extended the same day to the CoolMaster
+  bridge (`cm_auto_repoint`, plus its alert and post-boot refresh), which is
+  the plan for living without Bezeq: every integration that cannot follow a
+  DHCP move gets a repoint that can, and KNX is switched to automatic gateway
+  discovery.
 
 ## What the app does while it is down
 

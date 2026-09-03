@@ -31,6 +31,9 @@
 #   python3 /config/c4_repoint.py 10.0.0.42
 shell_command:
   c4_repoint: "python3 /config/c4_repoint.py --mac 00:0f:ff:9f:3b:44"
+  # Same shape for the CoolMaster bridge (added 2026-09-03): `--domain` picks
+  # that config entry, the MAC is the bridge's. Still no input, still no shell.
+  cm_repoint: "python3 /config/c4_repoint.py --domain coolmaster --mac 28:3b:96:11:60:51"
 
 command_line:
   # Where the Core 3 answers ARP right now. Twice a day and at every HA start
@@ -53,6 +56,25 @@ command_line:
         e=json.load(open('/config/.storage/core.config_entries'))['data']['entries'];
         print(next((x['data'].get('host','none') for x in e if x.get('domain')=='control4'),'none'))"
 
+  # The CoolMaster bridge behind every A/C and heating zone: the other box in
+  # this house whose integration dials a stored address and cannot follow a
+  # DHCP move (2026-09-03 — the Yamahas had moved too, but MusicCast
+  # rediscovers by SSDP; coolmaster does not).
+  - sensor:
+      name: CM IP watch
+      unique_id: cm_ip_watch
+      command: "python3 /config/c4_scan.py 28:3b:96:11:60:51"
+      scan_interval: 43200
+
+  - sensor:
+      name: CM configured host
+      unique_id: cm_configured_host
+      scan_interval: 3600
+      command: >-
+        python3 -c "import json;
+        e=json.load(open('/config/.storage/core.config_entries'))['data']['entries'];
+        print(next((x['data'].get('host','none') for x in e if x.get('domain')=='coolmaster'),'none'))"
+
 template:
   - binary_sensor:
       - name: C4 IP drift
@@ -71,6 +93,19 @@ template:
         attributes:
           observed: "{{ states('sensor.c4_ip_watch') }}"
           configured: "{{ states('sensor.c4_configured_host') }}"
+
+      - name: CM IP drift
+        unique_id: cm_ip_drift
+        device_class: problem
+        state: >-
+          {% set seen = states('sensor.cm_ip_watch') %}
+          {% set want = states('sensor.cm_configured_host') %}
+          {{ seen not in ['unknown','unavailable','none','']
+             and want not in ['unknown','unavailable','none','']
+             and seen != want }}
+        attributes:
+          observed: "{{ states('sensor.cm_ip_watch') }}"
+          configured: "{{ states('sensor.cm_configured_host') }}"
 
 # `automation manual_c4:` is a labelled second automation block, so this
 # coexists with the UI-managed `automation: !include automations.yaml`.
@@ -149,6 +184,10 @@ input_datetime:
   # forever.
   c4_last_auto_repoint:
     name: C4 last auto-repoint
+    has_date: true
+    has_time: true
+  cm_last_auto_repoint:
+    name: CM last auto-repoint
     has_date: true
     has_time: true
 
@@ -398,3 +437,235 @@ automation manual_c4_selfheal:
                 rewritten, nothing restarted — the house is still down.
               data:
                 tag: c4_auto_repoint
+
+# ---------------------------------------------------------------------------
+# CoolMaster (added 2026-09-03)
+#
+# The same drift fault, for the other box whose integration dials a stored
+# address: the CoolMaster bridge behind every A/C and heating zone. Found by
+# checking every fixed address in the house against the ARP table — the two
+# Yamahas had already moved and nobody noticed, because MusicCast rediscovers
+# by SSDP. coolmaster does not, so it gets the same treatment as the Core 3.
+#
+# Three automations, mirroring the Control4 set minus the cloud-auth reload
+# (the bridge is local; fault 1 does not apply):
+#
+#   cm_ip_drift_alert    Detects. Same 5-minute debounce.
+#   cm_auto_repoint      Acts. Same conditions as c4_auto_repoint, plus one:
+#                        it stands down while the Core 3 is ALSO drifted, so
+#                        the two repoints never race to restart the house.
+#                        Its 35-minute hold clears both the Control4
+#                        repoint's 30 and the reload automation's 27-minute
+#                        budget, so it never restarts a Control4 recovery
+#                        that was about to succeed.
+#   cm_after_boot        Refreshes both CoolMaster sensors three minutes into
+#                        every boot (a scan that ran while the network was
+#                        still coming up is otherwise trusted for twelve
+#                        hours), and if that boot was the repoint's own
+#                        restart, reports the outcome — the only place that
+#                        can be done from.
+#
+# All three ride the same kill switch, input_boolean.c4_self_heal.
+
+automation manual_cm_selfheal:
+  - alias: CoolMaster IP drift alert
+    id: cm_ip_drift_alert
+    description: >-
+      The CoolMaster bridge answers at an address the coolmaster integration
+      is not dialling. Every A/C and heating zone stops responding until the
+      entry is repointed; the self-heal below does that at the 35-minute mark.
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.cm_ip_drift
+        to: "on"
+        for: "00:05:00"
+    action:
+      - action: persistent_notification.create
+        data:
+          title: CoolMaster bridge has moved
+          notification_id: cm_ip_drift
+          message: >-
+            The CoolMaster answers at {{ state_attr('binary_sensor.cm_ip_drift','observed') }}
+            but Home Assistant is dialling
+            {{ state_attr('binary_sensor.cm_ip_drift','configured') }}.
+            A/C and heating will not respond until the config entry is
+            repointed. The self-heal does that at the 35-minute mark; by hand:
+            python3 /config/c4_repoint.py --domain coolmaster --mac 28:3b:96:11:60:51
+      - action: notify.mobile_app_daniel_iphone_17
+        continue_on_error: true
+        data:
+          title: CoolMaster bridge has moved
+          message: >-
+            Now at {{ state_attr('binary_sensor.cm_ip_drift','observed') }},
+            HA still dialling {{ state_attr('binary_sensor.cm_ip_drift','configured') }}.
+
+  - alias: CoolMaster self-heal — repoint after a DHCP lease change
+    id: cm_auto_repoint
+    description: >-
+      The CoolMaster bridge took a new lease. Rewrites the coolmaster config
+      entry's host and restarts. Same guard rails as the Control4 repoint,
+      and it lets the Core 3 settle first.
+    mode: single
+    max_exceeded: silent
+    trigger:
+      # Longer than the Control4 repoint's thirty minutes on purpose: when both
+      # boxes move on the same boot, the Control4 one goes first, restarts the
+      # house, and this one fires 35 minutes into the boot that follows.
+      - trigger: state
+        entity_id: binary_sensor.cm_ip_drift
+        to: "on"
+        for: "00:35:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.c4_self_heal
+        state: "on"
+      # Never while the Core 3 is also drifted: c4_auto_repoint owns that
+      # restart, and two rewrites racing to restart the house would lose one.
+      - condition: state
+        entity_id: binary_sensor.c4_ip_drift
+        state: "off"
+      # Every coolmaster entity dead, not some. One unit switched off at the
+      # wall must not be able to restart the house.
+      - condition: template
+        value_template: >-
+          {% set ents = integration_entities('coolmaster') %}
+          {{ ents | count > 0
+             and (ents | select('is_state','unavailable') | list | count)
+                 / (ents | count) >= 0.8 }}
+      # Positive evidence only, re-checked at the point of the write.
+      - condition: template
+        value_template: >-
+          {% set seen = states('sensor.cm_ip_watch') %}
+          {% set want = states('sensor.cm_configured_host') %}
+          {{ seen | regex_match('^\d{1,3}(\.\d{1,3}){3}$')
+             and want | regex_match('^\d{1,3}(\.\d{1,3}){3}$')
+             and seen != want }}
+      # At most one attempt per six hours, across restarts.
+      - condition: template
+        value_template: >-
+          {% set last = state_attr('input_datetime.cm_last_auto_repoint','timestamp') %}
+          {{ last is none or (as_timestamp(now()) - (last | float(0))) > 21600 }}
+    action:
+      # Stamped BEFORE the rewrite; the restart below never returns here.
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.cm_last_auto_repoint
+        data:
+          timestamp: "{{ as_timestamp(now()) }}"
+      # An attempt, never a result; the outcome is reported by cm_after_boot.
+      - action: notify.mobile_app_daniel_iphone_17
+        continue_on_error: true
+        data:
+          title: CoolMaster — repointing now
+          message: >-
+            Bridge answers at {{ states('sensor.cm_ip_watch') }}, HA is
+            dialling {{ states('sensor.cm_configured_host') }}. Rewriting and
+            restarting; another message follows either way.
+          data:
+            tag: cm_auto_repoint
+      - action: shell_command.cm_repoint
+        response_variable: repoint
+      - if:
+          - condition: template
+            value_template: "{{ repoint.returncode == 0 }}"
+        then:
+          # Immediately, with nothing in between — the same clobber rule as
+          # the Control4 repoint.
+          - action: homeassistant.restart
+        else:
+          - action: persistent_notification.create
+            data:
+              title: CoolMaster auto-repoint failed
+              notification_id: cm_auto_repoint
+              message: >-
+                c4_repoint.py exited {{ repoint.returncode }} and nothing was
+                rewritten or restarted. {{ repoint.stderr }}
+                Take it by hand: python3 /config/c4_repoint.py --domain coolmaster <address>
+          - action: notify.mobile_app_daniel_iphone_17
+            continue_on_error: true
+            data:
+              title: CoolMaster auto-repoint failed
+              message: >-
+                c4_repoint.py exited {{ repoint.returncode }}. Nothing was
+                rewritten, nothing restarted — A/C and heating are still down.
+              data:
+                tag: cm_auto_repoint
+
+  - alias: CoolMaster self-heal — refresh after boot, confirm a repoint
+    id: cm_after_boot
+    description: >-
+      Forces both CoolMaster sensors three minutes into every boot, so a scan
+      that ran while the network was still coming up is not trusted for
+      twelve hours. If this boot was the repoint's own restart, reports the
+      outcome: that script ends at homeassistant.restart and never returns,
+      and persistent notifications do not survive it.
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - trigger: homeassistant
+        event: start
+    condition:
+      - condition: state
+        entity_id: input_boolean.c4_self_heal
+        state: "on"
+    action:
+      - delay: "00:03:00"
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.cm_ip_watch
+            - sensor.cm_configured_host
+      # Only a boot the repoint itself caused gets a report.
+      - condition: template
+        value_template: >-
+          {% set last = state_attr('input_datetime.cm_last_auto_repoint','timestamp') %}
+          {{ last is not none and (as_timestamp(now()) - (last | float(0))) < 900 }}
+      - if:
+          - condition: template
+            value_template: >-
+              {% set ents = integration_entities('coolmaster') %}
+              {{ ents | count > 0
+                 and (ents | select('is_state','unavailable') | list | count)
+                     / (ents | count) < 0.8 }}
+        then:
+          # Survives, because no restart follows it.
+          - action: persistent_notification.create
+            data:
+              title: CoolMaster is back
+              notification_id: cm_auto_repoint
+              message: >-
+                The automatic repoint worked. The bridge is at
+                {{ states('sensor.cm_configured_host') }} and the zones are
+                up. Record the new address in docs/COMMISSIONING_LOG.md.
+          - action: notify.mobile_app_daniel_iphone_17
+            continue_on_error: true
+            data:
+              title: CoolMaster is back
+              message: >-
+                Repoint worked. Bridge at
+                {{ states('sensor.cm_configured_host') }}. Needs recording.
+              data:
+                # Replaces the "repointing now" push on the phone.
+                tag: cm_auto_repoint
+        else:
+          - action: persistent_notification.create
+            data:
+              title: CoolMaster did not come back
+              notification_id: cm_auto_repoint
+              message: >-
+                A repoint was applied and the house restarted, but the
+                coolmaster entities are still unavailable. Observed
+                {{ states('sensor.cm_ip_watch') }}, configured
+                {{ states('sensor.cm_configured_host') }}. Stop here and take
+                it by hand: docs/OUTAGE_RECOVERY_RUNBOOK.md.
+          - action: notify.mobile_app_daniel_iphone_17
+            continue_on_error: true
+            data:
+              title: CoolMaster did not come back
+              message: >-
+                Repoint applied, zones still down. Observed
+                {{ states('sensor.cm_ip_watch') }}, configured
+                {{ states('sensor.cm_configured_host') }}.
+              data:
+                tag: cm_auto_repoint

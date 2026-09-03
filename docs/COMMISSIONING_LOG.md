@@ -963,8 +963,69 @@ unavailable after the restart; of 34 sampled, 33 already were before it
 
 ### Follow-ups
 
-- [ ] **Find the two RX-V6As** (LAN sweep for YXC responders) and confirm
-  what `.70` is; then one message to Bezeq: correct the Green's MAC, add the
-  other five, and ask again for admin access to the FortiGate.
-- [ ] **Check the KNX shades** — 13 covers unavailable since 11:12:28Z.
+- [x] **Find the two RX-V6As** (LAN sweep for YXC responders) and confirm
+  what `.70` is. *Done later the same day; see the next entry.*
+- [ ] **One message to Bezeq**: correct the Green's MAC, add the other five,
+  and ask again for admin access to the FortiGate. Draft ready.
+- [x] **Check the KNX shades** — 13 covers unavailable since 11:12:28Z.
+  *Cause found the same day, and it is not the network; see the next entry.*
 - [ ] **Revoke the `laptop-claude` token** used for the install.
+
+## 2026-09-03 (later) — Receivers found; the shades broke on an HA update, not the network
+
+A second read-only pass from the laptop, an hour after the install.
+
+### The two RX-V6As had moved, and Home Assistant followed them
+
+A LAN sweep for Yamaha's YXC API found all three receivers:
+
+| Receiver | Now | When added (2026-07-23) | MAC |
+| --- | --- | --- | --- |
+| RX-V6A, master bedroom | `10.0.0.7` | `10.0.0.35` | `c0:d7:aa:8e:5d:b0` |
+| RX-V6A, lounge | `10.0.0.4` | `10.0.0.14` | `4c:22:f3:a4:9e:9c` |
+| RX-V4A, den | `10.0.0.76` | `10.0.0.76` | `4c:22:f3:72:54:e3` |
+
+The config entries are still titled with the addresses they were added at,
+which is how we know the receivers moved rather than the audio table being
+wrong. Nobody noticed because the MusicCast integration rediscovers by SSDP
+and updated its own host: all three entries loaded, players polling. So the
+house has had at least two silent DHCP moves besides the Core 3's three.
+Integrations that dial a stored address (Control4, KNX, CoolMaster) do not
+get this for free.
+
+### `.70` is the KNX gateway, confirmed
+
+It answers a KNXnet/IP search request as individual address `1.1.127`, MAC
+`00:1e:06:4b:80:08` — a CDInnovation "Maestro Controller" gateway (web UI on
+port 80), not a Weinzierl or Gira box. HA's tunnel to it was up (established
+11:37:01Z after the restart, 0 errors). Because it answers search, HA's
+"automatic" connection mode is available for it, which would make its
+address stop mattering.
+
+### The 13 shades: an HA core update, not the outage work
+
+All 13 KNX covers have been `unavailable` since 11:12:28Z. The cause is in
+HA's own log. Core went from `2026.8.1` to `2026.9.0` at about 11:09–11:15Z
+(pre-update backup 11:08:48Z, stop 11:12:27Z, started 11:15:17Z — before the
+laptop session began; whether by hand or by auto-update is not recorded).
+2026.9.0's KNX cover schema no longer accepts `device_class` under `entity`,
+and every one of the 13 UI-created covers carries `device_class: shade`
+there, so none were set up: repair issue `entity_validation_error_cover` at
+11:14:24Z, not auto-fixable; the entities still visible are restored
+registry orphans. The tunnel, the gateway and the network are fine.
+
+Fix: open each of the 13 covers in Settings → Devices & services → KNX →
+entities and re-save; the form drops the stale key. Or wait for a 2026.9.x
+KNX patch. Until then the shades still work through the Control4 covers and
+the `cover.*_shades` groups. Worth deciding separately whether an unattended
+core update is something this house should do to itself: today it took the
+shades down while nobody was watching, and it is a fault class none of the
+outage tooling covers.
+
+### Follow-ups
+
+- [ ] **Re-save the 13 KNX covers** (or take the 2026.9.x patch) and confirm
+  they come back.
+- [ ] **Decide on core auto-update.** If it is on, today is the argument for
+  turning it off and updating on purpose.
+- [ ] **Bezeq message** with all seven MACs; draft ready.

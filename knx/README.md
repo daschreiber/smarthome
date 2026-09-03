@@ -22,7 +22,10 @@ Diagnosed 2026-07-24, plan "B" implemented 2026-07-26. Full history below.
 ## Infrastructure facts
 
 - KNXnet/IP gateway **10.0.0.70:3671** (addr 1.1.127, tunnelling only, no KNX
-  Secure). Had ≥1 spare tunnel slot; HA now holds one permanently.
+  Secure). MAC `00:1e:06:4b:80:08`; a CDInnovation "Maestro Controller" box
+  with a web UI on port 80. Answers KNXnet/IP search, so HA's automatic
+  connection mode would find it if its DHCP address ever changed (confirmed
+  2026-09-03). Had ≥1 spare tunnel slot; HA now holds one permanently.
 - HA: KNX integration added 2026-07-26 via config flow (entry
   `01KYEC9TYPNN76GH8QY1Y4B1ME`, "Tunneling @ 1.1.127 @ 10.0.0.70:3671").
   Rollback = delete that integration.
@@ -118,3 +121,13 @@ debugging.
        covers still exist in HA but serve nothing; the `template:` block in
        configuration.yaml (repo copy: `ha/homekit_covers.yaml`) can be
        removed at leisure.
+
+## Known breakages
+
+- **2026-09-03, HA core 2026.9.0.** The KNX cover schema stopped accepting
+  `device_class` under `entity`. All 13 UI-created covers carried
+  `device_class: shade` there and failed validation on boot (repair issue
+  `entity_validation_error_cover`); the entities that remained were restored
+  registry orphans. Re-saving each cover in the KNX entity editor drops the
+  stale key. The gateway, tunnel and network were fine throughout; the
+  shades stayed controllable through the Control4 covers.

@@ -398,9 +398,9 @@ On this HA build the `config_entries/remove` websocket command returns
   on 2026-09-03: the Core 3 (`00:0f:ff:9f:3b:44` → `10.0.0.38`) is done; the
   Green's was made for a rotated, non-existent MAC (the real one is
   `20:f8:3b:03:d4:19`) and must be corrected; the KNX interface (`.70`),
-  CoolMaster (`.90`) and RX-V4A (`.76`) are not yet requested; the two
-  RX-V6As are no longer at the documented `.35` / `.14` and have to be found
-  first. The table with every MAC is in
+  CoolMaster (`.90`) and the three Yamahas (`.7`, `.4`, `.76` — the two
+  RX-V6As had moved from the documented `.35` / `.14`, and HA followed them)
+  are not yet requested. The table with every MAC is in
   [`OUTAGE_RECOVERY.md`](OUTAGE_RECOVERY.md).
 - [ ] **UPS on the comms cabinet** (ONT, router, switch, Green). Ends fault 1
   for any cut shorter than the runtime, and it is the only fix that also

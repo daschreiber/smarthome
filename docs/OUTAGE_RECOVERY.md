@@ -126,15 +126,22 @@ to shortcut any of this; File editor is what there is.
   | --- | --- | --- | --- |
   | Control4 Core 3 | `00:0f:ff:9f:3b:44` | `10.0.0.38` | **done** (Bezeq, 2026-09-03); MAC verified on-site |
   | Home Assistant Green | `20:f8:3b:03:d4:19` | `10.0.0.69` | **wrong** — Bezeq reserved `f8:3b:03:d4:19:20`, the same six octets rotated by one. No device has that MAC, so the Green is not reserved; it has only kept its lease. Needs correcting. |
-  | KNX IP interface — the shades | `00:1e:06:4b:80:08` seen at `.70`; identity not yet confirmed | `10.0.0.70` | not requested yet |
+  | KNX IP interface — the shades | `00:1e:06:4b:80:08`, confirmed: answers KNXnet/IP search as `1.1.127`; a CDInnovation "Maestro" gateway | `10.0.0.70` | not requested yet |
   | CoolMaster bridge — A/C and heating | `28:3b:96:11:60:51`, verified | `10.0.0.90` | not requested yet |
-  | Yamaha RX-V6A — master bedroom | unknown | documented `10.0.0.35`, but on 2026-09-03 that address held a Sonos (`c4:38:75:1d:1c:d0`) | receiver has to be found first |
-  | Yamaha RX-V6A — lounge | unknown | documented `10.0.0.14`, but on 2026-09-03 that address held a Control4 device (`00:0f:ff:97:2a:54`) | receiver has to be found first |
+  | Yamaha RX-V6A — master bedroom | `c0:d7:aa:8e:5d:b0`, verified via its YXC API | `10.0.0.7` — was `10.0.0.35` when added on 2026-07-23; DHCP moved it and HA's MusicCast integration followed by SSDP | not requested yet |
+  | Yamaha RX-V6A — lounge | `4c:22:f3:a4:9e:9c`, verified via its YXC API | `10.0.0.4` — was `10.0.0.14` when added; same story | not requested yet |
   | Yamaha RX-V4A — den | `4c:22:f3:72:54:e3`, verified via its YXC API | `10.0.0.76` | not requested yet |
 
   A reservation is made in the router only. A second, static address set on the
   device itself collides with it. Bezeq's "port 80 opened" changed nothing:
   `http://10.0.0.138` redirects to the same HTTPS login page it always did.
+
+  Which of these actually break on a move: the Control4, KNX and CoolMaster
+  integrations dial a stored address and do not follow. MusicCast (the three
+  Yamahas) rediscovers by SSDP and does — both RX-V6As moved without anyone
+  noticing. The KNX gateway answers KNXnet/IP search requests, so HA's
+  "automatic" connection mode is available for it; CoolMaster has no
+  discovery at all.
 - [ ] **UPS on the comms cabinet** — fibre ONT, router, switch and Green on
   one line-interactive unit. A short cut then never reboots the Green, so
   fault 1 never happens; a long one at least brings the network up before HA.

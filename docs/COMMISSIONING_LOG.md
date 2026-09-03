@@ -1085,3 +1085,19 @@ plus one appended block, then a restart. Next laptop session.
 - [ ] **KNX to Automatic** — running from the laptop; record the outcome here.
 - [ ] **UPS on the comms cabinet.** Still the only fix for the boot-timing
   collateral (Alexa, Cast, Eight Sleep) and now the biggest remaining item.
+
+### Codex review on #109, addressed the same evening
+
+Two findings, both real. (1) `cm_ip_drift_alert` had no kill-switch gate
+while the block's header claimed all three automations did. Kept the alert
+always-on — detection is not maintenance, and Control4's alert works the
+same way — and fixed the claim; the alert's message now says whether
+self-heal is on instead of promising a repoint that may be switched off.
+(2) A drift that begins while the switch is off fires the timed trigger
+once, into a closed switch, and is then lost; turning the switch back on
+never re-evaluated it. That gap was in `c4_auto_repoint` too, since
+2026-08-23. Both repoints now also trigger on the switch coming back on,
+with the hold moved onto a `for:` state condition so the wait is the same
+on either path. On the Green, the Control4 block installed this morning
+keeps the gap until the next install replaces
+`automation manual_c4_selfheal:`; the laptop hand-over now does that.

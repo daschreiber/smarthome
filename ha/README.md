@@ -96,8 +96,12 @@ address and cannot follow a move. Three more automations in
 | `cm_auto_repoint` | Acts: same conditions as `c4_auto_repoint`, a 35-minute hold, and it stands down while `binary_sensor.c4_ip_drift` is on — so when both boxes move on one boot the Control4 repoint goes first and this one fires on the boot that follows. Never two restarts racing. |
 | `cm_after_boot` | Refreshes both CoolMaster sensors three minutes into every boot, and if that boot was the repoint's own restart, reports the outcome. |
 
-Same kill switch. The bridge is local, so there is no cloud-auth reload to
-mirror; only the repoint. Installing it is a merge, not a paste: two
+The two that act ride the kill switch; the alert, like Control4's, always
+fires and says whether self-heal is on. Both repoints also re-evaluate when
+the switch is turned back on, so a drift that began during maintenance is
+picked up once the switch returns. The bridge is local, so there is no
+cloud-auth reload to mirror; only the repoint. Installing it is a merge, not
+a paste: two
 `- sensor:` items into the existing `command_line:` list, one `- name:` into
 the existing `template:` binary_sensor list, one `cm_repoint:` line under
 `shell_command:`, one helper under `input_datetime:`, and the whole

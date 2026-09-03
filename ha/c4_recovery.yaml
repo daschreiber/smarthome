@@ -347,10 +347,21 @@ automation manual_c4_selfheal:
         entity_id: binary_sensor.c4_ip_drift
         to: "on"
         for: "00:30:00"
+      # The kill switch coming back on after maintenance. A drift that began
+      # while it was off fired the trigger above once, into a closed switch,
+      # and is gone; nothing else would ever re-evaluate it. The `for` on the
+      # drift condition below keeps the thirty-minute hold on this path too.
+      - trigger: state
+        entity_id: input_boolean.c4_self_heal
+        to: "on"
     condition:
       - condition: state
         entity_id: input_boolean.c4_self_heal
         state: "on"
+      - condition: state
+        entity_id: binary_sensor.c4_ip_drift
+        state: "on"
+        for: "00:30:00"
       # House-wide, never a partial fault. One dead KNX channel plus a stale
       # drift reading must not be able to restart the house — the same 80%
       # line tools/c4_recover.py refuses below.
@@ -465,7 +476,9 @@ automation manual_c4_selfheal:
 #                        restart, reports the outcome — the only place that
 #                        can be done from.
 #
-# All three ride the same kill switch, input_boolean.c4_self_heal.
+# The two that act ride the kill switch, input_boolean.c4_self_heal. The
+# alert does not, exactly like Control4's: detection stays on during
+# maintenance, only the actions stop — and the alert says which it is.
 
 automation manual_cm_selfheal:
   - alias: CoolMaster IP drift alert
@@ -490,8 +503,13 @@ automation manual_cm_selfheal:
             but Home Assistant is dialling
             {{ state_attr('binary_sensor.cm_ip_drift','configured') }}.
             A/C and heating will not respond until the config entry is
-            repointed. The self-heal does that at the 35-minute mark; by hand:
-            python3 /config/c4_repoint.py --domain coolmaster --mac 28:3b:96:11:60:51
+            repointed.
+            {% if is_state('input_boolean.c4_self_heal','on') %}
+            The self-heal does that at the 35-minute mark.
+            {% else %}
+            Self-heal is switched off, so nothing will fix this by itself.
+            {% endif %}
+            By hand: python3 /config/c4_repoint.py --domain coolmaster --mac 28:3b:96:11:60:51
       - action: notify.mobile_app_daniel_iphone_17
         continue_on_error: true
         data:
@@ -516,10 +534,20 @@ automation manual_cm_selfheal:
         entity_id: binary_sensor.cm_ip_drift
         to: "on"
         for: "00:35:00"
+      # The kill switch coming back on after maintenance — same reasoning as
+      # the Control4 repoint: the timed trigger above fires once into a closed
+      # switch and is gone. The `for` on the drift condition keeps the hold.
+      - trigger: state
+        entity_id: input_boolean.c4_self_heal
+        to: "on"
     condition:
       - condition: state
         entity_id: input_boolean.c4_self_heal
         state: "on"
+      - condition: state
+        entity_id: binary_sensor.cm_ip_drift
+        state: "on"
+        for: "00:35:00"
       # Never while the Core 3 is also drifted: c4_auto_repoint owns that
       # restart, and two rewrites racing to restart the house would lose one.
       - condition: state

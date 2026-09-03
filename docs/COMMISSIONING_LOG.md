@@ -1024,10 +1024,11 @@ outage tooling covers.
 
 ### Follow-ups
 
-- [ ] **Re-save the 13 KNX covers** (or take the 2026.9.x patch) and confirm
-  they come back.
-- [ ] **Decide on core auto-update.** If it is on, today is the argument for
-  turning it off and updating on purpose.
+- [x] **Re-save the 13 KNX covers** (or take the 2026.9.x patch) and confirm
+  they come back. *Done the same night — by delete/create, since re-saving
+  throws on 2026.9.0; see the night entry.*
+- [x] **Decide on core auto-update.** *It was never on: the morning's update
+  was a manual click. Nothing to change.*
 - [ ] **Bezeq message** with all seven MACs; draft ready.
 
 ## 2026-09-03 (evening) — Living without Bezeq: CoolMaster self-heal, KNX to automatic
@@ -1079,10 +1080,10 @@ plus one appended block, then a restart. Next laptop session.
 
 ### Follow-ups
 
-- [ ] **Install the CoolMaster self-heal on the Green** (merge, check_config,
+- [x] **Install the CoolMaster self-heal on the Green** (merge, check_config,
   restart, verify `binary_sensor.cm_ip_drift` off and both CM sensors reading
-  `10.0.0.90`).
-- [ ] **KNX to Automatic** — running from the laptop; record the outcome here.
+  `10.0.0.90`). *Done the same night; see the night entry.*
+- [x] **KNX to Automatic** — *done the same night; see the night entry.*
 - [ ] **UPS on the comms cabinet.** Still the only fix for the boot-timing
   collateral (Alexa, Cast, Eight Sleep) and now the biggest remaining item.
 
@@ -1101,3 +1102,81 @@ with the hold moved onto a `for:` state condition so the wait is the same
 on either path. On the Green, the Control4 block installed this morning
 keeps the gap until the next install replaces
 `automation manual_c4_selfheal:`; the laptop hand-over now does that.
+
+## 2026-09-03 (night) — Shades back, KNX on Automatic, CoolMaster self-heal live
+
+All from the laptop session, in Manual permission mode after its auto mode
+had refused the write step: that mode decides silently instead of asking,
+so "I will approve the prompts" never got a prompt.
+
+### The 13 shades
+
+`knx/update_entity` — the command the entity editor itself uses — throws
+`KeyError` on 2026.9.0 for an entity that failed setup: it removes the
+entity before saving, and there is nothing to remove. So "re-save each
+cover" was never going to work here. What did: for each cover,
+`knx/delete_entity` then `knx/create_entity` from the backed-up stored
+config minus `entity.device_class`, one cover proven before the other
+twelve. Every re-read diffed to exactly that one key removed. All 13
+reclaimed their entity_id slugs, so the `cover.*_shades` groups, the app's
+entity map and recorder history are untouched; unique_ids changed
+(`knx_es_01M1…`); Google / Alexa / Assist expose flags re-applied. The
+repair issue `entity_validation_error_cover` still lists the old unique_ids
+and does not retract itself — dismiss it in the UI. Shade test: the study
+blind moved on command, twice, the KNX telegram counter advancing each
+time.
+
+### KNX connection → Automatic
+
+Reconfigure ran through the API: flow start → connection-type menu →
+`automatic`. The flow offered Automatic at all, which is the Green finding
+the gateway by search. Tunnel re-established one second after submit,
+`1.1.127` via Tunnel UDP, 0 of 13 covers unavailable. From now on a DHCP
+move of the gateway does not matter; the `10.0.0.70` reservation Bezeq say
+they made is belt-and-braces.
+
+### CoolMaster self-heal installed
+
+Same route as the morning: backup (byte-identical to the morning's write,
+so nothing had drifted in between), five insertions plus one appended
+block, 271 lines added and none removed, every one verbatim from the repo
+at `53a082a`, PyYAML assertions, read-back exact (40531 bytes),
+`check_config` valid, one restart, API back in 31 s. After: `sensor.cm_ip_watch`
+= `sensor.cm_configured_host` = `10.0.0.90`, drift off, all six automations
+present once and on, `cm_after_boot` fired on that start and ended
+silently, 0 of 16 coolmaster climate entities unavailable, Control4 0 of
+178, KNX 0 of 13, kill switch still on.
+
+Installed from `53a082a`, which predates the Codex fix in `f25550a`: both
+repoints on the Green still lose a drift that began while the kill switch
+was off. Part 3b of the laptop hand-over replaces both automation blocks;
+one more restart.
+
+Core updates, settled: Core and OS auto-update are off, only the Supervisor
+updates itself. This morning's 2026.8.1 → 2026.9.0 was a manual click.
+
+### Where this leaves the house
+
+| Box | Follows a DHCP move? | Since |
+| --- | --- | --- |
+| Control4 Core 3 | Yes — repoint self-heal, plus Bezeq's reservation | 2026-09-03 morning |
+| CoolMaster bridge | Yes — repoint self-heal | 2026-09-03 evening |
+| KNX gateway | Yes — HA finds it by search | 2026-09-03 evening |
+| Yamahas | Yes — MusicCast rediscovers by SSDP | always |
+| The Green | Address does not matter; app and remote access use Nabu Casa | — |
+
+None of it depends on Bezeq. The boot-timing collateral (Alexa, Cast, Eight
+Sleep) is untouched by any of this; the UPS is what covers that.
+
+### Follow-ups
+
+- [ ] **Part 3b** — replace both automation blocks from `f25550a` (or main
+  once #110 merges), restart, verify. Closes the kill-switch gap on the Green.
+- [ ] **Part 4** — DHCP DISCOVER check of Bezeq's reservations. The line that
+  matters is what the router offers the wrong MAC `f8:3b:03:d4:19:20`.
+- [ ] **Dismiss the stale KNX repair issue.**
+- [ ] **Check the 13 covers' area and name assignments** survived the
+  delete/create — the report confirmed expose flags, not areas.
+- [ ] **Revoke the `laptop-claude` token** once Part 3b is done.
+- [ ] **UPS on the comms cabinet.** Now the only item on this list that
+  changes what the house does in a power cut.

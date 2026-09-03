@@ -720,18 +720,23 @@ seven of them, listed in `docs/OUTAGE_RECOVERY.md`.
   Yamahas (`10.0.0.35`, `10.0.0.14`, `10.0.0.76`) — plus owner-level admin
   access to that router. Fourth time asking. The router being dealer-managed
   and on-site-only is the reason a five-minute change has cost three outages —
-  treat the access request as the real deliverable.
+  treat the access request as the real deliverable. *2026-09-03: one of seven
+  done (the Core 3); the Green's was made for a wrong MAC; the two RX-V6As
+  are not where this list says. See that day's entry.*
 - [ ] **UPS on the comms cabinet** — ONT, router, switch, Green. Ends fault 1
   for any cut shorter than its runtime, and it is the only fix that also covers
   the collateral: the 2026-08-21 boot left 28 Alexa entities, 6 Cast players
   and Eight Sleep broken, none of which is Control4 or fixed by any of the
   above.
-- [ ] **Install this bundle update on the Green** and turn
+- [x] **Install this bundle update on the Green** and turn
   `input_boolean.c4_self_heal` on — it defaults to off, and a reload is not
-  enough this time because the helpers are only created at boot.
+  enough this time because the helpers are only created at boot. *Done
+  2026-09-03 from a laptop on the LAN; see that day's entry.*
 - [ ] **Revoke the long-lived token shared into the 2026-08-21 session.** Still
   open, still in a chat transcript (Profile → Security → Long-lived access
-  tokens).
+  tokens). *2026-09-03: revoke the `laptop-claude` token from that day's
+  install too — it was passed inline to shell commands, so it sits in that
+  local session's transcript.*
 
 ### Amendment, same day — the notifications lied about their own success
 
@@ -894,3 +899,72 @@ observes can feed back into the lift, so future off-mechanism changes
 need the lift watched during the test. Before any further change: pull
 the Activity rows (`lift_tv_off` attempt/method/error) from the failed
 test, and establish in C4 Composer what lift/TV programming still exists.
+
+## 2026-09-03 — Self-heal live on the Green; Bezeq's reservations checked from inside the house
+
+PR #102 merged (`de8b6d2`) and, the same morning, installed on the Green and
+armed. The install and the network checks ran from a Claude Code session on
+a laptop on the home wifi, because the cloud session cannot reach `10.0.0.x`
+at all.
+
+### The install
+
+`configuration.yaml` on the Green (14351 bytes) was backed up, then rebuilt as
+a pure function of the backup: the 2026-08-23 `automation manual_c4:` block
+replaced by the current one, and `input_boolean:`, `input_datetime:` and
+`automation manual_c4_selfheal:` appended — repo lines 79–400 verbatim. The
+diff was two hunks, both expected; `shell_command` byte-identical, no `{{`;
+the house's own additions under `command_line:` and `template:` untouched.
+Written through the File editor add-on's API, read back byte-exact (28365
+bytes), `check_config` valid, one restart. API back in 31 s, `homeassistant
+started` at +165 s once all 77 config entries had loaded.
+
+After the restart: the three automations present exactly once each and on
+(`c4_ip_drift_alert`, `c4_reload_after_boot`, `c4_auto_repoint`); both
+helpers created; `sensor.c4_ip_watch` = `sensor.c4_configured_host` =
+`10.0.0.38`, drift off; 0 of 178 Control4 entities unavailable, same as
+before. `c4_reload_after_boot` fired on that start, sat out its 3-minute
+settle and exited without reloading — the designed no-op on a healthy house.
+`input_boolean.c4_self_heal` on at 11:38:26Z. **Fault 1 now has an
+unattended fix in place.**
+
+Route note: `POST /api/hassio/ingress/session` over REST returns an empty
+401 even for an owner token; the same call over the websocket
+(`supervisor/api`) works. Written into `OUTAGE_RECOVERY_RUNBOOK.md` §5.
+
+### Bezeq's reply, checked against the ARP table
+
+Bezeq manage the router. It is a **FortiGate** — login page at
+`https://10.0.0.138`, and we hold no credentials. They reported two
+reservations made and "port 80 opened". On-site:
+
+- `10.0.0.38` → `00:0f:ff:9f:3b:44`. Correct: the Core 3 is reserved.
+- `10.0.0.69` → the Green really is `20:f8:3b:03:d4:19` (Nabu Casa OUI,
+  answers the HA API). Bezeq reserved `f8:3b:03:d4:19:20` — the same six
+  octets rotated by one. No device has that MAC, so **the Green is not
+  reserved**; it has simply kept its lease. Must be corrected.
+- Port 80 redirects to the HTTPS login page, as it always did. Nothing was
+  gained; admin access is still the ask.
+
+The five-device remainder of the 2026-08-23 table was also wrong in two
+rows. `10.0.0.35` holds a Sonos (`c4:38:75:1d:1c:d0`) and `10.0.0.14` a
+Control4 device (`00:0f:ff:97:2a:54`) — not the two RX-V6As documented
+there since 2026-07-23. Either the receivers took new leases (the exact
+fault this whole effort exists for) or the audio table was never right;
+they have to be found before Bezeq can be asked. Confirmed: CoolMaster
+`28:3b:96:11:60:51` at `.90`; RX-V4A `4c:22:f3:72:54:e3` at `.76`, its YXC
+API answering. At `.70`, `00:1e:06:4b:80:08` serving a "Maestro Controller"
+page — plausibly the KNX interface, not proven.
+
+Unrelated but noted: all 13 KNX blind covers went `unavailable` at
+11:12:28Z, before anything was touched. 222 non-Control4 entities were
+unavailable after the restart; of 34 sampled, 33 already were before it
+(Alexa, Roborock, iPhone sensors, Cast — the usual collateral).
+
+### Follow-ups
+
+- [ ] **Find the two RX-V6As** (LAN sweep for YXC responders) and confirm
+  what `.70` is; then one message to Bezeq: correct the Green's MAC, add the
+  other five, and ask again for admin access to the FortiGate.
+- [ ] **Check the KNX shades** — 13 covers unavailable since 11:12:28Z.
+- [ ] **Revoke the `laptop-claude` token** used for the install.

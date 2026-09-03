@@ -113,25 +113,28 @@ to shortcut any of this; File editor is what there is.
 
 ## Preventing it
 
-- [ ] **DHCP reservations at the router** (`10.0.0.138`, dealer-managed,
-  reachable only on-site), plus owner-level admin access to that router. This
-  is the fix that ends the failure mode; everything above is a workaround for
-  not having it. Open since 2026-07-16, and the reason 2026-08-12 and
-  2026-08-21 happened at all. Every device this stack reaches at a fixed
-  address needs one — not just the two that have bitten so far:
+- [ ] **DHCP reservations at the router** (`10.0.0.138` — a Bezeq-managed
+  FortiGate; `https://10.0.0.138` is its login page and we hold no
+  credentials, so every reservation goes through Bezeq), plus owner-level
+  admin access to it. This is the fix that ends the failure mode; everything
+  above is a workaround for not having it. Open since 2026-07-16, and the
+  reason 2026-08-12 and 2026-08-21 happened at all. Every device this stack
+  reaches at a fixed address needs one. State on 2026-09-03, after Bezeq's
+  first pass and an on-site ARP check:
 
-  | Device | Address |
-  | --- | --- |
-  | Control4 Core 3 (`00:0f:ff:9f:3b:44`) | `10.0.0.38` |
-  | Home Assistant Green | `10.0.0.69` |
-  | KNX IP interface — the shades | `10.0.0.70` |
-  | CoolMaster bridge — A/C and heating | `10.0.0.90` |
-  | Yamaha RX-V6A — master bedroom | `10.0.0.35` |
-  | Yamaha RX-V6A — lounge | `10.0.0.14` |
-  | Yamaha RX-V4A — den | `10.0.0.76` |
+  | Device | MAC | Address | Reservation |
+  | --- | --- | --- | --- |
+  | Control4 Core 3 | `00:0f:ff:9f:3b:44` | `10.0.0.38` | **done** (Bezeq, 2026-09-03); MAC verified on-site |
+  | Home Assistant Green | `20:f8:3b:03:d4:19` | `10.0.0.69` | **wrong** — Bezeq reserved `f8:3b:03:d4:19:20`, the same six octets rotated by one. No device has that MAC, so the Green is not reserved; it has only kept its lease. Needs correcting. |
+  | KNX IP interface — the shades | `00:1e:06:4b:80:08` seen at `.70`; identity not yet confirmed | `10.0.0.70` | not requested yet |
+  | CoolMaster bridge — A/C and heating | `28:3b:96:11:60:51`, verified | `10.0.0.90` | not requested yet |
+  | Yamaha RX-V6A — master bedroom | unknown | documented `10.0.0.35`, but on 2026-09-03 that address held a Sonos (`c4:38:75:1d:1c:d0`) | receiver has to be found first |
+  | Yamaha RX-V6A — lounge | unknown | documented `10.0.0.14`, but on 2026-09-03 that address held a Control4 device (`00:0f:ff:97:2a:54`) | receiver has to be found first |
+  | Yamaha RX-V4A — den | `4c:22:f3:72:54:e3`, verified via its YXC API | `10.0.0.76` | not requested yet |
 
   A reservation is made in the router only. A second, static address set on the
-  device itself collides with it.
+  device itself collides with it. Bezeq's "port 80 opened" changed nothing:
+  `http://10.0.0.138` redirects to the same HTTPS login page it always did.
 - [ ] **UPS on the comms cabinet** — fibre ONT, router, switch and Green on
   one line-interactive unit. A short cut then never reboots the Green, so
   fault 1 never happens; a long one at least brings the network up before HA.
@@ -142,10 +145,11 @@ to shortcut any of this; File editor is what there is.
   address to the configured host and alerts when they disagree. It re-baselines
   itself after a repoint, unlike the 2026-08-12 version with `10.0.0.33`
   hardcoded in the automation.
-- [x] **Self-heal** (2026-08-23, `ha/c4_recovery.yaml`, see `ha/README.md`):
-  `c4_reload_after_boot` clears fault 1 unattended, `c4_auto_repoint` clears
-  fault 2 and restarts. Insurance, not a substitute for the reservation — it
-  is what keeps the house up if a router swap ever loses it.
+- [x] **Self-heal** (2026-08-23, `ha/c4_recovery.yaml`, see `ha/README.md`;
+  installed on the Green and armed 2026-09-03): `c4_reload_after_boot` clears
+  fault 1 unattended, `c4_auto_repoint` clears fault 2 and restarts.
+  Insurance, not a substitute for the reservation — it is what keeps the house
+  up if a router swap ever loses it.
 
 ## What the app does while it is down
 

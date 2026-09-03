@@ -1170,13 +1170,62 @@ Sleep) is untouched by any of this; the UPS is what covers that.
 
 ### Follow-ups
 
-- [ ] **Part 3b** — replace both automation blocks from `f25550a` (or main
+- [x] **Part 3b** — replace both automation blocks from `f25550a` (or main
   once #110 merges), restart, verify. Closes the kill-switch gap on the Green.
-- [ ] **Part 4** — DHCP DISCOVER check of Bezeq's reservations. The line that
+  *Written, config-checked and restarted the same afternoon; the
+  post-restart verification is the owner's — see below.*
+- [x] **Part 4** — DHCP DISCOVER check of Bezeq's reservations. The line that
   matters is what the router offers the wrong MAC `f8:3b:03:d4:19:20`.
+  *Done: it offers `.51`. The bad entry is gone. See below.*
+- [ ] **Verify Part 3b from the app**: Settings → Automations shows six
+  entries, all on; `input_boolean.c4_self_heal` on; no "did not come back"
+  notification on the phone.
 - [ ] **Dismiss the stale KNX repair issue.**
 - [ ] **Check the 13 covers' area and name assignments** survived the
   delete/create — the report confirmed expose flags, not areas.
 - [ ] **Revoke the `laptop-claude` token** once Part 3b is done.
 - [ ] **UPS on the comms cabinet.** Now the only item on this list that
   changes what the house does in a power cut.
+
+### Part 3b and Part 4, later the same afternoon
+
+**Part 3b.** Both automation blocks replaced on the Green from `f25550a`.
+The diff was six hunks, all inside the two blocks, and the new file was
+exactly the Green's first 442 lines (the house's own `command_line:` and
+`template:` additions included) followed by repo lines 194–699 verbatim.
+Read-back matched, `check_config` valid, restart issued. The laptop session
+was on an overloaded API by then and its post-restart verification never
+arrived, so that check is the owner's: six automations on, kill switch on,
+no "did not come back" notification. Nothing about the write itself is in
+doubt — every gate before the restart passed.
+
+**Part 4.** Six DHCP DISCOVERs from the laptop (`en8`), one per MAC, no
+REQUEST ever sent, all answered by `10.0.0.138`:
+
+| Probe | MAC | Offered |
+| --- | --- | --- |
+| RANDOM (never seen) | `02:00:5e:aa:bb:01` | `10.0.0.44` |
+| BOGUS (Bezeq's first, wrong entry) | `f8:3b:03:d4:19:20` | `10.0.0.51` |
+| Green | `20:f8:3b:03:d4:19` | `10.0.0.69` |
+| KNX gateway | `00:1e:06:4b:80:08` | `10.0.0.70` |
+| CoolMaster | `28:3b:96:11:60:51` | `10.0.0.90` |
+| Core 3 | `00:0f:ff:9f:3b:44` | `10.0.0.38` |
+
+The wrong entry is gone: the bogus MAC gets an ordinary pool address, not
+`.69`. The four real devices are offered exactly their addresses, which is
+what reservations would do and also what their existing leases would do —
+consistent with Bezeq's claim, not proof of it; proof is a lease turnover
+or a screenshot of their table. The pool hands new devices `.44` and `.51`,
+in among the fixed addresses, which is why pinning addresses on the
+devices themselves was rejected.
+
+### Day's end
+
+Three outages taught the house two faults; today it learned to fix both
+without a person, for every box that cannot follow a DHCP move, and the
+one dependency on the ISP that remained was checked from inside. What a
+power cut does now: the Core 3 and the CoolMaster come back on their own
+addresses or get repointed; the shades' gateway is found by search; the
+Yamahas follow themselves. Still true: none of this covers the boot-timing
+collateral (Alexa, Cast, Eight Sleep), and the next real outage is the
+test that counts.

@@ -125,9 +125,9 @@ to shortcut any of this; File editor is what there is.
   | Device | MAC | Address | Reservation |
   | --- | --- | --- | --- |
   | Control4 Core 3 | `00:0f:ff:9f:3b:44` | `10.0.0.38` | **done** (Bezeq, 2026-09-03); MAC verified on-site |
-  | Home Assistant Green | `20:f8:3b:03:d4:19` | `10.0.0.69` | **wrong, correction claimed** — Bezeq first reserved `f8:3b:03:d4:19:20`, the same six octets rotated by one; no device has that MAC. Correction requested the same day and Bezeq say it is done; not yet verified (the check is what the router offers the wrong MAC — see the log) |
-  | KNX IP interface — the shades | `00:1e:06:4b:80:08`, confirmed: answers KNXnet/IP search as `1.1.127`; a CDInnovation "Maestro" gateway | `10.0.0.70` | requested 2026-09-03, Bezeq say done — and moot since that evening: HA's KNX connection is on **Automatic** and finds the gateway by search |
-  | CoolMaster bridge — A/C and heating | `28:3b:96:11:60:51`, verified | `10.0.0.90` | requested 2026-09-03, Bezeq say done; the self-heal repoints it either way (`cm_auto_repoint`, live since that evening) |
+  | Home Assistant Green | `20:f8:3b:03:d4:19` | `10.0.0.69` | **corrected** — Bezeq first reserved `f8:3b:03:d4:19:20`, the same six octets rotated by one. Checked from inside the house that afternoon: the router now offers the wrong MAC an ordinary pool address (`.51`) and offers the Green `.69`. The bad entry is gone; the reservation itself is consistent, not proven |
+  | KNX IP interface — the shades | `00:1e:06:4b:80:08`, confirmed: answers KNXnet/IP search as `1.1.127`; a CDInnovation "Maestro" gateway | `10.0.0.70` | requested 2026-09-03, Bezeq say done; the router offers `.70` to that MAC (consistent) — and moot since that evening: HA's KNX connection is on **Automatic** and finds the gateway by search |
+  | CoolMaster bridge — A/C and heating | `28:3b:96:11:60:51`, verified | `10.0.0.90` | requested 2026-09-03, Bezeq say done; the router offers `.90` to that MAC (consistent); the self-heal repoints it either way (`cm_auto_repoint`, live since that evening) |
   | Yamaha RX-V6A — master bedroom | `c0:d7:aa:8e:5d:b0`, verified via its YXC API | `10.0.0.7` — was `10.0.0.35` when added on 2026-07-23; DHCP moved it and HA's MusicCast integration followed by SSDP | not requested yet |
   | Yamaha RX-V6A — lounge | `4c:22:f3:a4:9e:9c`, verified via its YXC API | `10.0.0.4` — was `10.0.0.14` when added; same story | not requested yet |
   | Yamaha RX-V4A — den | `4c:22:f3:72:54:e3`, verified via its YXC API | `10.0.0.76` | not requested yet |

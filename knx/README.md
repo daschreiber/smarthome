@@ -27,7 +27,9 @@ Diagnosed 2026-07-24, plan "B" implemented 2026-07-26. Full history below.
   connection mode would find it if its DHCP address ever changed (confirmed
   2026-09-03). Had ≥1 spare tunnel slot; HA now holds one permanently.
 - HA: KNX integration added 2026-07-26 via config flow (entry
-  `01KYEC9TYPNN76GH8QY1Y4B1ME`, "Tunneling @ 1.1.127 @ 10.0.0.70:3671").
+  `01KYEC9TYPNN76GH8QY1Y4B1ME`; was "Tunneling @ 1.1.127 @ 10.0.0.70:3671",
+  reconfigured to **Automatic** on 2026-09-03 so a DHCP move of the gateway
+  no longer matters — it is found by search on every connect).
   Rollback = delete that integration.
 - 13 cover entities created via the WS API `knx/create_entity` (platform
   cover, `ga_up_down` write + `ga_stop` write; travel 120s except the MBR
@@ -128,6 +130,14 @@ debugging.
   `device_class` under `entity`. All 13 UI-created covers carried
   `device_class: shade` there and failed validation on boot (repair issue
   `entity_validation_error_cover`); the entities that remained were restored
-  registry orphans. Re-saving each cover in the KNX entity editor drops the
-  stale key. The gateway, tunnel and network were fine throughout; the
-  shades stayed controllable through the Control4 covers.
+  registry orphans. Re-saving in the entity editor does **not** fix it:
+  `knx/update_entity`, which the editor also uses, throws `KeyError` on
+  2026.9.0 for an entity that failed setup (it removes the entity before
+  saving, and there is nothing to remove). What worked, the same night:
+  `knx/delete_entity` then `knx/create_entity` per cover, from the stored
+  config minus that one key. Entity ids were reclaimed, so groups, the
+  app's entity map and history are untouched; unique_ids changed
+  (`knx_es_01M1…`); Google / Alexa / Assist expose flags re-applied. The
+  repair issue does not retract itself — dismiss it. The gateway, tunnel and
+  network were fine throughout; the shades stayed controllable through the
+  Control4 covers.

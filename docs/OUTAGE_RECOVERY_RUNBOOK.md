@@ -19,6 +19,8 @@ History: `docs/COMMISSIONING_LOG.md` (2026-08-12, 2026-08-21).
 | Core 3 address **now** | `10.0.0.38` (was `10.0.0.33`, before that `10.0.0.29`) |
 | Router — Bezeq-managed **FortiGate**, on-site only | `10.0.0.138`; `https://10.0.0.138` is a login page and we hold no credentials; port 80 only redirects there |
 | Green MAC | `20:f8:3b:03:d4:19` (Nabu Casa OUI). The `f8:3b:03:d4:19:20` in Bezeq's 2026-09-03 reply is this rotated by one octet — no such device |
+| KNX connection | **Automatic** since 2026-09-03: HA finds the gateway by KNXnet/IP search on every connect, so its address no longer matters. Was `Tunneling @ 1.1.127 @ 10.0.0.70:3671`. Gateway MAC `00:1e:06:4b:80:08` |
+| CoolMaster bridge | `10.0.0.90`, MAC `28:3b:96:11:60:51`. Own address self-heal since 2026-09-03 (below) |
 | Config entry title | `control4_core3_000FFF9F3B44` |
 | Healthy integration | **179 devices / 178 entities** |
 | Control4-proxied entities | 168 lights, 31 climate (UFH zones + changeover), covers ride native KNX |
@@ -45,6 +47,24 @@ attempts both repairs itself:
 | `automation.control4_self_heal_repoint_after_a_dhcp_lease_change` | Fault 2. Drift on for 30 min + 80%+ down + two real disagreeing addresses → repoint and restart, once per 6 hours. |
 | `input_boolean.c4_self_heal` | Kill switch for both. Turn it **off** before deliberate maintenance that makes the house look like an outage. |
 | `input_datetime.c4_last_auto_repoint` | The six-hour brake, stamped before the rewrite so it survives the restart. |
+
+Added and installed 2026-09-03 (evening) — the CoolMaster bridge gets the
+same address self-heal (automation ids; entity ids are the slugified
+aliases):
+
+| File / entity | Purpose |
+| --- | --- |
+| `shell_command.cm_repoint` | Fixed argv, `--domain coolmaster --mac 28:3b:96:11:60:51`. No caller input. |
+| `sensor.cm_ip_watch` / `sensor.cm_configured_host` / `binary_sensor.cm_ip_drift` | The bridge's readings, same shape as the Core 3's. |
+| `cm_ip_drift_alert` | Detects. Always on, and says whether self-heal is. |
+| `cm_auto_repoint` | Drift on for 35 min, Core 3 **not** drifted, 80%+ of coolmaster down, two real disagreeing addresses → repoint and restart, once per 6 hours. |
+| `cm_after_boot` | Forces both CM sensors 3 min into every boot; reports a repoint's outcome on the boot that follows it. |
+| `input_datetime.cm_last_auto_repoint` | Its six-hour brake. |
+
+`input_boolean.c4_self_heal` is the kill switch for all four acting
+automations. The bridge's phone messages carry the tag `cm_auto_repoint`
+and read exactly like the Control4 table below with "CoolMaster" in place
+of "Control4".
 
 Because the bundle is installed, **§3 is now the whole repair**. §5 exists only
 for the case where someone has rebuilt the Green.

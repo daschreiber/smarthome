@@ -657,6 +657,28 @@ class SelfHealYamlTest(unittest.TestCase):
                     if c.get("entity_id") == "binary_sensor.c4_ip_drift")
         self.assertEqual(gate["state"], "off")
 
+    def test_the_repoints_re_evaluate_when_the_kill_switch_comes_back_on(self):
+        """A drift that begins while self-heal is off fires the timed trigger
+        once, into a closed switch, and is gone. Re-enabling the switch has to
+        be a trigger too — with the same hold, moved onto the condition."""
+        for auto_id, prefix in self.REPOINTS.items():
+            auto = self.autos[auto_id]
+            switch = [t for t in auto["trigger"]
+                      if t.get("entity_id") == "input_boolean.c4_self_heal"]
+            self.assertEqual(len(switch), 1, auto_id)
+            self.assertEqual(switch[0]["to"], "on", auto_id)
+            held = next(c for c in auto["condition"]
+                        if c.get("entity_id") == f"binary_sensor.{prefix}_ip_drift")
+            self.assertEqual(held["state"], "on", auto_id)
+            self.assertEqual(held["for"], auto["trigger"][0]["for"], auto_id)
+
+    def test_the_coolmaster_alert_does_not_promise_a_self_heal_that_is_off(self):
+        """The alert fires with the switch off on purpose (detection is not
+        maintenance), so its message must not then promise a repoint."""
+        self.assertNotIn("input_boolean.c4_self_heal", self.conditions("cm_ip_drift_alert"))
+        blob = json.dumps(self.autos["cm_ip_drift_alert"]["action"])
+        self.assertIn("is_state('input_boolean.c4_self_heal','on')", blob)
+
     def test_the_repoint_only_restarts_when_the_rewrite_succeeded(self):
         for auto_id in self.REPOINTS:
             branch = next(a for a in self.autos[auto_id]["action"] if "if" in a)

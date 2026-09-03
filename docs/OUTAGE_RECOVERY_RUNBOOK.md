@@ -17,7 +17,8 @@ History: `docs/COMMISSIONING_LOG.md` (2026-08-12, 2026-08-21).
 | Home Assistant | `http://10.0.0.69:8123` (LAN) / Nabu Casa URL when away |
 | Core 3 MAC — **never changes** | `00:0f:ff:9f:3b:44` |
 | Core 3 address **now** | `10.0.0.38` (was `10.0.0.33`, before that `10.0.0.29`) |
-| Router (dealer-managed, on-site only) | `10.0.0.138` |
+| Router — Bezeq-managed **FortiGate**, on-site only | `10.0.0.138`; `https://10.0.0.138` is a login page and we hold no credentials; port 80 only redirects there |
+| Green MAC | `20:f8:3b:03:d4:19` (Nabu Casa OUI). The `f8:3b:03:d4:19:20` in Bezeq's 2026-09-03 reply is this rotated by one octet — no such device |
 | Config entry title | `control4_core3_000FFF9F3B44` |
 | Healthy integration | **179 devices / 178 entities** |
 | Control4-proxied entities | 168 lights, 31 climate (UFH zones + changeover), covers ride native KNX |
@@ -35,7 +36,8 @@ Installed on the Green as of 2026-08-21 (the "HA-side bundle"):
 | `binary_sensor.c4_ip_drift` | On when both read real addresses and they disagree. |
 | `automation.control4_ip_drift_alert` | Persistent notification + phone push, 5-minute debounce. |
 
-Added 2026-08-23 — the house now attempts both repairs itself:
+Added 2026-08-23, installed on the Green and armed 2026-09-03 — the house now
+attempts both repairs itself:
 
 | File / entity | Purpose |
 | --- | --- |
@@ -253,6 +255,26 @@ install notes in `ha/README.md`.
    await hass.callService('homeassistant','restart',{});
    ```
 
+### Writing `/config` from a script on the LAN (2026-09-03)
+
+The same File editor API works from a laptop on the home network with an
+admin long-lived token, with one trap: `POST /api/hassio/ingress/session`
+over REST answers an empty `401` even for an owner token — HA core forwards
+only a short allowlist of Supervisor paths over REST. Ask over the websocket
+instead:
+
+```json
+{"type":"supervisor/api","endpoint":"/ingress/session","method":"post"}
+```
+
+The reply carries `session`; send it as `Cookie: ingress_session=<session>`
+on every call to `http://10.0.0.69:8123<ingress_url>api/…`, where
+`ingress_url` comes from the same websocket call with endpoint
+`/addons/core_configurator/info`. Reads, urlencoded `api/save` writes and
+relative paths then behave exactly as in the browser route below. The
+2026-09-03 self-heal install went this way: backup, write, byte-exact
+read-back, `check_config`, one restart, API back in 31 s.
+
 ### Reading and writing `/config` from the browser
 
 The File editor add-on's own API, reachable from the authenticated page. The
@@ -369,14 +391,17 @@ On this HA build the `config_entries/remove` websocket command returns
 
 ## 9. The fix that ends this
 
-- [ ] **DHCP reservations on the router at `10.0.0.138`** for all seven
-  devices this stack reaches at a fixed address — the Core 3
-  (`00:0f:ff:9f:3b:44` → `10.0.0.38`), the Green (`10.0.0.69`), the KNX IP
-  interface (`10.0.0.70`), the CoolMaster bridge (`10.0.0.90`) and the three
-  Yamahas (`10.0.0.35`, `10.0.0.14`, `10.0.0.76`) — plus owner-level admin
-  access to that router. Dealer-managed, reachable only on-site. Open since
-  2026-07-16, and the direct cause of both 2026-08-12 and 2026-08-21. The
-  table is in [`OUTAGE_RECOVERY.md`](OUTAGE_RECOVERY.md).
+- [ ] **DHCP reservations on the router at `10.0.0.138`** (a Bezeq-managed
+  FortiGate; no credentials held) for all seven devices this stack reaches
+  at a fixed address, plus owner-level admin access to it. Open since
+  2026-07-16, and the direct cause of both 2026-08-12 and 2026-08-21. State
+  on 2026-09-03: the Core 3 (`00:0f:ff:9f:3b:44` → `10.0.0.38`) is done; the
+  Green's was made for a rotated, non-existent MAC (the real one is
+  `20:f8:3b:03:d4:19`) and must be corrected; the KNX interface (`.70`),
+  CoolMaster (`.90`) and RX-V4A (`.76`) are not yet requested; the two
+  RX-V6As are no longer at the documented `.35` / `.14` and have to be found
+  first. The table with every MAC is in
+  [`OUTAGE_RECOVERY.md`](OUTAGE_RECOVERY.md).
 - [ ] **UPS on the comms cabinet** (ONT, router, switch, Green). Ends fault 1
   for any cut shorter than the runtime, and it is the only fix that also
   covers the collateral — Alexa, Cast and Eight Sleep all broke on the same

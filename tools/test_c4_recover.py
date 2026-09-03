@@ -563,21 +563,32 @@ class RecoveryYamlTest(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(ROOT, "ha", "c4_recovery.yaml")) as handle:
             self.text = handle.read()
-        self.command = next(
-            line.split(":", 1)[1].strip().strip('"')
+        self.commands = {
+            key: line.split(":", 1)[1].strip().strip('"')
             for line in self.text.splitlines()
-            if line.strip().startswith("c4_repoint:")
-        )
+            for key in ("c4_repoint", "cm_repoint")
+            if line.strip().startswith(key + ":")
+        }
+        self.command = self.commands["c4_repoint"]
 
     def test_the_shell_command_carries_no_template(self):
         """Home Assistant runs a templated shell_command through a shell, so
         any {{ }} here is a command-execution hole for every service caller."""
-        self.assertNotIn("{{", self.command)
-        self.assertNotIn("{%", self.command)
+        self.assertEqual(sorted(self.commands), ["c4_repoint", "cm_repoint"])
+        for name, command in self.commands.items():
+            self.assertNotIn("{{", command, name)
+            self.assertNotIn("{%", command, name)
 
     def test_it_resolves_the_controller_by_mac_instead(self):
         self.assertIn("--mac", self.command)
         self.assertIn(c4.CORE3_MAC, self.command)
+
+    def test_the_coolmaster_service_is_the_same_fixed_argv_for_its_own_entry(self):
+        """Second device, same rule: the service names its config entry and
+        its MAC and takes nothing from the caller."""
+        command = self.commands["cm_repoint"]
+        self.assertIn("--domain coolmaster", command)
+        self.assertIn("--mac 28:3b:96:11:60:51", command)
 
 
 class SelfHealYamlTest(unittest.TestCase):
@@ -600,40 +611,58 @@ class SelfHealYamlTest(unittest.TestCase):
     def conditions(self, automation_id):
         return json.dumps(self.autos[automation_id].get("condition", []))
 
-    def test_both_self_heal_automations_are_gated_on_the_kill_switch(self):
+    REPOINTS = {"c4_auto_repoint": "c4", "cm_auto_repoint": "cm"}
+    ACTORS = ("c4_reload_after_boot", "c4_auto_repoint", "cm_auto_repoint", "cm_after_boot")
+
+    def test_every_self_heal_automation_is_gated_on_the_kill_switch(self):
         """One toggle in the app has to be able to stop all of this."""
-        for auto_id in ("c4_reload_after_boot", "c4_auto_repoint"):
+        for auto_id in self.ACTORS:
             self.assertIn("input_boolean.c4_self_heal", self.conditions(auto_id), auto_id)
 
     def test_the_repoint_refuses_anything_short_of_a_house_wide_outage(self):
         """A partial fault plus a stale scan must not restart the house — the
         same line tools/c4_recover.py refuses without --force."""
-        self.assertIn(">= 0.8", self.conditions("c4_auto_repoint"))
+        for auto_id in self.REPOINTS:
+            self.assertIn(">= 0.8", self.conditions(auto_id), auto_id)
 
     def test_the_repoint_is_rate_limited_across_restarts(self):
         """Without this, a controller answering ARP at an address it cannot
         actually be reached on rewrites and reboots forever."""
-        conditions = self.conditions("c4_auto_repoint")
-        self.assertIn("input_datetime.c4_last_auto_repoint", conditions)
-        self.assertIn("21600", conditions)
-        stamp = json.dumps(self.autos["c4_auto_repoint"]["action"][0])
-        self.assertIn("input_datetime.set_datetime", stamp,
-                      "the window must be burned before the restart, not after")
+        for auto_id, prefix in self.REPOINTS.items():
+            conditions = self.conditions(auto_id)
+            self.assertIn(f"input_datetime.{prefix}_last_auto_repoint", conditions, auto_id)
+            self.assertIn("21600", conditions, auto_id)
+            stamp = json.dumps(self.autos[auto_id]["action"][0])
+            self.assertIn("input_datetime.set_datetime", stamp,
+                          "the window must be burned before the restart, not after")
+
+    def hold(self, automation_id):
+        held = self.autos[automation_id]["trigger"][0]["for"]
+        hours, minutes, seconds = (int(p) for p in held.split(":"))
+        return hours * 3600 + minutes * 60 + seconds
 
     def test_the_repoint_waits_out_the_reload_before_it_acts(self):
         """Overlap would restart the house in the middle of a recovery that
         was about to work on its own."""
-        held = self.autos["c4_auto_repoint"]["trigger"][0]["for"]
-        hours, minutes, seconds = (int(p) for p in held.split(":"))
-        wait = hours * 3600 + minutes * 60 + seconds
         reload_budget = 3 * 60 + 3 * 8 * 60      # settle + three attempts
-        self.assertGreater(wait, reload_budget)
+        for auto_id in self.REPOINTS:
+            self.assertGreater(self.hold(auto_id), reload_budget, auto_id)
+
+    def test_the_two_repoints_can_never_fire_together(self):
+        """Two rewrites racing to restart the house would lose one of them:
+        the CoolMaster repoint holds longer AND stands down while the Core 3
+        is drifted, so the Control4 one always goes first."""
+        self.assertGreater(self.hold("cm_auto_repoint"), self.hold("c4_auto_repoint"))
+        gate = next(c for c in self.autos["cm_auto_repoint"]["condition"]
+                    if c.get("entity_id") == "binary_sensor.c4_ip_drift")
+        self.assertEqual(gate["state"], "off")
 
     def test_the_repoint_only_restarts_when_the_rewrite_succeeded(self):
-        branch = next(a for a in self.autos["c4_auto_repoint"]["action"] if "if" in a)
-        self.assertIn("returncode == 0", json.dumps(branch["if"]))
-        self.assertIn("homeassistant.restart", json.dumps(branch["then"]))
-        self.assertNotIn("homeassistant.restart", json.dumps(branch["else"]))
+        for auto_id in self.REPOINTS:
+            branch = next(a for a in self.autos[auto_id]["action"] if "if" in a)
+            self.assertIn("returncode == 0", json.dumps(branch["if"]), auto_id)
+            self.assertIn("homeassistant.restart", json.dumps(branch["then"]), auto_id)
+            self.assertNotIn("homeassistant.restart", json.dumps(branch["else"]), auto_id)
 
     def test_the_reload_cannot_index_an_empty_entity_list(self):
         """The reload target is `integration_entities('control4') | first`; on
@@ -665,23 +694,47 @@ class SelfHealYamlTest(unittest.TestCase):
         """The runbook sends a reader to these notifications to decide whether
         the house is fixed. One that says so before `c4_repoint.py` has even
         run stops the troubleshooting of a house that is still down."""
-        actions = self.autos["c4_auto_repoint"]["action"]
-        shell_at = next(i for i, a in enumerate(actions)
-                        if a.get("action") == "shell_command.c4_repoint")
-        before = json.dumps(actions[:shell_at])
-        for claim in ("repointed automatically", "Restarting HA", "is back"):
-            self.assertNotIn(claim, before)
-        self.assertIn("repointing now", before.lower(),
-                      "the attempt still has to be announced")
+        for auto_id, prefix in self.REPOINTS.items():
+            actions = self.autos[auto_id]["action"]
+            shell_at = next(i for i, a in enumerate(actions)
+                            if a.get("action") == f"shell_command.{prefix}_repoint")
+            before = json.dumps(actions[:shell_at])
+            for claim in ("repointed automatically", "Restarting HA", "is back"):
+                self.assertNotIn(claim, before, auto_id)
+            self.assertIn("repointing now", before.lower(),
+                          "the attempt still has to be announced")
 
     def test_a_failed_repoint_corrects_the_phone_not_just_the_dashboard(self):
         """A persistent notification can be replaced by id; a push cannot, so
         without a second push the phone keeps the optimistic one."""
-        branch = next(a for a in self.autos["c4_auto_repoint"]["action"] if "if" in a)
-        pushed = [a for a in branch["else"] if a["action"].startswith("notify.")]
-        self.assertTrue(pushed, "failure never reaches the phone")
-        self.assertEqual(pushed[0]["data"]["data"]["tag"], "c4_auto_repoint",
-                         "without a shared tag it stacks instead of replacing")
+        for auto_id in self.REPOINTS:
+            branch = next(a for a in self.autos[auto_id]["action"] if "if" in a)
+            pushed = [a for a in branch["else"] if a["action"].startswith("notify.")]
+            self.assertTrue(pushed, "failure never reaches the phone")
+            self.assertEqual(pushed[0]["data"]["data"]["tag"], auto_id,
+                             "without a shared tag it stacks instead of replacing")
+
+    def test_a_coolmaster_repoint_is_confirmed_after_the_restart(self):
+        """Same rule as Control4: the repoint script never returns, so the only
+        place its outcome can be reported from is the boot that follows."""
+        blob = json.dumps(self.autos["cm_after_boot"]["action"])
+        self.assertIn("cm_last_auto_repoint", blob)
+        self.assertIn("CoolMaster is back", blob)
+        self.assertIn("did not come back", blob)
+        self.assertIn('"tag": "cm_auto_repoint"', blob)
+
+    def test_the_coolmaster_refresh_runs_on_every_boot_not_only_after_a_repoint(self):
+        """A 12-hour scan that ran while the network was still coming up would
+        otherwise hide a drift until the afternoon (2026-08-21). The stamp
+        check gates only the report, not the refresh."""
+        self.assertNotIn("cm_last_auto_repoint", self.conditions("cm_after_boot"))
+        actions = self.autos["cm_after_boot"]["action"]
+        refresh_at = next(i for i, a in enumerate(actions)
+                          if a.get("action") == "homeassistant.update_entity")
+        self.assertIn("sensor.cm_ip_watch", json.dumps(actions[refresh_at]))
+        gate_at = next(i for i, a in enumerate(actions)
+                       if "cm_last_auto_repoint" in json.dumps(a))
+        self.assertGreater(gate_at, refresh_at)
 
     def test_a_successful_repoint_is_confirmed_after_the_restart(self):
         """`homeassistant.restart` ends that script, and persistent
@@ -697,8 +750,7 @@ class SelfHealYamlTest(unittest.TestCase):
     def test_no_template_can_divide_by_an_empty_entity_list(self):
         """`ents | count` is a divisor in four places; on a rebuilt Green it
         is zero and the whole automation dies on a template error."""
-        blob = json.dumps(self.autos["c4_reload_after_boot"]) + json.dumps(
-            self.autos["c4_auto_repoint"])
+        blob = "".join(json.dumps(self.autos[a]) for a in self.ACTORS)
         for fragment in blob.split("/ (ents | count)")[:-1]:
             tail = fragment[-260:]
             self.assertTrue(
@@ -706,7 +758,7 @@ class SelfHealYamlTest(unittest.TestCase):
                 "unguarded division:" + tail)
 
     def test_every_automation_id_is_unique(self):
-        self.assertEqual(len(self.autos), 3)
+        self.assertEqual(len(self.autos), 6)
 
 
 class HelperTest(unittest.TestCase):

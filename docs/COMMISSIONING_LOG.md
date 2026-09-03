@@ -1029,3 +1029,59 @@ outage tooling covers.
 - [ ] **Decide on core auto-update.** If it is on, today is the argument for
   turning it off and updating on purpose.
 - [ ] **Bezeq message** with all seven MACs; draft ready.
+
+## 2026-09-03 (evening) — Living without Bezeq: CoolMaster self-heal, KNX to automatic
+
+Bezeq managed one correct reservation out of two, the router is a FortiGate
+we cannot log in to, and the owner does not expect more from them. So the
+question became: which integrations actually break when a box takes a new
+lease, and can each of those be made to follow the box instead?
+
+| Integration | Follows a move? | Plan |
+| --- | --- | --- |
+| Control4 | No | Repoint self-heal — done 2026-08-23, live since this morning |
+| CoolMaster | No | Repoint self-heal — **this entry** |
+| KNX | No, but the gateway answers KNXnet/IP search | Switch the connection to Automatic — in progress from the laptop |
+| MusicCast (3 Yamahas) | Yes, SSDP | Nothing; it already moved twice unnoticed |
+| The Green itself | n/a | Nothing: the app and remote access go through Nabu Casa, only humans dial its address |
+
+Reservations at the router stay the tidy answer where Bezeq will do them
+(the short message asks for the correction, `.70` and `.90`), but nothing
+above depends on it. Device-side static addresses were considered and
+rejected: without router access we do not know the DHCP pool, and a static
+address inside it is a collision waiting for the next lease.
+
+### CoolMaster repoint (`ha/c4_recovery.yaml`)
+
+`c4_repoint.py` already took `--domain`, so the bridge gets the same
+machinery with no script change: `shell_command.cm_repoint` (fixed argv,
+`--domain coolmaster --mac 28:3b:96:11:60:51`), `sensor.cm_ip_watch`,
+`sensor.cm_configured_host`, `binary_sensor.cm_ip_drift`,
+`input_datetime.cm_last_auto_repoint`, and `automation manual_cm_selfheal:`
+with `cm_ip_drift_alert`, `cm_auto_repoint` and `cm_after_boot`. Two
+differences from the Control4 set, both about the two repoints sharing one
+house: the CoolMaster hold is 35 minutes, longer than the Control4 repoint's
+30 and the reload's 27, and it stands down while `binary_sensor.c4_ip_drift`
+is on. So when both boxes move on the same boot the Control4 one restarts
+the house first and the CoolMaster one fires on the boot that follows —
+never two rewrites racing to restart. `cm_after_boot` also forces both
+sensors three minutes into every boot, the 2026-08-21 lesson applied to the
+second device. Same kill switch.
+
+Tests: `tools/test_c4_recover.py` now checks both services for templates,
+both repoints for the kill switch, the 80% line, the six-hour brake, the
+hold, restart-only-on-success and honest notifications, plus the ordering
+guarantee between them. 6 automation ids.
+
+Not yet on the Green: this needs a merge into the existing
+`command_line:` / `template:` / `shell_command:` / `input_datetime:` keys
+plus one appended block, then a restart. Next laptop session.
+
+### Follow-ups
+
+- [ ] **Install the CoolMaster self-heal on the Green** (merge, check_config,
+  restart, verify `binary_sensor.cm_ip_drift` off and both CM sensors reading
+  `10.0.0.90`).
+- [ ] **KNX to Automatic** — running from the laptop; record the outcome here.
+- [ ] **UPS on the comms cabinet.** Still the only fix for the boot-timing
+  collateral (Alexa, Cast, Eight Sleep) and now the biggest remaining item.

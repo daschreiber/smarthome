@@ -45,8 +45,8 @@ reads None — sessions aren't in `source_list`).
 
 | receiver | IP | HA entity | notes |
 |---|---|---|---|
-| RX-V6A | 10.0.0.35 — **not there on 2026-09-03** (a Sonos held `.35`); current address unknown | `media_player.master_bedroom_2` | white-noise host (docs/ALEXA_WHITE_NOISE.md) |
-| RX-V6A | 10.0.0.14 — **not there on 2026-09-03** (a Control4 device held `.14`); current address unknown | `media_player.room_lounge` | Lounge cabinet; added 2026-07-23 |
+| RX-V6A | 10.0.0.7 (`c0:d7:aa:8e:5d:b0`; was 10.0.0.35 when added — DHCP moved it, HA followed by SSDP) | `media_player.master_bedroom_2` | white-noise host (docs/ALEXA_WHITE_NOISE.md) |
+| RX-V6A | 10.0.0.4 (`4c:22:f3:a4:9e:9c`; was 10.0.0.14 when added — same) | `media_player.room_lounge` | Lounge cabinet; added 2026-07-23 |
 | RX-V4A | 10.0.0.76 (`4c:22:f3:72:54:e3`, verified 2026-09-03) | `media_player.room_den` | Den cabinet; added 2026-07-23 |
 
 Both "new" receivers were on the LAN all along but never added to HA (the

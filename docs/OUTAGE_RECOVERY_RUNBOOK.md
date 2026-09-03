@@ -35,8 +35,37 @@ Installed on the Green as of 2026-08-21 (the "HA-side bundle"):
 | `binary_sensor.c4_ip_drift` | On when both read real addresses and they disagree. |
 | `automation.control4_ip_drift_alert` | Persistent notification + phone push, 5-minute debounce. |
 
+Added 2026-08-23 — the house now attempts both repairs itself:
+
+| File / entity | Purpose |
+| --- | --- |
+| `automation.control4_self_heal_reload_after_a_boot_before_internet_failure` | Fault 1. On start: refresh both address sensors, then reload the entry up to 3× at 8-minute spacing. |
+| `automation.control4_self_heal_repoint_after_a_dhcp_lease_change` | Fault 2. Drift on for 30 min + 80%+ down + two real disagreeing addresses → repoint and restart, once per 6 hours. |
+| `input_boolean.c4_self_heal` | Kill switch for both. Turn it **off** before deliberate maintenance that makes the house look like an outage. |
+| `input_datetime.c4_last_auto_repoint` | The six-hour brake, stamped before the rewrite so it survives the restart. |
+
 Because the bundle is installed, **§3 is now the whole repair**. §5 exists only
 for the case where someone has rebuilt the Green.
+
+**Before you start: check whether it already fixed itself.** The self-heal
+takes up to 27 minutes for fault 1 and up to about an hour for fault 2. Read
+the last notification on the phone before touching anything — they all carry
+the same tag, so the one still showing is the current truth:
+
+| Last message | What it means | What you do |
+| --- | --- | --- |
+| `Control4 — repointing now` | Mid-repair, nothing concluded. | Wait ~5 minutes for it to be replaced. |
+| `Control4 is back` | The repoint worked and HA came back on the new address. | Record the address in the commissioning log. Nothing else. |
+| `Control4 auto-repoint failed` | `c4_repoint.py` exited non-zero; **nothing was written and nothing restarted.** | §3, by hand. The exit code is in the message. |
+| `Control4 did not come back` | Three reloads over 27 minutes did not clear it. | §3. If the message also says a repoint had just been applied, the address is not the problem — go to §4 and verify. |
+| *nothing* | The self-heal never ran, or is switched off. | Check `input_boolean.c4_self_heal`, then §3. |
+
+Note what is **not** in that list: there is no "repointed successfully"
+message from the repoint automation itself. It ends at
+`homeassistant.restart` and never returns, and persistent notifications do not
+survive a restart — so success is reported on the way back up, by
+`c4_reload_after_boot`, and its absence after a `repointing now` means the
+restart did not complete.
 
 ---
 
@@ -340,12 +369,21 @@ On this HA build the `config_entries/remove` websocket command returns
 
 ## 9. The fix that ends this
 
-- [ ] **DHCP reservation for `00:0f:ff:9f:3b:44`** on the router at
-  `10.0.0.138`. Dealer-managed, reachable only on-site. Open since 2026-07-16,
-  and the direct cause of both 2026-08-12 and 2026-08-21.
+- [ ] **DHCP reservations on the router at `10.0.0.138`** for all seven
+  devices this stack reaches at a fixed address — the Core 3
+  (`00:0f:ff:9f:3b:44` → `10.0.0.38`), the Green (`10.0.0.69`), the KNX IP
+  interface (`10.0.0.70`), the CoolMaster bridge (`10.0.0.90`) and the three
+  Yamahas (`10.0.0.35`, `10.0.0.14`, `10.0.0.76`) — plus owner-level admin
+  access to that router. Dealer-managed, reachable only on-site. Open since
+  2026-07-16, and the direct cause of both 2026-08-12 and 2026-08-21. The
+  table is in [`OUTAGE_RECOVERY.md`](OUTAGE_RECOVERY.md).
+- [ ] **UPS on the comms cabinet** (ONT, router, switch, Green). Ends fault 1
+  for any cut shorter than the runtime, and it is the only fix that also
+  covers the collateral — Alexa, Cast and Eight Sleep all broke on the same
+  2026-08-21 boot and none of them are in this runbook.
 
-Everything in this document is a workaround for not having that reservation.
-It is a well-instrumented workaround now — `binary_sensor.c4_ip_drift`
-re-baselines itself after any repoint and pushes to the phone within five
-minutes — but the drift will keep happening on every power cut until the
-controller's lease is pinned.
+Everything in this document is a workaround for not having those. It is a
+well-instrumented workaround now, and since 2026-08-23 an automatic one — but
+the drift will keep happening on every power cut until the lease is pinned,
+and self-heal that runs on every outage is a fire alarm that keeps going off,
+not a building that stopped catching fire.

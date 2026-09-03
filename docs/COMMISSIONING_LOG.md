@@ -635,6 +635,140 @@ the subnet from the Green's own address instead of assuming `10.0.0`.
   the outcome here — including the Core 3's new address, so the next reader
   knows where it landed.
 
+## 2026-08-23 — The house recovered, and was taught to recover itself
+
+### Closing out 2026-08-21: where the Core 3 landed
+
+The repair ran on the evening of 2026-08-21 from the Mac, and this entry is the
+record the previous follow-up asked for. Both faults were present, in the
+predicted order: the reload cleared the boot-before-internet cloud-auth
+timeout, which exposed the drift underneath it. **The Core 3 is now at
+`10.0.0.38`** (was `10.0.0.33`, before that `10.0.0.29`; MAC unchanged at
+`00:0f:ff:9f:3b:44`). Repointed via `shell_command.c4_repoint`, one restart.
+Verified: 179 devices / 178 entities, 0 of 168 lights unavailable,
+`sensor.c4_ip_watch` and `sensor.c4_configured_host` in agreement,
+`binary_sensor.c4_ip_drift` off. The HA-side bundle is installed on the Green
+and the old hardcoded drift automation is gone from `configuration.yaml`.
+
+It could not use `tools/c4_recover.py`. macOS grants computer-use Terminal in
+click-only mode, and the device shell is sandboxed away from both the LAN and
+GitHub, so the whole repair went through the Home Assistant frontend —
+`hass.callService` / `callWS` / `callApi` for the reload, repoint and restart,
+and the File editor add-on's own ingress API for byte-exact writes into
+`/config`. That route, and the traps in it, are written down in
+`docs/OUTAGE_RECOVERY_RUNBOOK.md`.
+
+### Self-heal — the automations now act, not just alert
+
+Three occurrences of the same two faults, each needing the same two hands-on
+repairs, while the one permanent fix stayed an unticked checkbox behind a
+dealer visit. So `ha/c4_recovery.yaml` gained two automations that mirror the
+two faults (details and the full condition table: `ha/README.md`):
+
+- **`c4_reload_after_boot`** — on `homeassistant.start`, wait three minutes for
+  the boot to settle, force a refresh of both address sensors, then reload the
+  Control4 config entry up to three times at eight-minute spacing. That spacing
+  is the 2026-07-16 rule, not padding: `apis.control4.com` rate-limits fast
+  retries and then drops connections in a way that looks exactly like wrong
+  credentials. It notifies only when all three attempts failed — a reload that
+  fixed the house at 04:51 is not worth waking anyone for.
+
+- **`c4_auto_repoint`** — drift on for thirty minutes, **and** 80%+ of the
+  Control4 entities `unavailable`, **and** both address sensors reading real
+  IPv4 that disagree, **and** no auto-repoint in the last six hours. Then
+  rewrite the host and restart.
+
+The interesting part is the conditions, because this rewrites a config entry
+and restarts the house unattended:
+
+- **Thirty minutes, not five.** The reload automation needs twenty-seven to
+  exhaust its attempts. Overlapping them would restart the house in the middle
+  of a recovery that was about to work on its own.
+- **The six-hour brake survives the restart it causes.**
+  `input_datetime.c4_last_auto_repoint` is stamped *before* the rewrite, so a
+  repoint that dies half way still burns the window. Without it, a controller
+  answering ARP at an address it cannot actually be reached on would
+  rewrite-and-reboot forever.
+- **The same 80% line `tools/c4_recover.py` refuses below.** One dead KNX
+  channel plus a stale scan must never be able to restart the house.
+- **`input_boolean.c4_self_heal`** switches both off from the phone. Turn it
+  off before deliberate maintenance that makes the house look like an outage.
+
+Eight tests were added (51 total). They assert the properties rather than the
+text: the kill switch gates both, the repoint refuses a partial fault, the
+brake exists and is stamped first, the repoint's hold exceeds the reload's
+budget, the restart only happens on a zero exit code, and the reload cannot
+index an empty entity list on a rebuilt Green.
+
+Also corrected: the repo copy of the drift alert still said
+`notify.mobile_app_iphone`, a placeholder the installed copy on the Green never
+had. It now names the house's real service, `notify.mobile_app_daniel_iphone_17`.
+
+### This is insurance, not the fix
+
+Self-heal that runs on every outage is a fire alarm that keeps going off, not a
+building that stopped catching fire. The permanent fix is still the router: a
+DHCP reservation for every device this stack reaches at a fixed address, all
+seven of them, listed in `docs/OUTAGE_RECOVERY.md`.
+
+### Follow-ups
+
+- [ ] **DHCP reservations at the router** (`10.0.0.138`) for all seven devices
+  this stack reaches at a fixed address — the Core 3
+  (`00:0f:ff:9f:3b:44` → `10.0.0.38`), the Green (`10.0.0.69`), the KNX IP
+  interface (`10.0.0.70`), the CoolMaster bridge (`10.0.0.90`) and the three
+  Yamahas (`10.0.0.35`, `10.0.0.14`, `10.0.0.76`) — plus owner-level admin
+  access to that router. Fourth time asking. The router being dealer-managed
+  and on-site-only is the reason a five-minute change has cost three outages —
+  treat the access request as the real deliverable.
+- [ ] **UPS on the comms cabinet** — ONT, router, switch, Green. Ends fault 1
+  for any cut shorter than its runtime, and it is the only fix that also covers
+  the collateral: the 2026-08-21 boot left 28 Alexa entities, 6 Cast players
+  and Eight Sleep broken, none of which is Control4 or fixed by any of the
+  above.
+- [ ] **Install this bundle update on the Green** and turn
+  `input_boolean.c4_self_heal` on — it defaults to off, and a reload is not
+  enough this time because the helpers are only created at boot.
+- [ ] **Revoke the long-lived token shared into the 2026-08-21 session.** Still
+  open, still in a chat transcript (Profile → Security → Long-lived access
+  tokens).
+
+### Amendment, same day — the notifications lied about their own success
+
+Codex caught it on review, and it was real: the repoint automation sent
+"Control4 repointed automatically" **before** running `c4_repoint.py`. On a
+non-zero exit the house was still down while the phone said it had been fixed
+— and the runbook had just been written to send a reader to exactly that
+notification to decide whether they were done.
+
+Following it up exposed a second one underneath. Persistent notifications live
+in memory and do not survive a restart, so on the path where the repoint
+*worked* that message was erased seconds after it was created. The runbook was
+pointing at something that could only ever be visible when it was wrong.
+
+The fix is structural rather than a reordering, because
+`homeassistant.restart` ends that script and never returns — there is no point
+inside it where success can honestly be reported:
+
+- The repoint now sends `Control4 — repointing now`, an attempt, not a result.
+- Failure replaces it with `Control4 auto-repoint failed`, carrying the exit
+  code, on both the dashboard and the phone. The phone needed its own
+  correction: a persistent notification can be replaced by id, a push cannot,
+  so all four messages now share one push `tag` and the latest replaces the
+  last rather than stacking under it.
+- Success is reported on the way back up, by `c4_reload_after_boot`, which
+  reads `input_datetime.c4_last_auto_repoint` to recognise that this boot was
+  the repoint's own restart. That reading has to happen before the retry loop
+  — twenty-seven minutes later it would be outside its own fifteen-minute
+  window.
+- The reload automation's health check became a `choose` to make room for it,
+  which is also how a healthy routine restart still stays silent.
+
+The runbook now carries a table of the four messages and what each one means,
+including the one that says a repoint had just been applied and did not help —
+which is the signal that the address is not the problem. Three tests added
+(56 total), both new guards mutation-checked.
+
 ## 2026-08-29 — TV follower: the MBR TV mirrors its ceiling lift again
 
 ### Owner report

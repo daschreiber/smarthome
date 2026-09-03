@@ -100,13 +100,301 @@ automation manual_c4:
             {{ state_attr('binary_sensor.c4_ip_drift','configured') }}.
             Lights and underfloor heating will stop responding until the config
             entry is repointed (docs/OUTAGE_RECOVERY.md).
-      # Rename to whichever notify.mobile_app_* service this house already
-      # uses; `continue_on_error` keeps the persistent notification useful if
-      # the phone service is gone.
-      - action: notify.mobile_app_iphone
+      # This house's push service (docs/OUTAGE_RECOVERY_RUNBOOK.md §0). Rename
+      # it for any other install; `continue_on_error` keeps the persistent
+      # notification useful if the phone service is gone.
+      - action: notify.mobile_app_daniel_iphone_17
         continue_on_error: true
         data:
           title: Control4 controller has moved
           message: >-
             Now at {{ state_attr('binary_sensor.c4_ip_drift','observed') }},
             HA still dialling {{ state_attr('binary_sensor.c4_ip_drift','configured') }}.
+
+# ---------------------------------------------------------------------------
+# Self-heal (added 2026-08-23, after the third occurrence)
+#
+# Everything above this line only DETECTS. Everything below it ACTS, because
+# the same two faults have now needed the same two hands-on repairs three
+# times, and the permanent network fix is still gated behind a dealer visit.
+#
+# The two automations mirror the two faults, in the order they stack:
+#
+#   c4_reload_after_boot   Fault 1. HA came back before the fibre, the
+#                          Control4 CLOUD auth call died mid-request, and the
+#                          entry is in setup_error with no retry. A reload
+#                          clears it, and costs nothing when it is not needed.
+#
+#   c4_auto_repoint        Fault 2, which hides behind fault 1. The Core 3
+#                          took a new DHCP lease, so the reload times out
+#                          against the old address. Rewrites the host and
+#                          restarts.
+#
+# Both are gated on input_boolean.c4_self_heal, so the whole thing can be
+# switched off from the phone without touching YAML.
+#
+# The repoint is deliberately the more heavily conditioned of the two: it
+# rewrites a config entry and restarts the house, so it demands a house-wide
+# outage, two real addresses that disagree, thirty minutes of that being
+# continuously true, and at most one attempt per six hours.
+input_boolean:
+  c4_self_heal:
+    name: Control4 self-heal
+    icon: mdi:shield-refresh
+
+input_datetime:
+  # Loop brake for the repoint. Persists across the restart it triggers,
+  # which is the whole point — without it a controller that answers ARP at an
+  # address the integration cannot actually talk to would rewrite-and-restart
+  # forever.
+  c4_last_auto_repoint:
+    name: C4 last auto-repoint
+    has_date: true
+    has_time: true
+
+automation manual_c4_selfheal:
+  - alias: Control4 self-heal — reload after a boot-before-internet failure
+    id: c4_reload_after_boot
+    description: >-
+      Fault 1 of the power-cut signature: the Control4 cloud auth call died
+      while the fibre was still coming up and left the config entry in
+      setup_error with no retry. The internet is back by the time anyone
+      looks, so a reload is enough. Three attempts, eight minutes apart.
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - trigger: homeassistant
+        event: start
+    condition:
+      - condition: state
+        entity_id: input_boolean.c4_self_heal
+        state: "on"
+      # If the registry has no Control4 entities at all there is nothing to
+      # reload and nothing to measure — that is a rebuilt Green, not this
+      # fault. Also guards the `| first` in the reload target below.
+      - condition: template
+        value_template: "{{ integration_entities('control4') | count > 0 }}"
+    action:
+      # Let the boot settle. The entity registry restores its rows as
+      # `unavailable` and the integration finishes failing before there is
+      # anything worth reading.
+      - delay: "00:03:00"
+      # C4 IP watch polls every 12h and C4 configured host every hour, so
+      # after a boot both can be hours stale — or empty, from a scan that ran
+      # while the network was still coming up (2026-08-21, when an empty
+      # sensor stopped the recovery dead). Force them before anything reads
+      # them, including the drift binary_sensor the repoint below waits on.
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.c4_ip_watch
+            - sensor.c4_configured_host
+      # Was this boot the repoint automation's own restart? That stamp is the
+      # only thing which survives it, and it has to be read NOW: the retry
+      # loop below runs for twenty-seven minutes, and re-reading at the end
+      # would put every repoint outside the window.
+      - variables:
+          after_repoint: >-
+            {% set last = state_attr('input_datetime.c4_last_auto_repoint','timestamp') %}
+            {{ last is not none and (as_timestamp(now()) - (last | float(0))) < 900 }}
+      - choose:
+          # Healthy. Either a routine restart — which deserves silence, and a
+          # reload here would blip all 179 devices and spend a cloud auth call
+          # for nothing — or the repoint's own restart, which is the ONLY
+          # place a repoint's success can be reported from: that script ends
+          # at `homeassistant.restart` and never comes back to say so.
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {% set ents = integration_entities('control4') %}
+                  {{ ents | count == 0
+                     or (ents | select('is_state','unavailable') | list | count)
+                        / (ents | count) < 0.8 }}
+            sequence:
+              - condition: template
+                value_template: "{{ after_repoint | bool(false) }}"
+              # This one survives, because no restart follows it.
+              - action: persistent_notification.create
+                data:
+                  title: Control4 is back
+                  notification_id: c4_auto_repoint
+                  message: >-
+                    The automatic repoint worked. The Core 3 is at
+                    {{ states('sensor.c4_configured_host') }} and the
+                    integration is up. Record the new address in
+                    docs/COMMISSIONING_LOG.md. The permanent fix is still a
+                    DHCP reservation for 00:0f:ff:9f:3b:44 on the router —
+                    see docs/OUTAGE_RECOVERY.md.
+              - action: notify.mobile_app_daniel_iphone_17
+                continue_on_error: true
+                data:
+                  title: Control4 is back
+                  message: >-
+                    Repoint worked. Core 3 at
+                    {{ states('sensor.c4_configured_host') }}. Needs recording.
+                  data:
+                    # Same tag as the "repointing now" push, so this replaces
+                    # it on the phone instead of stacking beneath it.
+                    tag: c4_auto_repoint
+        default:
+          - repeat:
+              sequence:
+                - action: homeassistant.reload_config_entry
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ integration_entities('control4') | first }}"
+                # Setup takes about thirty seconds when it works. The other
+                # seven and a half minutes are the 2026-07-16 rule:
+                # apis.control4.com rate-limits fast retries and then drops
+                # connections in a way that looks exactly like wrong
+                # credentials. One attempt, then wait.
+                - delay: "00:08:00"
+              until:
+                - condition: template
+                  value_template: >-
+                    {% set ents = integration_entities('control4') %}
+                    {{ repeat.index >= 3
+                       or ents | count == 0
+                       or (ents | select('is_state','unavailable') | list | count)
+                          / (ents | count) < 0.8 }}
+          # Say so only when it did not work. A reload that fixed the house at
+          # 04:51 is not worth a push notification.
+          - condition: template
+            value_template: >-
+              {% set ents = integration_entities('control4') %}
+              {{ ents | count > 0
+                 and (ents | select('is_state','unavailable') | list | count)
+                     / (ents | count) >= 0.8 }}
+          - action: persistent_notification.create
+            data:
+              title: Control4 did not come back
+              notification_id: c4_selfheal_gave_up
+              message: >-
+                Three reloads over twenty-seven minutes did not clear it, so
+                this is not just the cloud-auth timeout.
+                {% if after_repoint | bool(false) %}
+                A repoint had just been applied, so that did not fix it either
+                — stop here and take it by hand.
+                {% else %}
+                If the Core 3 has also moved, the repoint automation takes
+                over at the thirty-minute mark.
+                {% endif %}
+                docs/OUTAGE_RECOVERY_RUNBOOK.md.
+          - action: notify.mobile_app_daniel_iphone_17
+            continue_on_error: true
+            data:
+              title: Control4 did not come back
+              message: >-
+                Reload did not clear it. Observed
+                {{ states('sensor.c4_ip_watch') }}, configured
+                {{ states('sensor.c4_configured_host') }}.
+              data:
+                tag: c4_auto_repoint
+
+  - alias: Control4 self-heal — repoint after a DHCP lease change
+    id: c4_auto_repoint
+    description: >-
+      Fault 2: the Core 3 took a new lease while the power was out, so the
+      reload above times out against the old address. Rewrites the config
+      entry's host and restarts. Every condition here exists to make sure
+      this only ever fires on that one fault.
+    mode: single
+    max_exceeded: silent
+    trigger:
+      # Thirty minutes, not five: the reload automation above needs
+      # twenty-four to exhaust its attempts, and a repoint on top of a reload
+      # already in flight would restart the house mid-recovery.
+      - trigger: state
+        entity_id: binary_sensor.c4_ip_drift
+        to: "on"
+        for: "00:30:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.c4_self_heal
+        state: "on"
+      # House-wide, never a partial fault. One dead KNX channel plus a stale
+      # drift reading must not be able to restart the house — the same 80%
+      # line tools/c4_recover.py refuses below.
+      - condition: template
+        value_template: >-
+          {% set ents = integration_entities('control4') %}
+          {{ ents | count > 0
+             and (ents | select('is_state','unavailable') | list | count)
+                 / (ents | count) >= 0.8 }}
+      # Positive evidence only. The drift sensor already asserts this, but a
+      # config entry is about to be rewritten from these two values, so they
+      # are re-checked at the point of the write rather than trusted from
+      # upstream.
+      - condition: template
+        value_template: >-
+          {% set seen = states('sensor.c4_ip_watch') %}
+          {% set want = states('sensor.c4_configured_host') %}
+          {{ seen | regex_match('^\d{1,3}(\.\d{1,3}){3}$')
+             and want | regex_match('^\d{1,3}(\.\d{1,3}){3}$')
+             and seen != want }}
+      # At most one repoint per six hours, across restarts. If the rewrite
+      # does not fix it, the next attempt is a human's.
+      - condition: template
+        value_template: >-
+          {% set last = state_attr('input_datetime.c4_last_auto_repoint','timestamp') %}
+          {{ last is none or (as_timestamp(now()) - (last | float(0))) > 21600 }}
+    action:
+      # Stamped BEFORE the rewrite, because the restart below never returns
+      # to this script. A repoint that dies half way still burns the window.
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.c4_last_auto_repoint
+        data:
+          timestamp: "{{ as_timestamp(now()) }}"
+      # Announced as an ATTEMPT, never as a result — the rewrite below has not
+      # happened yet, and a message claiming it did would stop someone
+      # troubleshooting a house that is still down. Every later message on
+      # this fault carries the same `tag`, so whichever one is true last is
+      # the one left on the phone.
+      #
+      # No persistent notification here either: they live in memory and the
+      # restart on the success path wipes them within seconds, so on the path
+      # that works this would vanish before anyone read it. Success is
+      # reported after the restart, by c4_reload_after_boot; failure is
+      # reported below, where no restart follows to erase it.
+      - action: notify.mobile_app_daniel_iphone_17
+        continue_on_error: true
+        data:
+          title: Control4 — repointing now
+          message: >-
+            Core 3 answers at {{ states('sensor.c4_ip_watch') }}, HA is
+            dialling {{ states('sensor.c4_configured_host') }}. Rewriting and
+            restarting; another message follows either way.
+          data:
+            tag: c4_auto_repoint
+      - action: shell_command.c4_repoint
+        response_variable: repoint
+      - if:
+          - condition: template
+            value_template: "{{ repoint.returncode == 0 }}"
+        then:
+          # Immediately, with nothing in between. Config entries are only read
+          # from .storage at boot, and any save from elsewhere in the meantime
+          # writes the in-memory host back over the rewrite — the clobber that
+          # made the 2026-08-12 manual fix need two restarts.
+          - action: homeassistant.restart
+        else:
+          - action: persistent_notification.create
+            data:
+              title: Control4 auto-repoint failed
+              notification_id: c4_auto_repoint
+              message: >-
+                c4_repoint.py exited {{ repoint.returncode }} and nothing was
+                rewritten or restarted. {{ repoint.stderr }}
+                Take it by hand: docs/OUTAGE_RECOVERY_RUNBOOK.md.
+          # Replaces the "repointing now" push rather than stacking under it,
+          # so the phone is never left holding the optimistic one.
+          - action: notify.mobile_app_daniel_iphone_17
+            continue_on_error: true
+            data:
+              title: Control4 auto-repoint failed
+              message: >-
+                c4_repoint.py exited {{ repoint.returncode }}. Nothing was
+                rewritten, nothing restarted — the house is still down.
+              data:
+                tag: c4_auto_repoint

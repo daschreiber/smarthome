@@ -95,6 +95,20 @@ describe("off enforcement (the 2026-08-30 stranded-on TV)", () => {
     expect(offAttemptsAllowed()).toBe(1);
   });
 
+  it("a budget spent on another off target does not block the new one (deploy transition)", () => {
+    // State left by the Room Off build: stowed, three attempts spent on
+    // the Control4 zone, TV still on. The Samsung's own budget is fresh.
+    delete process.env.LIFTWATCH_OFF_ATTEMPTS;
+    const stale: LiftwatchState = {
+      enabled: true, lastDown: false, offAttempts: 3, offVia: C4_ROOM_ENTITY,
+    };
+    const d = evaluateTvFollow(false, true, stale, NOW);
+    expect(d.action).toBe("tv_off");
+    expect(d.next).toMatchObject({ offAttempts: 1, offVia: TV_ENTITY });
+    // ...and that one is the only one at the default budget.
+    expect(evaluateTvFollow(false, true, d.next, NOW + 30_000).action).toBeNull();
+  });
+
   it("a TV still on with the lift up is switched off — no edge required", () => {
     // Baseline re-learned as "up" after a deploy, TV left playing inside
     // the ceiling. The tick after the baseline acts.

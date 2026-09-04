@@ -96,6 +96,11 @@ export interface LiftwatchState {
   /** turn_off attempts spent this stow (lift-up) episode; reset whenever
    *  the lift is down. Bounds the off-enforcement. */
   offAttempts?: number;
+  /** The entity the current stow's off attempts were spent on. A change
+   *  of off target (env or a new build) resets the count — a budget spent
+   *  on Room Off must not block the first Samsung off (Codex review,
+   *  2026-09-04). */
+  offVia?: string;
   /** Recent lift edges (ms epoch), pruned to BREAKER_WINDOW_MS — the
    *  breaker's evidence. */
   edges?: number[];
@@ -240,9 +245,10 @@ export function evaluateTvFollow(
   // Up: the down→up edge spends the first off attempt; while the TV still
   // affirmatively reads "on" (never on unknown), the enforcement spends
   // the rest — a TV inside the ceiling is never meant to be on.
-  const attempts = st.offAttempts ?? 0;
+  const via = offEntity();
+  const attempts = st.offVia === via ? (st.offAttempts ?? 0) : 0;
   if (edge || (tvOn === true && attempts < offAttemptsAllowed())) {
-    return { action: "tv_off", next: { ...tracked, offAttempts: attempts + 1 } };
+    return { action: "tv_off", next: { ...tracked, offAttempts: attempts + 1, offVia: via } };
   }
   return { action: null, next: tracked };
 }

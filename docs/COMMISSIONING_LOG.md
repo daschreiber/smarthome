@@ -1330,3 +1330,50 @@ With the Room Off build live: the TV does not go off when the lift rises.
     `command: KEY_POWEROFF` (discrete off) — if THAT works, the app can
     be pointed at it deliberately (with the lift watched, per the #105
     lesson).
+
+## 2026-09-04 — TV follower round five: it was the Cast receiver all along
+
+### The owner's photo
+
+A single Samsung off didn't do it either — and the TV comes on to the
+**Home Assistant Cast idle screen** (blue, HA logo, device icons).
+
+### What that means
+
+`media_player.55_qled` is the TV's **Google Cast receiver**, not the
+Samsung's TV control. Its feature bits (turn_on/off, play_media, stop,
+browse — 152461) are the Cast integration's signature, and the discovered
+*Samsung TV* integration was deliberately skipped at commissioning
+(2026-07-16 entry) while Google Cast was set up later. So:
+
+- Cast "on" launches the receiver and HDMI-CEC wakes the TV onto it —
+  which is why lowering works and lands on the HA screen.
+- Cast "off" merely quits the cast app. It cannot power a TV down. Every
+  off so far — plain, retried, held-key (which fell back to the same
+  thing, the remote entity being absent), Room Off, single — was the
+  wrong lever. The rounds two through four diagnoses stand corrected:
+  nothing was "fighting" the Samsung; the Samsung was never addressed.
+- Consequently the 2026-08-30 lift oscillation was NOT caused by the
+  follower's commands (a cast quit each time). Whatever moved the lift is
+  Control4's own, and stays an open C4 question.
+
+### Change (PR: LIFTWATCH_TV_ENTITY)
+
+`LIFTWATCH_TV_ENTITY` names the Samsung TV integration's media_player
+once it exists. It becomes the OFF target and the power TRUTH (the Cast
+entity only knows whether it is casting). If the entity isn't in the
+entity map yet, the follower synthesizes a minimal media_player device
+for it (env-named server-side entity, same trust as
+`WHITENOISE_MEDIA_ENTITY`; the typed command layer still gates it). The
+ON stays on the Cast receiver by design — the household likes landing on
+that screen. No behavior change until the variable is set.
+
+### To do on site (~5 min)
+
+- [ ] HA → Settings → Devices & services → the discovered **Samsung TV**
+  card (or Add integration → *Samsung Smart TV*) → Configure; accept the
+  "Allow" prompt on the TV (lift down, TV on).
+- [ ] Note the new entity id (the device's media_player). Set
+  `LIFTWATCH_TV_ENTITY=<that id>` on Railway — or hand it over to be
+  baked into the entity map as the default.
+- [ ] Raise the lift: `lift_tv_off` via the new entity, TV powers down.

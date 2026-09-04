@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BREAKER_COOLDOWN_MS, BREAKER_EDGES, BREAKER_WINDOW_MS, C4_ROOM_ENTITY, MAX_OFF_ATTEMPTS,
   TV_ENTITY, evaluateTvFollow, liftDownFromState, loadLiftwatch, offAttemptsAllowed, offDevice,
-  saveLiftwatch, tickLiftwatch, tvDevice, tvOnFromState, type LiftwatchState,
+  saveLiftwatch, tickLiftwatch, tvDevice, tvOnFromState, tvPowerDevice, tvTruthEntity,
+  type LiftwatchState,
 } from "../liftwatch";
 import { TV_LIFT_ENTITY } from "../sleepwatch";
 import { getState } from "../ha";
@@ -32,6 +33,7 @@ beforeEach(() => {
   delete process.env.SLEEPWATCH_LIFT_STATE;
   delete process.env.LIFTWATCH_OFF_ENTITY;
   delete process.env.LIFTWATCH_OFF_ATTEMPTS;
+  delete process.env.LIFTWATCH_TV_ENTITY;
 });
 
 const NOW = 1_800_000_000_000;
@@ -296,6 +298,60 @@ describe("tick", () => {
     await tickLiftwatch();
     expect(executeOnDevice).not.toHaveBeenCalled();
     expect(loadLiftwatch().lastDown).toBe(true);
+  });
+});
+
+describe("the Samsung TV integration entity (LIFTWATCH_TV_ENTITY)", () => {
+  const SAMSUNG = "media_player.samsung_qled_tv";
+
+  beforeEach(() => {
+    vi.mocked(getState).mockReset();
+    vi.mocked(executeOnDevice).mockReset();
+  });
+
+  it("absent: the Cast receiver is both truth and off target", () => {
+    expect(tvPowerDevice()).toBeNull();
+    expect(tvTruthEntity()).toBe(TV_ENTITY);
+    expect(offDevice()?.entityId).toBe(TV_ENTITY);
+  });
+
+  it("present but not in the entity map: a synthetic media_player with on_off, and it becomes truth + off", () => {
+    process.env.LIFTWATCH_TV_ENTITY = SAMSUNG;
+    const dev = tvPowerDevice();
+    expect(dev).toMatchObject({ entityId: SAMSUNG, kind: "media_player", room: "Master Bedroom", visible: false });
+    expect(dev?.capabilities).toContain("on_off");
+    expect(tvTruthEntity()).toBe(SAMSUNG);
+    expect(offDevice()?.entityId).toBe(SAMSUNG);
+    // An explicit off target still wins.
+    process.env.LIFTWATCH_OFF_ENTITY = C4_ROOM_ENTITY;
+    expect(offDevice()?.entityId).toBe(C4_ROOM_ENTITY);
+  });
+
+  it("lift up → turn_off on the Samsung, with its state as the truth; lift down → the Cast receiver still", async () => {
+    process.env.LIFTWATCH_TV_ENTITY = SAMSUNG;
+    saveLiftwatch({ enabled: true, lastDown: true, offAttempts: 0 });
+    const seen: string[] = [];
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      seen.push(id);
+      return { state: id === TV_LIFT_ENTITY ? "off" : "on" } as never;
+    });
+    await tickLiftwatch();
+    expect(seen).toContain(SAMSUNG);
+    expect(seen).not.toContain(TV_ENTITY);
+    expect(executeOnDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: SAMSUNG }),
+      { command: "turn_off" },
+    );
+
+    vi.mocked(executeOnDevice).mockClear();
+    vi.mocked(getState).mockImplementation(async (id: string) =>
+      ({ state: id === TV_LIFT_ENTITY ? "on" : "off" }) as never,
+    );
+    await tickLiftwatch();
+    expect(executeOnDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: TV_ENTITY }),
+      { command: "turn_on" },
+    );
   });
 });
 

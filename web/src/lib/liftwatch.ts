@@ -47,6 +47,19 @@ import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
  *   (HDMI-CEC / Anynet+ re-waking it) and no amount of app-side retrying
  *   helps. LIFTWATCH_OFF_ENTITY still redirects the off (Room Off is
  *   available, but only meaningful once the ON also goes through C4).
+ * - Round five (2026-09-04, the owner's photo): a single off didn't do it
+ *   either — and the TV comes on to the HOME ASSISTANT CAST IDLE SCREEN.
+ *   That is the whole story: `media_player.55_qled` is the TV's Google
+ *   Cast receiver, not the Samsung's TV control (its feature bits —
+ *   turn_on/off, play_media, browse — are the Cast integration's
+ *   signature; the discovered Samsung TV integration was skipped at
+ *   commissioning, COMMISSIONING_LOG 2026-07-16). Cast "on" launches the
+ *   receiver and HDMI-CEC wakes the TV onto it; Cast "off" merely quits
+ *   the cast app — it has no way to power a TV down. Every off so far was
+ *   the wrong lever. The real one is the Samsung TV integration's own
+ *   media_player, once configured in HA: LIFTWATCH_TV_ENTITY names it and
+ *   it becomes both the OFF target and the power TRUTH. The ON stays on
+ *   the Cast entity (the household likes landing on that screen).
  *
  * Deliberate semantics, same philosophy as the rest of the house:
  * - The ON side is an EDGE, never a level: the TV comes on exactly once
@@ -77,12 +90,27 @@ import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
  * two rules can never disagree about which way the TV went.
  */
 
-/** The Samsung on the lift. Hidden from the room's cards since 2026-07-22
- *  (the MBR media cards were dead — that note was about the Control4
- *  zone's missing turn_on), but the entity itself advertises turn_on and
- *  turn_off (supported_features 152461). It is the TV-power TRUTH (does
- *  the panel read on?) and the ON command's target. */
+/** The TV's Google Cast receiver (NOT the Samsung's TV control — see the
+ *  round-five note above). Hidden from the room's cards since 2026-07-22.
+ *  It is the ON command's target: launching the receiver wakes the TV
+ *  over HDMI-CEC onto the Home Assistant Cast screen. It is also the
+ *  power truth and the off target only until LIFTWATCH_TV_ENTITY names
+ *  the real Samsung entity. */
 export const TV_ENTITY = "media_player.55_qled";
+
+/** The Samsung TV integration's own media_player for this TV, once it is
+ *  configured in HA (LIFTWATCH_TV_ENTITY). Real power control and real
+ *  power truth — the Cast entity has neither. Empty until then. */
+export function tvPowerEntity(): string {
+  return process.env.LIFTWATCH_TV_ENTITY || "";
+}
+
+/** Whose state answers "does the panel read on?": the Samsung entity when
+ *  configured, else the Cast receiver (which only knows whether it is
+ *  casting). */
+export function tvTruthEntity(): string {
+  return tvPowerEntity() || TV_ENTITY;
+}
 
 /** The Control4 zone for the room: `turn_off` is Control4's Room Off —
  *  the way the house's original lift programming powered the TV down. */
@@ -155,16 +183,40 @@ export function tvDevice(): Device | null {
   return registry().devices.find((d) => d.entityId === TV_ENTITY) ?? null;
 }
 
-/** Where the OFF goes: the Samsung itself by default (the only path
- *  proven to reach it), or whatever LIFTWATCH_OFF_ENTITY names — e.g. the
- *  Control4 zone for Room Off. Falls back to the TV if the named entity
- *  isn't in the map. */
+/** A device for the Samsung power entity: the registry row if the entity
+ *  map carries it, else a minimal synthetic media_player — the env names
+ *  a server-side entity, the same trust as WHITENOISE_MEDIA_ENTITY, and
+ *  the typed command layer still gates what can be sent to it. */
+export function tvPowerDevice(): Device | null {
+  const id = tvPowerEntity();
+  if (!id) return null;
+  const mapped = registry().devices.find((d) => d.entityId === id);
+  if (mapped) return mapped;
+  return {
+    id: "master_bedroom__tv_power",
+    entityId: id,
+    kind: "media_player",
+    label: "TV (power)",
+    room: "Master Bedroom",
+    floor: 6,
+    group: "Media",
+    category: "media",
+    visible: false,
+    capabilities: ["on_off"],
+  };
+}
+
+/** Where the OFF goes: LIFTWATCH_OFF_ENTITY if set (e.g. the Control4
+ *  zone for Room Off), else the Samsung power entity when configured,
+ *  else the Cast receiver (which can only quit the cast). */
 export function offEntity(): string {
-  return process.env.LIFTWATCH_OFF_ENTITY || TV_ENTITY;
+  return process.env.LIFTWATCH_OFF_ENTITY || tvTruthEntity();
 }
 
 export function offDevice(): Device | null {
   const id = offEntity();
+  const power = tvPowerDevice();
+  if (power && power.entityId === id) return power;
   return registry().devices.find((d) => d.entityId === id) ?? tvDevice();
 }
 
@@ -262,7 +314,7 @@ export async function tickLiftwatch(): Promise<void> {
   // lift edge, and vice versa.
   const [liftRes, tvRes] = await Promise.allSettled([
     getState(TV_LIFT_ENTITY),
-    getState(TV_ENTITY),
+    getState(tvTruthEntity()),
   ]);
   const down =
     liftRes.status === "fulfilled" ? liftDownFromState(liftRes.value?.state) : null;

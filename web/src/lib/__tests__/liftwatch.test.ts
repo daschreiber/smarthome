@@ -359,6 +359,13 @@ describe("discovering the TV's own entity", () => {
     expect(discoverTvPowerEntity([ha("media_player.x", "Samsung Q80 65", SAMSUNG)])).toBeNull();
   });
 
+  it("the owner's own device name — \"Master Bedroom Lift TV\" — is this TV", () => {
+    expect(discoverTvPowerEntity([ha("media_player.master_bedroom_lift_tv", "Master Bedroom Lift TV", SAMSUNG)]))
+      .toBe("media_player.master_bedroom_lift_tv");
+    // ...but not the Control4 zone that merely carries the room's name.
+    expect(discoverTvPowerEntity([ha(C4_ROOM_ENTITY, "Master Bedroom", 23821)])).toBeNull();
+  });
+
   it("an entity named by model code (QE55…) is this TV too", () => {
     expect(discoverTvPowerEntity([ha("media_player.samsung_qe55q70datxsq", "Samsung QE55Q70DATXSQ", SAMSUNG)]))
       .toBe("media_player.samsung_qe55q70datxsq");

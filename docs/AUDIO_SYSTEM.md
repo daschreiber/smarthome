@@ -77,6 +77,17 @@ Spotify Connect to the receiver exits the same speakers as C4 audio.
 
 Sonos Arc Ultra in the Gym (`media_player.gym_gym`, full transport +
 grouping). Samsung TVs via cast/`samsungtv` (+ `dlna_dmr` Den TV soundbar).
+
+**The Master Bedroom lift TV has TWO entities, and they are not
+interchangeable** (learned the hard way, 2026-08-30 → 2026-09-04):
+`media_player.55_qled` is the TV's Google Cast receiver — its "on"
+launches the receiver and HDMI-CEC wakes the TV onto the HA Cast screen,
+but its "off" only quits the cast and cannot power the TV down. The
+`samsungtv` entity, device name **Master Bedroom Lift TV** (QE55Q70DATXSQ,
+added 2026-09-04), is the real power control. The TV follower
+(lib/liftwatch) uses the Cast receiver for ON and the Samsung entity for
+OFF and for "is the panel on?". The house's second 55" QLED
+(QE55Q60DAUXSQ) was deliberately left un-added.
 Apple TV "Basement Jerusalem". Rack has its own AC (`climate.rack_unit_109`).
 
 ## Spotify device-picker decoder

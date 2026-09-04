@@ -9,80 +9,56 @@ import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
 
 /**
  * TV follower: the Master Bedroom TV runs in unison with its ceiling lift
- * (owner report, 2026-08-29 — the house has always worked this way).
- * Whenever the lift comes DOWN — keypad, app, or Control4 — the TV turns
- * on; whenever it goes back UP, the TV turns off. The behavior stopped
- * working some time before 2026-08-29; the old link never lived in this
- * stack (no HA automation, no app rule — it was Control4-side programming
- * we don't hold), so instead of chasing what broke inside Control4 the app
- * now owns the rule.
+ * (owner request 2026-08-29 — the house has always worked this way; the
+ * original link was Control4-side programming that stopped working and
+ * is not held in this stack). Whenever the lift comes DOWN — keypad,
+ * app, or Control4 — the TV turns on; whenever it goes back UP, the TV
+ * turns off. Working since 2026-09-04.
  *
  * A standing house rule like Sleep sense and the Sauna follower, NOT a
  * user-authored automation: the trigger is the lift relay's STATE, which
- * the step builder can't express. Evaluated on the scheduler's 30s tick.
+ * the step builder can't express. Evaluated on the scheduler's 30s tick
+ * (before Sleep sense, so a bedtime off lands before the noise starts).
  *
- * WHAT THE FIELD TESTS TAUGHT (2026-08-30, three rounds):
- * - Samsung-direct `media_player.turn_off` reaches the TV (the screen
- *   flashes) but the panel comes back on. A held power press through the
- *   TV's remote entity (#105) didn't help either — and the lift itself
- *   oscillated for minutes on the next opening. Nothing here commands the
- *   lift relay, so that oscillation is Control4 reacting to TV power
- *   events with its own residual TV↔lift programming. Conclusion:
- *   CONTROL4 STILL OWNS THE TV'S POWER IN THAT ROOM. Poking the Samsung
- *   over the network fights it; the historical off was Control4's own
- *   "Room Off", which powers the room's endpoints down through their
- *   drivers and leaves the room state consistent.
- * - Round four (2026-09-04): Control4's Room Off did NOTHING. In
- *   hindsight it couldn't: Control4 only powers down what it believes is
- *   on, and our ON goes straight to the Samsung over the network, so the
- *   room was never on in Control4's eyes. (It also suggests the ORIGINAL
- *   breakage: Control4's own Samsung driver lost its authorization to the
- *   TV, so C4's programming stopped moving the TV yet still reacts to its
- *   power events.) The Samsung network path is the only one proven to
- *   reach the TV, so the OFF goes back there — and by default as ONE
- *   command per stow (LIFTWATCH_OFF_ATTEMPTS, default 1): a power key is
- *   a toggle, and retrying against an integration state that lags could
- *   itself be what relights the panel. One command isolates the question;
- *   if a single off still only flashes, the TV is being held on locally
- *   (HDMI-CEC / Anynet+ re-waking it) and no amount of app-side retrying
- *   helps. LIFTWATCH_OFF_ENTITY still redirects the off (Room Off is
- *   available, but only meaningful once the ON also goes through C4).
- * - Round five (2026-09-04, the owner's photo): a single off didn't do it
- *   either — and the TV comes on to the HOME ASSISTANT CAST IDLE SCREEN.
- *   That is the whole story: `media_player.55_qled` is the TV's Google
- *   Cast receiver, not the Samsung's TV control (its feature bits —
- *   turn_on/off, play_media, browse — are the Cast integration's
- *   signature; the discovered Samsung TV integration was skipped at
- *   commissioning, COMMISSIONING_LOG 2026-07-16). Cast "on" launches the
- *   receiver and HDMI-CEC wakes the TV onto it; Cast "off" merely quits
- *   the cast app — it has no way to power a TV down. Every off so far was
- *   the wrong lever. The real one is the Samsung TV integration's own
- *   media_player, once configured in HA: LIFTWATCH_TV_ENTITY names it and
- *   it becomes both the OFF target and the power TRUTH. The ON stays on
- *   the Cast entity (the household likes landing on that screen).
+ * THE TWO TV ENTITIES — the fact that took five field rounds to learn
+ * (COMMISSIONING_LOG 2026-08-30 … 2026-09-04):
+ * - `media_player.55_qled` is the TV's Google CAST receiver. Its "on"
+ *   launches the receiver and HDMI-CEC wakes the TV onto the Home
+ *   Assistant Cast screen (the household likes landing there) — so it is
+ *   the ON target. Its "off" merely quits the cast and cannot power a TV
+ *   down; it is never the off target once the real one is known.
+ * - The Samsung TV integration's own media_player ("Master Bedroom Lift
+ *   TV", added 2026-09-04) is the real power control and the power TRUTH.
+ *   The follower DISCOVERS it among HA's states (discoverTvPowerCandidates:
+ *   a media_player named for this TV with turn_off + select_source, never
+ *   the Cast receiver or a Control4 zone), remembers it in its state file,
+ *   and offers a choice on the Automations card if several match — the
+ *   house has two 55" QLEDs. LIFTWATCH_TV_ENTITY pins one explicitly;
+ *   LIFTWATCH_OFF_ENTITY redirects only the off.
  *
  * Deliberate semantics, same philosophy as the rest of the house:
  * - The ON side is an EDGE, never a level: the TV comes on exactly once
  *   per lowering. Someone who turns it off by remote with the lift still
  *   down is a human making a choice — the follower never relights it.
- * - The OFF side is the edge PLUS bounded level enforcement: while the
- *   lift is up and the TV still reads "on", keep commanding off — up to
- *   MAX_OFF_ATTEMPTS per stow, one per tick, every attempt audited, then
- *   stand down until the lift next comes down. A TV that is ON inside the
- *   ceiling is never a human's choice, so re-asserting here fights a
- *   failure, not a person. This also covers the restart hole: a baseline
- *   re-learned with the lift already up no longer strands a playing TV.
- * - A CIRCUIT BREAKER: if the lift relay changes position BREAKER_EDGES
- *   times inside BREAKER_WINDOW_MS, something is fighting (the 2026-08-30
- *   oscillation) and the follower must not be a link in that loop — it
- *   stops commanding for BREAKER_COOLDOWN_MS, audits the trip once, and
- *   keeps only tracking the baseline. A human never moves a ceiling lift
- *   six times in five minutes.
+ * - The OFF side is the edge plus a bounded budget per stow (default ONE
+ *   command, LIFTWATCH_OFF_ATTEMPTS up to MAX_OFF_ATTEMPTS): a power key
+ *   is a toggle, so the follower never retries blind; with a budget above
+ *   one it re-sends only while the TV affirmatively reads "on" — a TV ON
+ *   inside the ceiling is never a human's choice. The budget is tied to
+ *   the entity it was spent on (offVia), so a change of target starts
+ *   fresh. A stranded-on TV found after a restart gets its one off.
+ * - A CIRCUIT BREAKER: BREAKER_EDGES lift edges inside BREAKER_WINDOW_MS
+ *   means something is fighting (the 2026-08-30 lift oscillation, which
+ *   was Control4's own doing, not this rule's) — the follower stops
+ *   commanding for BREAKER_COOLDOWN_MS, audits the trip once, and keeps
+ *   tracking the baseline. A human never moves a ceiling lift six times
+ *   in five minutes.
  * - Unknown is not "up": an unreadable lift state holds the last known
- *   baseline instead of inventing an edge. Same rule after a restart: the
- *   first readable state only sets the baseline, it never acts — a deploy
- *   mid-movie must not power-cycle the TV. (The off-enforcement needs the
- *   TV to affirmatively read "on"; unknown TV state never triggers it.)
+ *   baseline instead of inventing an edge. Same after a restart: the first
+ *   readable state only sets the baseline, it never acts — a deploy
+ *   mid-movie must not power-cycle the TV. Unknown TV state never triggers
+ *   the enforcement. The state file lives on the /data volume by default
+ *   so a deploy does not wipe the baseline.
  *
  * Polarity rides the same knob as Sleep sense: SLEEPWATCH_LIFT_STATE names
  * the relay state that means "stowed" (default "off" — proven nightly by
@@ -91,11 +67,10 @@ import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
  */
 
 /** The TV's Google Cast receiver (NOT the Samsung's TV control — see the
- *  round-five note above). Hidden from the room's cards since 2026-07-22.
- *  It is the ON command's target: launching the receiver wakes the TV
- *  over HDMI-CEC onto the Home Assistant Cast screen. It is also the
- *  power truth and the off target only until LIFTWATCH_TV_ENTITY names
- *  the real Samsung entity. */
+ *  header). Hidden from the room's cards since 2026-07-22. It is the ON
+ *  command's target: launching the receiver wakes the TV over HDMI-CEC
+ *  onto the Home Assistant Cast screen. It is the power truth and the
+ *  off target only until the Samsung entity is discovered or pinned. */
 export const TV_ENTITY = "media_player.55_qled";
 
 /** The Samsung TV integration's own media_player for this TV, once it is

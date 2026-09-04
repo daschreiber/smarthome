@@ -64,7 +64,7 @@ model when they land:
 
 | Device | Integration route | New capabilities |
 | --- | --- | --- |
-| Samsung Smart TVs | Samsung TV / SmartThings (55" QLED already discovered) | power, volume, source |
+| Samsung Smart TVs | Samsung TV integration — **the Master Bedroom lift TV landed 2026-09-04** ("Master Bedroom Lift TV"; drives the TV follower's off, see `docs/AUDIO_SYSTEM.md`). Card-level power/volume/source for TVs still to come; the other 55" QLED is discovered but not added | power, volume, source |
 | Yale Linus lock | Yale Home cloud or Matter (see Phase F prerequisites) | lock/unlock — **app support landed 2026-07-29** (hold + confirm + account password on unlock + flagged audit; excluded from conversation, scenes, and automations; commissioning per `docs/YALE_LOCK_SETUP.md`) |
 | Sauna | **integrated 2026-07-16** as a virtual device in the app backend, consuming the existing sauna service's `/api/quick/*` endpoints (all KLAFS session/watchdog logic stays in that service). **Committed next step (owner decision):** promote to Home Assistant entities (switch + temperature sensors wrapping the same endpoints) so HA automations and scenes can target it; the backend then reads it via HA like every other device. | on/off, target temp (40-100°C server-side bounds), `confirm:true` required on every command |
 | Roborock ×2 | official Roborock integration | **app support landed 2026-07-21** (see below) — start/pause/dock; per-room (segment) cleaning deferred until the integration exposes the map segments |

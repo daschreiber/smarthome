@@ -32,10 +32,21 @@ import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
  *   over the network fights it; the historical off was Control4's own
  *   "Room Off", which powers the room's endpoints down through their
  *   drivers and leaves the room state consistent.
- * - So the OFF now goes through the Control4 zone (`media_player.
- *   master_bedroom`, `turn_off` = Room Off) — LIFTWATCH_OFF_ENTITY
- *   overrides, e.g. back to the Samsung entity. The ON stays the Samsung
- *   `turn_on` (network wake), which has worked every time.
+ * - Round four (2026-09-04): Control4's Room Off did NOTHING. In
+ *   hindsight it couldn't: Control4 only powers down what it believes is
+ *   on, and our ON goes straight to the Samsung over the network, so the
+ *   room was never on in Control4's eyes. (It also suggests the ORIGINAL
+ *   breakage: Control4's own Samsung driver lost its authorization to the
+ *   TV, so C4's programming stopped moving the TV yet still reacts to its
+ *   power events.) The Samsung network path is the only one proven to
+ *   reach the TV, so the OFF goes back there — and by default as ONE
+ *   command per stow (LIFTWATCH_OFF_ATTEMPTS, default 1): a power key is
+ *   a toggle, and retrying against an integration state that lags could
+ *   itself be what relights the panel. One command isolates the question;
+ *   if a single off still only flashes, the TV is being held on locally
+ *   (HDMI-CEC / Anynet+ re-waking it) and no amount of app-side retrying
+ *   helps. LIFTWATCH_OFF_ENTITY still redirects the off (Room Off is
+ *   available, but only meaningful once the ON also goes through C4).
  *
  * Deliberate semantics, same philosophy as the rest of the house:
  * - The ON side is an EDGE, never a level: the TV comes on exactly once
@@ -94,11 +105,20 @@ export interface LiftwatchState {
 
 const DEFAULT_STATE: LiftwatchState = { enabled: true, lastDown: null };
 
-/** Off commands per stow episode: the up-edge spends the first, and the
- *  enforcement spends the rest while the TV still reads "on". Enough to
- *  out-stubborn a dropped command, small enough that a truly unreachable
- *  TV gets three audit rows, not a nightly war. */
+/** Ceiling on off commands per stow episode; the live budget is
+ *  offAttemptsAllowed() (LIFTWATCH_OFF_ATTEMPTS). The up-edge spends the
+ *  first; the enforcement spends the rest while the TV still reads "on". */
 export const MAX_OFF_ATTEMPTS = 3;
+
+/** Off commands per stow. Default 1 (2026-09-04): a power key is a toggle,
+ *  so a retry against a lagging "on" can relight the panel — one command
+ *  per stow until the TV is proven to honor a single off. Raise to 2–3 to
+ *  bring back the enforcement (the restart-hole cover) once it is. */
+export function offAttemptsAllowed(): number {
+  const raw = Number(process.env.LIFTWATCH_OFF_ATTEMPTS);
+  const n = Number.isFinite(raw) ? Math.floor(raw) : 1;
+  return Math.min(MAX_OFF_ATTEMPTS, Math.max(1, n));
+}
 
 /** Lift edges inside the window that mean "something is fighting". A
  *  human testing open/close twice is four; the 2026-08-30 oscillation
@@ -130,12 +150,12 @@ export function tvDevice(): Device | null {
   return registry().devices.find((d) => d.entityId === TV_ENTITY) ?? null;
 }
 
-/** Where the OFF goes: the Control4 room by default (Room Off), or
- *  whatever LIFTWATCH_OFF_ENTITY names — the Samsung entity to go back to
- *  network power-off. Falls back to the TV itself if the named entity
+/** Where the OFF goes: the Samsung itself by default (the only path
+ *  proven to reach it), or whatever LIFTWATCH_OFF_ENTITY names — e.g. the
+ *  Control4 zone for Room Off. Falls back to the TV if the named entity
  *  isn't in the map. */
 export function offEntity(): string {
-  return process.env.LIFTWATCH_OFF_ENTITY || C4_ROOM_ENTITY;
+  return process.env.LIFTWATCH_OFF_ENTITY || TV_ENTITY;
 }
 
 export function offDevice(): Device | null {
@@ -221,7 +241,7 @@ export function evaluateTvFollow(
   // affirmatively reads "on" (never on unknown), the enforcement spends
   // the rest — a TV inside the ceiling is never meant to be on.
   const attempts = st.offAttempts ?? 0;
-  if (edge || (tvOn === true && attempts < MAX_OFF_ATTEMPTS)) {
+  if (edge || (tvOn === true && attempts < offAttemptsAllowed())) {
     return { action: "tv_off", next: { ...tracked, offAttempts: attempts + 1 } };
   }
   return { action: null, next: tracked };
@@ -284,7 +304,7 @@ export async function tickLiftwatch(): Promise<void> {
     ok: !error, durationMs: Date.now() - started, error,
   });
   console.log(
-    `[liftwatch] lift ${action === "tv_on" ? "down → TV on" : `up → TV off (attempt ${attempt}/${MAX_OFF_ATTEMPTS})`} via ${dev.entityId}` +
+    `[liftwatch] lift ${action === "tv_on" ? "down → TV on" : `up → TV off (attempt ${attempt}/${offAttemptsAllowed()})`} via ${dev.entityId}` +
     (error ? ` FAILED: ${error}` : ""),
   );
 }

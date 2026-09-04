@@ -4,8 +4,8 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BREAKER_COOLDOWN_MS, BREAKER_EDGES, BREAKER_WINDOW_MS, C4_ROOM_ENTITY, MAX_OFF_ATTEMPTS,
-  TV_ENTITY, evaluateTvFollow, liftDownFromState, loadLiftwatch, offDevice, saveLiftwatch,
-  tickLiftwatch, tvDevice, tvOnFromState, type LiftwatchState,
+  TV_ENTITY, evaluateTvFollow, liftDownFromState, loadLiftwatch, offAttemptsAllowed, offDevice,
+  saveLiftwatch, tickLiftwatch, tvDevice, tvOnFromState, type LiftwatchState,
 } from "../liftwatch";
 import { TV_LIFT_ENTITY } from "../sleepwatch";
 import { getState } from "../ha";
@@ -31,6 +31,7 @@ beforeEach(() => {
   process.env.LIFTWATCH_PATH = path.join(dir, "liftwatch.json");
   delete process.env.SLEEPWATCH_LIFT_STATE;
   delete process.env.LIFTWATCH_OFF_ENTITY;
+  delete process.env.LIFTWATCH_OFF_ATTEMPTS;
 });
 
 const NOW = 1_800_000_000_000;
@@ -73,6 +74,27 @@ describe("edge detection", () => {
 });
 
 describe("off enforcement (the 2026-08-30 stranded-on TV)", () => {
+  beforeEach(() => { process.env.LIFTWATCH_OFF_ATTEMPTS = String(MAX_OFF_ATTEMPTS); });
+
+  it("by default the off is ONE command per stow — a toggle key is never retried blind", () => {
+    delete process.env.LIFTWATCH_OFF_ATTEMPTS;
+    expect(offAttemptsAllowed()).toBe(1);
+    const edge = evaluateTvFollow(false, true, DOWN, NOW);
+    expect(edge.action).toBe("tv_off");
+    // Still reads on a tick later: no second command.
+    expect(evaluateTvFollow(false, true, edge.next, NOW + 30_000).action).toBeNull();
+    // A stranded-on TV after a restart still gets its ONE off (the
+    // restart-hole cover survives at a budget of one) — and no second.
+    const stranded = evaluateTvFollow(false, true, { ...UP, offAttempts: 0 }, NOW);
+    expect(stranded.action).toBe("tv_off");
+    expect(evaluateTvFollow(false, true, stranded.next, NOW + 30_000).action).toBeNull();
+    // The env re-enables the enforcement, clamped to the ceiling.
+    process.env.LIFTWATCH_OFF_ATTEMPTS = "9";
+    expect(offAttemptsAllowed()).toBe(MAX_OFF_ATTEMPTS);
+    process.env.LIFTWATCH_OFF_ATTEMPTS = "0";
+    expect(offAttemptsAllowed()).toBe(1);
+  });
+
   it("a TV still on with the lift up is switched off — no edge required", () => {
     // Baseline re-learned as "up" after a deploy, TV left playing inside
     // the ceiling. The tick after the baseline acts.
@@ -219,34 +241,39 @@ describe("tick", () => {
     expect(loadLiftwatch()).toMatchObject({ enabled: true, lastDown: true, offAttempts: 0 });
   });
 
-  it("lift up → Control4 Room Off on the room zone, not the Samsung", async () => {
+  it("lift up → one Samsung turn_off, the only path proven to reach the TV", async () => {
     saveLiftwatch({ enabled: true, lastDown: true, offAttempts: 0 });
     vi.mocked(getState).mockImplementation(states("off", "on"));
     await tickLiftwatch();
     expect(executeOnDevice).toHaveBeenCalledWith(
-      expect.objectContaining({ entityId: C4_ROOM_ENTITY }),
+      expect.objectContaining({ entityId: TV_ENTITY }),
       { command: "turn_off" },
     );
     expect(loadLiftwatch()).toMatchObject({ enabled: true, lastDown: false, offAttempts: 1 });
+    // The TV still reads on next tick: nothing more is sent by default.
+    vi.mocked(executeOnDevice).mockClear();
+    await tickLiftwatch();
+    expect(executeOnDevice).not.toHaveBeenCalled();
   });
 
-  it("the stranded-on TV is cleaned up end-to-end through the tick", async () => {
+  it("with the enforcement re-enabled, a stranded-on TV is cleaned up through the tick", async () => {
+    process.env.LIFTWATCH_OFF_ATTEMPTS = "3";
     saveLiftwatch({ enabled: true, lastDown: false, offAttempts: 0 });
     vi.mocked(getState).mockImplementation(states("off", "on"));
     await tickLiftwatch();
     expect(executeOnDevice).toHaveBeenCalledWith(
-      expect.objectContaining({ entityId: C4_ROOM_ENTITY }),
+      expect.objectContaining({ entityId: TV_ENTITY }),
       { command: "turn_off" },
     );
   });
 
-  it("LIFTWATCH_OFF_ENTITY redirects the off (e.g. back to the Samsung); an unknown entity falls back to the TV", async () => {
-    process.env.LIFTWATCH_OFF_ENTITY = TV_ENTITY;
-    expect(offDevice()?.entityId).toBe(TV_ENTITY);
+  it("LIFTWATCH_OFF_ENTITY redirects the off (e.g. Control4 Room Off); an unknown entity falls back to the TV", async () => {
+    process.env.LIFTWATCH_OFF_ENTITY = C4_ROOM_ENTITY;
+    expect(offDevice()?.entityId).toBe(C4_ROOM_ENTITY);
     process.env.LIFTWATCH_OFF_ENTITY = "media_player.does_not_exist";
     expect(offDevice()?.entityId).toBe(TV_ENTITY);
     delete process.env.LIFTWATCH_OFF_ENTITY;
-    expect(offDevice()?.entityId).toBe(C4_ROOM_ENTITY);
+    expect(offDevice()?.entityId).toBe(TV_ENTITY);
   });
 
   it("an open breaker sends nothing, even on a clean edge", async () => {
@@ -272,6 +299,7 @@ describe("configuration", () => {
     expect(dev?.entityId).toBe(TV_ENTITY);
     expect(dev?.room).toBe("Master Bedroom");
     expect(dev?.capabilities).toContain("on_off");
+    process.env.LIFTWATCH_OFF_ENTITY = C4_ROOM_ENTITY;
     const room = offDevice();
     expect(room?.entityId).toBe(C4_ROOM_ENTITY);
     expect(room?.room).toBe("Master Bedroom");

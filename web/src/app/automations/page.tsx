@@ -1154,6 +1154,7 @@ function SaunaFollower() {
 function TvFollower() {
   const [st, setSt] = useState<{
     enabled: boolean; available: boolean; canToggle: boolean; tvPower: string | null;
+    tvCandidates: Array<{ entityId: string; name: string }>;
   } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1166,6 +1167,21 @@ function TvFollower() {
 
   // Absent hardware = absent card (the TV left the entity map).
   if (!st || !st.available) return null;
+
+  // Several TVs match the bedroom set's name: the owner names the right
+  // one here rather than the follower guessing (a wrong pick would switch
+  // off a TV in another room).
+  const pick = (entityId: string) => {
+    setBusy(true);
+    fetch("/api/liftwatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...appKeyHeaders() },
+      body: JSON.stringify({ tvPower: entityId }),
+    })
+      .then((r) => r.json())
+      .then((out) => { if (out.ok) setSt({ ...st, tvPower: out.tvPower, tvCandidates: [] }); })
+      .finally(() => setBusy(false));
+  };
 
   const toggle = () => {
     setBusy(true);
@@ -1186,10 +1202,27 @@ function TvFollower() {
         <div className="st">
           {!st.enabled
             ? "paused"
-            : !st.tvPower
-              ? "lift comes down → TV on · lift goes up → nothing can switch the TV off yet: Home Assistant only has the TV's Cast receiver, whose \"off\" merely quits the cast. Add the Samsung TV integration in Home Assistant (Settings → Devices & services → Samsung TV → Configure, accept the prompt on the TV) — the follower finds it by itself within five minutes"
-              : "lift comes down → TV on · lift goes up → TV off (one command per stow) · however the lift was moved — keypad, app, or Control4 · turning the TV off by remote with the lift down is left alone · stands down for 10 minutes if the lift moves six times in five"}
+            : !st.tvPower && st.tvCandidates.length > 1
+              ? `${st.tvCandidates.length} TVs in Home Assistant match the bedroom set's name — which one is on the lift? (The wrong pick would switch off a TV in another room.)`
+              : !st.tvPower
+                ? "lift comes down → TV on · lift goes up → nothing can switch the TV off yet: Home Assistant only has the TV's Cast receiver, whose \"off\" merely quits the cast. Add the Samsung TV integration in Home Assistant (Settings → Devices & services → Samsung TV → Add, accept the prompt on the TV) — the follower finds it by itself within five minutes"
+                : "lift comes down → TV on · lift goes up → TV off (one command per stow) · however the lift was moved — keypad, app, or Control4 · turning the TV off by remote with the lift down is left alone · stands down for 10 minutes if the lift moves six times in five"}
         </div>
+        {st.enabled && !st.tvPower && st.tvCandidates.length > 1 && (
+          <div className="btn-row" style={{ marginTop: 6 }}>
+            {st.tvCandidates.map((c) => (
+              <button
+                key={c.entityId}
+                className="mini-btn"
+                disabled={busy || !st.canToggle}
+                onClick={() => pick(c.entityId)}
+                title={c.entityId}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <button
         className="toggle"

@@ -117,8 +117,18 @@ const TV_NAME = /\b55\b[\s\S]*qled|qled[\s\S]*\b55\b/i;
 const FEATURE_TURN_OFF = 256;
 const FEATURE_SELECT_SOURCE = 2048;
 
-export function discoverTvPowerEntity(states: HaState[]): string | null {
-  const hits = states
+export interface TvCandidate {
+  entityId: string;
+  name: string;
+}
+
+/** Every media_player that could be this TV's own entity. The house has
+ *  more than one 55" QLED (2026-09-04: two Samsung Smart TVs discovered,
+ *  both named "55\" QLED"), so this is a LIST — one match is adopted,
+ *  several are offered to the owner on the Automations card, never
+ *  guessed: the wrong pick would switch off a TV in another room. */
+export function discoverTvPowerCandidates(states: HaState[]): TvCandidate[] {
+  return states
     .filter((s) => s.entity_id.startsWith("media_player."))
     .filter((s) => s.entity_id !== TV_ENTITY && s.entity_id !== C4_ROOM_ENTITY)
     .filter((s) => TV_NAME.test(String(s.attributes.friendly_name ?? "")))
@@ -126,9 +136,23 @@ export function discoverTvPowerEntity(states: HaState[]): string | null {
       const f = Number(s.attributes.supported_features ?? 0);
       return (f & FEATURE_TURN_OFF) !== 0 && (f & FEATURE_SELECT_SOURCE) !== 0;
     })
-    .map((s) => s.entity_id)
-    .sort();
-  return hits[0] ?? null;
+    .map((s) => ({ entityId: s.entity_id, name: String(s.attributes.friendly_name ?? s.entity_id) }))
+    .sort((a, b) => a.entityId.localeCompare(b.entityId));
+}
+
+/** The one unambiguous match, or null (none, or more than one). */
+export function discoverTvPowerEntity(states: HaState[]): string | null {
+  const hits = discoverTvPowerCandidates(states);
+  return hits.length === 1 ? hits[0].entityId : null;
+}
+
+/** The owner's pick among several candidates (Automations card). Only a
+ *  candidate the last scan actually saw is accepted. */
+export function pickTvPower(entityId: string): boolean {
+  const st = loadLiftwatch();
+  if (!(st.tvPowerCandidates ?? []).some((c) => c.entityId === entityId)) return false;
+  saveLiftwatch({ ...st, tvPower: entityId });
+  return true;
 }
 
 /** Discovery runs on the tick only while nothing names the TV's entity,
@@ -149,10 +173,19 @@ async function maybeDiscoverTvPower(nowMs: number): Promise<void> {
     return; // HA unreachable: try again next scan window
   }
   if (!Array.isArray(states)) return;
-  const found = discoverTvPowerEntity(states as HaState[]);
+  const candidates = discoverTvPowerCandidates(states as HaState[]);
+  const found = candidates.length === 1 ? candidates[0].entityId : null;
   // Re-read after the await (a toggle may have rewritten the file).
   const fresh = loadLiftwatch();
-  saveLiftwatch({ ...fresh, tvPowerScanMs: nowMs, ...(found ? { tvPower: found } : {}) });
+  saveLiftwatch({
+    ...fresh,
+    tvPowerScanMs: nowMs,
+    tvPowerCandidates: candidates,
+    ...(found ? { tvPower: found } : {}),
+  });
+  if (candidates.length > 1 && JSON.stringify(fresh.tvPowerCandidates) !== JSON.stringify(candidates)) {
+    console.log(`[liftwatch] ${candidates.length} TVs match — the owner picks on the Automations card:`, candidates);
+  }
   if (found) {
     audit({
       ts: new Date().toISOString(), user: "liftwatch", deviceId: "automations",
@@ -197,6 +230,8 @@ export interface LiftwatchState {
   tvPower?: string;
   /** When discovery last scanned (ms epoch). */
   tvPowerScanMs?: number;
+  /** What the last scan saw; more than one = the owner picks. */
+  tvPowerCandidates?: TvCandidate[];
 }
 
 const DEFAULT_STATE: LiftwatchState = { enabled: true, lastDown: null };

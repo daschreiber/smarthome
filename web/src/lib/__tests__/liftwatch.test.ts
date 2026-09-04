@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BREAKER_COOLDOWN_MS, BREAKER_EDGES, BREAKER_WINDOW_MS, C4_ROOM_ENTITY, MAX_OFF_ATTEMPTS,
   TV_ENTITY, evaluateTvFollow, liftDownFromState, loadLiftwatch, offAttemptsAllowed, offDevice,
-  TV_POWER_SCAN_MS, discoverTvPowerEntity, saveLiftwatch, tickLiftwatch, tvDevice, tvOnFromState,
-  tvPowerDevice, tvTruthEntity, type LiftwatchState,
+  TV_POWER_SCAN_MS, discoverTvPowerCandidates, discoverTvPowerEntity, pickTvPower, saveLiftwatch,
+  tickLiftwatch, tvDevice, tvOnFromState, tvPowerDevice, tvTruthEntity, type LiftwatchState,
 } from "../liftwatch";
 import { TV_LIFT_ENTITY } from "../sleepwatch";
 import { getState, getStates, type HaState } from "../ha";
@@ -316,6 +316,41 @@ describe("discovering the TV's own entity", () => {
       ha("media_player.samsung_55_qled", "[TV] 55\" QLED", SAMSUNG),
     ];
     expect(discoverTvPowerEntity(states)).toBe("media_player.samsung_55_qled");
+  });
+
+  it("two 55\" QLEDs (the house has more than one): never guessed — listed for the owner to pick", async () => {
+    const states = [
+      ha(TV_ENTITY, '55" QLED', CAST),
+      ha("media_player.55_qled_2", '55" QLED', SAMSUNG),
+      ha("media_player.55_qled_1", '55" QLED 1', SAMSUNG),
+    ];
+    expect(discoverTvPowerEntity(states)).toBeNull();
+    expect(discoverTvPowerCandidates(states).map((c) => c.entityId)).toEqual([
+      "media_player.55_qled_1", "media_player.55_qled_2",
+    ]);
+
+    // Through the tick: no adoption, candidates remembered, the off still
+    // goes to the Cast receiver meanwhile.
+    vi.mocked(getState).mockReset();
+    vi.mocked(getStates).mockReset();
+    vi.mocked(executeOnDevice).mockReset();
+    saveLiftwatch({ enabled: true, lastDown: true, offAttempts: 0 });
+    vi.mocked(getStates).mockResolvedValue(states);
+    vi.mocked(getState).mockImplementation(async (id: string) =>
+      ({ state: id === TV_LIFT_ENTITY ? "off" : "on" }) as never,
+    );
+    await tickLiftwatch();
+    expect(loadLiftwatch().tvPower).toBeUndefined();
+    expect(loadLiftwatch().tvPowerCandidates?.map((c) => c.name)).toEqual(['55" QLED 1', '55" QLED']);
+    expect(executeOnDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: TV_ENTITY }), { command: "turn_off" },
+    );
+
+    // The owner's pick must be one the scan saw; then it is the TV.
+    expect(pickTvPower("media_player.some_other_tv")).toBe(false);
+    expect(pickTvPower("media_player.55_qled_2")).toBe(true);
+    expect(tvTruthEntity()).toBe("media_player.55_qled_2");
+    expect(offDevice()?.entityId).toBe("media_player.55_qled_2");
   });
 
   it("nothing to find without the integration — and never a source-less or unrelated player", () => {

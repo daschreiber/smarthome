@@ -1409,3 +1409,14 @@ app-side chores, so the app now does them:
   five minutes the card flips to the full description and Activity shows
   `lift_tv_power_found`; the next raise sends `lift_tv_off` via that
   entity and the TV powers down.
+
+### Addendum (same day): the house has two 55" QLEDs
+
+HA's Discovered list shows two Samsung Smart TVs, both named
+`55" QLED` (QE55Q70DATXSQ and QE55Q60DAUXSQ), so name-based discovery is
+ambiguous. The follower now never guesses between several matches: it
+lists them, the Automations card asks "which one is on the lift?", and
+the owner's pick (validated against the scan's own list, audited as
+`liftwatch_tv_pick`) becomes the TV. Until picked, the off still goes to
+the Cast receiver (harmless). To tell the two apart from the TV itself:
+Settings → Support → About This TV shows the model code.

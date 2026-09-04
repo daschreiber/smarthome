@@ -1229,3 +1229,53 @@ addresses or get repointed; the shades' gateway is found by search; the
 Yamahas follow themselves. Still true: none of this covers the boot-timing
 collateral (Alexa, Cast, Eight Sleep), and the next real outage is the
 test that counts.
+## 2026-09-04 — TV follower: the off goes through Control4's Room Off; a breaker
+
+### Reading the three 2026-08-30 rounds together
+
+- Samsung-direct `media_player.turn_off` reaches the TV (screen flashes)
+  and the panel comes back on. The held power press (#105, reverted)
+  changed nothing on the off side.
+- After #105 the LIFT oscillated for ~4–5 min on an opening. Nothing in
+  the follower has ever commanded the lift relay — it only addresses TV
+  entities — so that oscillation was Control4 reacting to TV power events
+  with residual TV↔lift programming of its own.
+- Together: Control4 still owns the TV's power in that room (the TV is a
+  source of the `media_player.master_bedroom` zone — "Smart TV", per
+  AUDIO_SYSTEM.md). Turning the Samsung off over the network fights the
+  room's active state; the historical off — what the original lift
+  programming did — was Control4's Room Off.
+
+### Change (TV follower: Room Off + breaker)
+
+- OFF now = `turn_off` on the Control4 zone `media_player.master_bedroom`
+  (Room Off; the zone advertises `turn_off`, AUDIO_SYSTEM.md quirks
+  table), through the typed command layer — no new service passthrough.
+  `LIFTWATCH_OFF_ENTITY` overrides (Samsung entity = old behavior). The
+  ON stays the Samsung network `turn_on`, which has worked every time.
+  The TV's own entity remains the truth for "does the panel read on?".
+- CIRCUIT BREAKER: six lift edges inside five minutes trips it — no
+  commands for ten minutes, one `lift_breaker_trip` audit row, baseline
+  tracking continues. Whatever the loop's real cause, the follower is
+  provably not a link in it.
+- Scheduler order: the follower now ticks BEFORE Sleep sense, so at
+  bedtime Room Off lands before the sleep watcher (arming on the same
+  stowed lift) starts the noise, not after. (Sleep sense would have
+  retried an early death anyway; this removes the collision.)
+- Audit rows carry `via` (the entity commanded), so Activity shows which
+  path each attempt took.
+
+### Verify on site — watch the LIFT as much as the TV
+
+- [ ] Raise the lift with the TV playing: Room Off within ~35s; TV
+  powers down; the lift does NOT move again. Activity: `lift_tv_off`
+  with `via: media_player.master_bedroom`.
+- [ ] Lower it: TV on (unchanged path). Lift does not move again.
+- [ ] If the lift ever oscillates, Activity should show a
+  `lift_breaker_trip` row within three cycles, and the follower goes
+  quiet for ten minutes. If the lift keeps oscillating with the follower
+  quiet — or with it paused on the Automations card — the loop is
+  entirely inside Control4, and that is where it must be fixed.
+- [ ] If Room Off does NOT power the TV down: the C4 room's TV driver
+  isn't controlling power (IR emitter / IP driver) — a dealer question,
+  and the strongest evidence yet that the C4 side needs repair.

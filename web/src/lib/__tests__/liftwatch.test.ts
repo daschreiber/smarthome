@@ -17,14 +17,15 @@ vi.mock("../execute", () => ({ executeOnDevice: vi.fn() }));
 vi.mock("../audit", () => ({ audit: vi.fn() }));
 
 /**
- * The TV follower's contract after the 2026-08-30 field tests: the ON side
- * is an edge (the TV comes on exactly once per lowering; a remote-control
- * off mid-session is never fought), the OFF side is the edge plus bounded
- * enforcement — and it goes through Control4's Room Off, the mechanism
- * the house's original programming used, because the Samsung fights a
- * network power-off. A circuit breaker takes the follower out of any
- * lift feedback loop. Unknown states hold; the first readable lift state
- * after a restart is a baseline, never an action.
+ * The TV follower's contract (settled 2026-09-04): the ON side is an edge
+ * on the TV's Cast receiver (the TV comes on exactly once per lowering; a
+ * remote-control off mid-session is never fought); the OFF side is the
+ * edge plus a bounded per-stow budget, sent to the TV's own Samsung
+ * entity — discovered among HA's states, offered for a pick when several
+ * match, pinned by env if wanted — with that entity as the power truth.
+ * A circuit breaker takes the follower out of any lift feedback loop.
+ * Unknown states hold; the first readable lift state after a restart is
+ * a baseline, never an action.
  */
 
 beforeEach(() => {

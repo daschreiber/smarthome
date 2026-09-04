@@ -1420,3 +1420,53 @@ the owner's pick (validated against the scan's own list, audited as
 `liftwatch_tv_pick`) becomes the TV. Until picked, the off still goes to
 the Cast receiver (harmless). To tell the two apart from the TV itself:
 Settings → Support → About This TV shows the model code.
+
+## 2026-09-04 — RESOLVED: the TV follows the lift again
+
+The owner added the Samsung TV integration for the bedroom set — device
+name **Master Bedroom Lift TV** (QE55Q70DATXSQ; the second discovered
+55" QLED, QE55Q60DAUXSQ, deliberately not added) — the follower discovered
+it on its next scan, and the first raise afterwards powered the TV down.
+Lowering still lands on the HA Cast screen, which the household likes.
+
+### What it took, in one paragraph (for the next reader)
+
+The lift relay side was right from day one (`light.knx_switch_mbr_tv_lift`,
+Sleep sense's own signal). The TV side was wrong for five rounds because
+`media_player.55_qled` — the only bedroom TV entity HA had, discovered
+as Google Cast in July while the Samsung TV integration was skipped — is
+the TV's Cast receiver: it can wake the TV (HDMI-CEC) but its "off" only
+quits the cast. Everything tried against it (retries, a held power key,
+Control4 Room Off, a single clean off) was the wrong lever, and every
+"Control4 still owns the TV" theory in the 2026-08-30 / 2026-09-04
+entries above is superseded by that fact. The lift oscillation of
+2026-08-30 was never caused by this rule (a cast quit each time) and
+remains a Control4-side question. What finally mattered: the owner's
+photo of the HA Cast idle screen.
+
+### What is in place now
+
+- `lib/liftwatch`: ON via the Cast receiver (edge); OFF via the Samsung
+  entity (one command per stow by default, `LIFTWATCH_OFF_ATTEMPTS`
+  up to 3 with still-reads-on enforcement); the Samsung entity is the
+  power truth; discovered automatically (a pick on the Automations card
+  if several TVs match; `LIFTWATCH_TV_ENTITY` pins one); circuit breaker
+  on six lift edges in five minutes; state on the `/data` volume by
+  default; the follower ticks before Sleep sense.
+- Automations card "TV follower — bedroom lift" with a pause toggle;
+  `GET|POST /api/liftwatch` (API_CONTRACT); Railway variables all
+  optional (DEPLOY_RAILWAY table); the two-entity fact recorded in
+  AUDIO_SYSTEM.md and the expansion doc.
+
+### Follow-ups
+
+- [ ] Next inventory/entity-map refresh (`tools/build_entity_map.py`
+  from a fresh HA export): the new Samsung entity will appear — keep it
+  hidden in the Master Bedroom like `media_player.55_qled` (the follower
+  drives it; no card yet). Discovery keeps working either way.
+- [ ] Control4: whatever moved the lift on its own on 2026-08-30 is still
+  in the Director's programming, as is the dead original TV↔lift link —
+  a dealer/Composer clean-up when convenient. Not urgent while the app
+  owns the rule.
+- [ ] The second 55" QLED sits in HA's Discovered list; Ignore it there
+  if the card annoys, or add it when a card for that room is wanted.

@@ -98,16 +98,21 @@ export async function tick(): Promise<void> {
 
   await tickHolds(now, away);
   await tickTimers();
+  // The TV follower runs BEFORE Sleep sense on purpose: at bedtime the
+  // lift stows, the follower turns the Control4 room off, and only then
+  // does the sleep watcher (which arms on that same stowed lift) start the
+  // noise — the other order would have Room Off land right after the
+  // noise starts. Each section still fails alone.
+  try {
+    await tickLiftwatch();
+  } catch (err) {
+    console.error("[scheduler] liftwatch tick failed:", err);
+  }
   await tickSleepwatch();
   try {
     await tickSaunawatch();
   } catch (err) {
     console.error("[scheduler] saunawatch tick failed:", err);
-  }
-  try {
-    await tickLiftwatch();
-  } catch (err) {
-    console.error("[scheduler] liftwatch tick failed:", err);
   }
 }
 

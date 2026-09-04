@@ -359,6 +359,12 @@ describe("discovering the TV's own entity", () => {
     expect(discoverTvPowerEntity([ha("media_player.x", "Samsung Q80 65", SAMSUNG)])).toBeNull();
   });
 
+  it("an entity named by model code (QE55…) is this TV too", () => {
+    expect(discoverTvPowerEntity([ha("media_player.samsung_qe55q70datxsq", "Samsung QE55Q70DATXSQ", SAMSUNG)]))
+      .toBe("media_player.samsung_qe55q70datxsq");
+    expect(discoverTvPowerEntity([ha("media_player.y", "Samsung QE65Q70DATXSQ", SAMSUNG)])).toBeNull();
+  });
+
   it("the tick discovers it, remembers it, and the next off goes there", async () => {
     vi.mocked(getState).mockReset();
     vi.mocked(getStates).mockReset();

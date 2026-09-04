@@ -109,11 +109,12 @@ export function tvPowerEntity(): string {
 
 /** How the TV's own entity is recognized among HA's states once the
  *  Samsung TV integration is added: a media_player that is not the Cast
- *  receiver, is named for this TV (the Cast receiver is "55\" QLED", and
- *  the Samsung integration names its entity after the same TV), and
+ *  receiver, is named for this TV (the Cast receiver is "55\" QLED"; the
+ *  Samsung integration names its entity after the same TV, or after the
+ *  model code — QE55Q70DATXSQ — depending on HA version), and
  *  advertises turn_off AND select_source — the Cast receiver has no
  *  source selection, the Control4 zones are not named for the TV. */
-const TV_NAME = /\b55\b[\s\S]*qled|qled[\s\S]*\b55\b/i;
+const TV_NAME = /\b55\b[\s\S]*qled|qled[\s\S]*\b55\b|\b(?:qe|qn|ue|gq)55/i;
 const FEATURE_TURN_OFF = 256;
 const FEATURE_SELECT_SOURCE = 2048;
 

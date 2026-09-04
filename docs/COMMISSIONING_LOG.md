@@ -1279,3 +1279,54 @@ test that counts.
 - [ ] If Room Off does NOT power the TV down: the C4 room's TV driver
   isn't controlling power (IR emitter / IP driver) — a dealer question,
   and the strongest evidence yet that the C4 side needs repair.
+
+## 2026-09-04 — TV follower round four: Room Off did nothing; one Samsung off per stow
+
+### Owner report
+
+With the Room Off build live: the TV does not go off when the lift rises.
+
+### What that tells us
+
+- Control4's Room Off is a no-op here — and in hindsight had to be:
+  Control4 only powers down what it believes is on, and the follower's
+  ON goes straight to the Samsung over the network, so the room was
+  never "on" in Control4's eyes. (It also points at the ORIGINAL
+  breakage: if Control4's own Samsung driver lost its authorization to
+  the TV, C4's lift programming would stop moving the TV in either
+  direction while still reacting to the TV's power events — exactly the
+  2026-08-30 oscillation. Dealer/Composer question, still open.)
+- The Samsung network path is therefore the only one proven to reach
+  the TV (ON works every time; the OFF is received — the screen flashes).
+  The open question is why one network off produces a flash instead of
+  a shutdown, and there are two candidates the app cannot distinguish:
+  (a) our own enforcement retries — a power key is a TOGGLE, and a retry
+  against an integration state that lags could relight the panel;
+  (b) the TV being held on locally, almost always HDMI-CEC ("Anynet+"):
+  a connected source re-waking it the instant it goes to standby.
+
+### Change
+
+- OFF default back to the Samsung entity (`LIFTWATCH_OFF_ENTITY`, Room
+  Off stays available for when the ON also goes through Control4).
+- `LIFTWATCH_OFF_ATTEMPTS` (1–3, default **1**): exactly one off command
+  per stow, no retries, nothing to Control4. This makes the next lift
+  raise the isolating experiment for (a) vs (b). `3` restores the
+  still-reads-on enforcement (the restart-hole cover) once the TV is
+  proven to honor a single off.
+- Breaker and scheduler order unchanged.
+
+### Verify on site
+
+- [ ] Raise the lift with the TV playing, watch for ~90s. Exactly one
+  `lift_tv_off` in Activity (`via: media_player.55_qled`, attempt 1).
+  - TV goes off and STAYS off → (a): the retries were the culprit. Done;
+    leave `LIFTWATCH_OFF_ATTEMPTS` at 1.
+  - Single flash, stays on → (b): the TV is held on locally. Next step is
+    ON THE TV, not in the app: Settings → General → External Device
+    Manager → Anynet+ (HDMI-CEC) → OFF, then repeat the test. If that
+    fixes it, nothing else changes; if not, try in HA Developer Tools →
+    Actions: `remote.send_command` on `remote.55_qled` with
+    `command: KEY_POWEROFF` (discrete off) — if THAT works, the app can
+    be pointed at it deliberately (with the lift watched, per the #105
+    lesson).

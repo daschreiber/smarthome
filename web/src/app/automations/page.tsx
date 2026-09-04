@@ -1185,7 +1185,7 @@ function TvFollower() {
         <div className="nm">TV follower — bedroom lift</div>
         <div className="st">
           {st.enabled
-            ? "lift comes down → TV on · lift goes up → the Control4 room goes off, which powers the TV down (a TV found still playing inside the ceiling is switched off) · however the lift was moved — keypad, app, or Control4 · turning the TV off by remote with the lift down is left alone · stands down for 10 minutes if the lift moves six times in five"
+            ? "lift comes down → TV on · lift goes up → TV off (one command per stow) · however the lift was moved — keypad, app, or Control4 · turning the TV off by remote with the lift down is left alone · stands down for 10 minutes if the lift moves six times in five"
             : "paused"}
         </div>
       </div>

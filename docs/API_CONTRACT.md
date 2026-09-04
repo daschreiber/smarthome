@@ -168,9 +168,10 @@ acts on a stale edge.
 
 ### `GET | POST /api/liftwatch`
 TV follower (the Master Bedroom TV mirrors its ceiling lift: lift down →
-TV on on the edge; lift up → Control4 Room Off, enforced while the TV
-still reads "on", bounded per stow; a circuit breaker stands the rule
-down for 10 min if the lift moves six times in five). GET: `{ enabled,
+TV on on the edge; lift up → TV off, one command per stow by default
+(`LIFTWATCH_OFF_ATTEMPTS` re-enables the still-reads-on enforcement); a
+circuit breaker stands the rule down for 10 min if the lift moves six
+times in five). GET: `{ enabled,
 available, canToggle }`. POST (canProgram): `{ enabled }` — re-enabling
 resets the baseline so it never acts on a stale edge.
 

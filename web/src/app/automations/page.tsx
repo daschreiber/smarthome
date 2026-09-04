@@ -1153,7 +1153,7 @@ function SaunaFollower() {
  */
 function TvFollower() {
   const [st, setSt] = useState<{
-    enabled: boolean; available: boolean; canToggle: boolean;
+    enabled: boolean; available: boolean; canToggle: boolean; tvPower: string | null;
   } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1184,9 +1184,11 @@ function TvFollower() {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="nm">TV follower — bedroom lift</div>
         <div className="st">
-          {st.enabled
-            ? "lift comes down → TV on · lift goes up → TV off (one command per stow) · however the lift was moved — keypad, app, or Control4 · turning the TV off by remote with the lift down is left alone · stands down for 10 minutes if the lift moves six times in five"
-            : "paused"}
+          {!st.enabled
+            ? "paused"
+            : !st.tvPower
+              ? "lift comes down → TV on · lift goes up → nothing can switch the TV off yet: Home Assistant only has the TV's Cast receiver, whose \"off\" merely quits the cast. Add the Samsung TV integration in Home Assistant (Settings → Devices & services → Samsung TV → Configure, accept the prompt on the TV) — the follower finds it by itself within five minutes"
+              : "lift comes down → TV on · lift goes up → TV off (one command per stow) · however the lift was moved — keypad, app, or Control4 · turning the TV off by remote with the lift down is left alone · stands down for 10 minutes if the lift moves six times in five"}
         </div>
       </div>
       <button

@@ -3,7 +3,7 @@ import { writeJsonFile } from "./store";
 import path from "node:path";
 import { audit } from "./audit";
 import { executeOnDevice } from "./execute";
-import { getState } from "./ha";
+import { getState, getStates, type HaState } from "./ha";
 import { registry, type Device } from "./registry";
 import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
 
@@ -99,10 +99,68 @@ import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
 export const TV_ENTITY = "media_player.55_qled";
 
 /** The Samsung TV integration's own media_player for this TV, once it is
- *  configured in HA (LIFTWATCH_TV_ENTITY). Real power control and real
- *  power truth — the Cast entity has neither. Empty until then. */
+ *  configured in HA: LIFTWATCH_TV_ENTITY, else the one the follower
+ *  DISCOVERED (see discoverTvPowerEntity) and remembered in its state.
+ *  Real power control and real power truth — the Cast entity has
+ *  neither. Empty until then. */
 export function tvPowerEntity(): string {
-  return process.env.LIFTWATCH_TV_ENTITY || "";
+  return process.env.LIFTWATCH_TV_ENTITY || loadLiftwatch().tvPower || "";
+}
+
+/** How the TV's own entity is recognized among HA's states once the
+ *  Samsung TV integration is added: a media_player that is not the Cast
+ *  receiver, is named for this TV (the Cast receiver is "55\" QLED", and
+ *  the Samsung integration names its entity after the same TV), and
+ *  advertises turn_off AND select_source — the Cast receiver has no
+ *  source selection, the Control4 zones are not named for the TV. */
+const TV_NAME = /\b55\b[\s\S]*qled|qled[\s\S]*\b55\b/i;
+const FEATURE_TURN_OFF = 256;
+const FEATURE_SELECT_SOURCE = 2048;
+
+export function discoverTvPowerEntity(states: HaState[]): string | null {
+  const hits = states
+    .filter((s) => s.entity_id.startsWith("media_player."))
+    .filter((s) => s.entity_id !== TV_ENTITY && s.entity_id !== C4_ROOM_ENTITY)
+    .filter((s) => TV_NAME.test(String(s.attributes.friendly_name ?? "")))
+    .filter((s) => {
+      const f = Number(s.attributes.supported_features ?? 0);
+      return (f & FEATURE_TURN_OFF) !== 0 && (f & FEATURE_SELECT_SOURCE) !== 0;
+    })
+    .map((s) => s.entity_id)
+    .sort();
+  return hits[0] ?? null;
+}
+
+/** Discovery runs on the tick only while nothing names the TV's entity,
+ *  at most this often — one bulk states read every few minutes is cheap,
+ *  and the moment the integration is added the follower switches over
+ *  by itself (no Railway variable, no entity map edit). */
+export const TV_POWER_SCAN_MS = 5 * 60_000;
+
+async function maybeDiscoverTvPower(nowMs: number): Promise<void> {
+  if (process.env.LIFTWATCH_TV_ENTITY) return;
+  const st = loadLiftwatch();
+  if (st.tvPower) return;
+  if (nowMs - (st.tvPowerScanMs ?? 0) < TV_POWER_SCAN_MS) return;
+  let states: unknown;
+  try {
+    states = await getStates();
+  } catch {
+    return; // HA unreachable: try again next scan window
+  }
+  if (!Array.isArray(states)) return;
+  const found = discoverTvPowerEntity(states as HaState[]);
+  // Re-read after the await (a toggle may have rewritten the file).
+  const fresh = loadLiftwatch();
+  saveLiftwatch({ ...fresh, tvPowerScanMs: nowMs, ...(found ? { tvPower: found } : {}) });
+  if (found) {
+    audit({
+      ts: new Date().toISOString(), user: "liftwatch", deviceId: "automations",
+      entityId: "liftwatch", command: "lift_tv_power_found", args: { entity: found },
+      ok: true, durationMs: 0,
+    });
+    console.log(`[liftwatch] found the TV's own entity: ${found} — off and power truth move to it`);
+  }
 }
 
 /** Whose state answers "does the panel read on?": the Samsung entity when
@@ -134,6 +192,11 @@ export interface LiftwatchState {
   edges?: number[];
   /** While now < this (ms epoch) the breaker is open: no commands. */
   breakerUntil?: number;
+  /** The TV's own (Samsung TV integration) media_player, as discovered
+   *  among HA's states — see discoverTvPowerEntity. */
+  tvPower?: string;
+  /** When discovery last scanned (ms epoch). */
+  tvPowerScanMs?: number;
 }
 
 const DEFAULT_STATE: LiftwatchState = { enabled: true, lastDown: null };
@@ -160,8 +223,13 @@ export const BREAKER_EDGES = 6;
 export const BREAKER_WINDOW_MS = 5 * 60_000;
 export const BREAKER_COOLDOWN_MS = 10 * 60_000;
 
+/** The state file: LIFTWATCH_PATH, else the Railway volume when it is
+ *  mounted (a deploy must not wipe the baseline — 2026-09-04, when every
+ *  test came minutes after a deploy), else the working directory. */
 function storePath(): string {
-  return process.env.LIFTWATCH_PATH || path.join(process.cwd(), "liftwatch.json");
+  if (process.env.LIFTWATCH_PATH) return process.env.LIFTWATCH_PATH;
+  if (fs.existsSync("/data")) return "/data/liftwatch.json";
+  return path.join(process.cwd(), "liftwatch.json");
 }
 
 export function loadLiftwatch(): LiftwatchState {
@@ -309,6 +377,7 @@ export function evaluateTvFollow(
  *  registry or the rule is paused. */
 export async function tickLiftwatch(): Promise<void> {
   if (!loadLiftwatch().enabled || !liftwatchAvailable()) return;
+  await maybeDiscoverTvPower(Date.now());
 
   // Each read fails alone: a TV briefly unreachable must not blind the
   // lift edge, and vice versa.
@@ -324,8 +393,20 @@ export async function tickLiftwatch(): Promise<void> {
   // in flight must win — evaluating (and saving) the pre-request state
   // would silently undo the pause and command the TV on a tick the admin
   // already stopped (Codex review, 2026-08-29).
-  const st = loadLiftwatch();
+  let st = loadLiftwatch();
   if (!st.enabled) return;
+  // A discovered entity that HA no longer has (integration removed) is
+  // forgotten, so discovery runs again and the Cast receiver is the
+  // fallback meanwhile. An env-named entity is the operator's call.
+  if (
+    !process.env.LIFTWATCH_TV_ENTITY && st.tvPower &&
+    tvRes.status === "fulfilled" && tvRes.value === null
+  ) {
+    const { tvPower: _gone, ...rest } = st;
+    void _gone;
+    st = rest;
+    saveLiftwatch(st);
+  }
   const { action, next } = evaluateTvFollow(down, tvOn, st);
   // Persist the baseline AND the spent attempt BEFORE acting: a crash
   // mid-command must not replay the edge (and double-audit) on the next

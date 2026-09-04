@@ -1377,3 +1377,35 @@ that screen. No behavior change until the variable is set.
   `LIFTWATCH_TV_ENTITY=<that id>` on Railway — or hand it over to be
   baked into the entity map as the default.
 - [ ] Raise the lift: `lift_tv_off` via the new entity, TV powers down.
+
+## 2026-09-04 — TV follower: self-configuring, so the house has one step left
+
+Follow-up to round five. Two of the three remaining on-site steps were
+app-side chores, so the app now does them:
+
+- **State file on the volume by default.** `storePath()` prefers
+  `/data/liftwatch.json` whenever the volume is mounted; `LIFTWATCH_PATH`
+  is now an override, not a requirement. (The owner noticed the Cast
+  "flash" stopped after some rollback — most likely every recent test
+  came minutes after a deploy, and a deploy wiped the baseline, so the
+  first raise sent nothing at all.)
+- **The TV's own entity is discovered.** While nothing names it, the tick
+  reads HA's states at most every five minutes and looks for a
+  media_player that is not the Cast receiver, is named for this TV
+  ("55 … QLED"), and advertises turn_off + select_source — the Samsung TV
+  integration's signature. Found once, it is remembered in the state file
+  (`tvPower`), audited (`lift_tv_power_found`), and becomes the off
+  target and the power truth. Forgotten again if HA stops having it.
+  `LIFTWATCH_TV_ENTITY` still pins one explicitly.
+- **The Automations card says what is missing.** Until the entity
+  exists, the TV follower card explains that the off cannot work yet and
+  names the integration to add.
+
+### The one step only the house can do
+
+- [ ] HA → Settings → Devices & services → the discovered **Samsung TV**
+  card (or Add integration → *Samsung Smart TV*) → Configure; with the
+  lift down and the TV on, accept the "Allow" prompt on the TV. Within
+  five minutes the card flips to the full description and Activity shows
+  `lift_tv_power_found`; the next raise sends `lift_tv_off` via that
+  entity and the TV powers down.

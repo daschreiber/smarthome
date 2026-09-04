@@ -5,14 +5,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BREAKER_COOLDOWN_MS, BREAKER_EDGES, BREAKER_WINDOW_MS, C4_ROOM_ENTITY, MAX_OFF_ATTEMPTS,
   TV_ENTITY, evaluateTvFollow, liftDownFromState, loadLiftwatch, offAttemptsAllowed, offDevice,
-  saveLiftwatch, tickLiftwatch, tvDevice, tvOnFromState, tvPowerDevice, tvTruthEntity,
-  type LiftwatchState,
+  TV_POWER_SCAN_MS, discoverTvPowerEntity, saveLiftwatch, tickLiftwatch, tvDevice, tvOnFromState,
+  tvPowerDevice, tvTruthEntity, type LiftwatchState,
 } from "../liftwatch";
 import { TV_LIFT_ENTITY } from "../sleepwatch";
-import { getState } from "../ha";
+import { getState, getStates, type HaState } from "../ha";
 import { executeOnDevice } from "../execute";
 
-vi.mock("../ha", () => ({ getState: vi.fn() }));
+vi.mock("../ha", () => ({ getState: vi.fn(), getStates: vi.fn() }));
 vi.mock("../execute", () => ({ executeOnDevice: vi.fn() }));
 vi.mock("../audit", () => ({ audit: vi.fn() }));
 
@@ -301,11 +301,89 @@ describe("tick", () => {
   });
 });
 
+const ha = (entity_id: string, name: string, features: number): HaState =>
+  ({ entity_id, state: "on", attributes: { friendly_name: name, supported_features: features }, last_updated: "", last_changed: "" });
+
+describe("discovering the TV's own entity", () => {
+  const CAST = 152461; // the Cast receiver's bits
+  const SAMSUNG = 1 + 8 + 16 + 32 + 256 + 512 + 2048 + 16384; // a samsungtv media_player
+
+  it("finds a Samsung-integration media_player named for this TV, never the Cast receiver or a Control4 zone", () => {
+    const states = [
+      ha(TV_ENTITY, '55" QLED', CAST),
+      ha(C4_ROOM_ENTITY, "Master Bedroom", 23821),
+      ha("media_player.lounge", "Lounge", 23821),
+      ha("media_player.samsung_55_qled", "[TV] 55\" QLED", SAMSUNG),
+    ];
+    expect(discoverTvPowerEntity(states)).toBe("media_player.samsung_55_qled");
+  });
+
+  it("nothing to find without the integration — and never a source-less or unrelated player", () => {
+    expect(discoverTvPowerEntity([ha(TV_ENTITY, '55" QLED', CAST)])).toBeNull();
+    expect(discoverTvPowerEntity([ha("media_player.den_tv", "Den 55 QLED", 256)])).toBeNull();
+    expect(discoverTvPowerEntity([ha("media_player.x", "Samsung Q80 65", SAMSUNG)])).toBeNull();
+  });
+
+  it("the tick discovers it, remembers it, and the next off goes there", async () => {
+    vi.mocked(getState).mockReset();
+    vi.mocked(getStates).mockReset();
+    vi.mocked(executeOnDevice).mockReset();
+    saveLiftwatch({ enabled: true, lastDown: true, offAttempts: 0 });
+    vi.mocked(getStates).mockResolvedValue([
+      ha(TV_ENTITY, '55" QLED', CAST),
+      ha("media_player.samsung_55_qled", "[TV] 55\" QLED", SAMSUNG),
+    ]);
+    vi.mocked(getState).mockImplementation(async (id: string) =>
+      ({ state: id === TV_LIFT_ENTITY ? "off" : "on" }) as never,
+    );
+    await tickLiftwatch();
+    expect(loadLiftwatch().tvPower).toBe("media_player.samsung_55_qled");
+    expect(tvTruthEntity()).toBe("media_player.samsung_55_qled");
+    expect(executeOnDevice).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: "media_player.samsung_55_qled" }),
+      { command: "turn_off" },
+    );
+    // Found once: no further bulk scans.
+    vi.mocked(getStates).mockClear();
+    await tickLiftwatch();
+    expect(getStates).not.toHaveBeenCalled();
+  });
+
+  it("scans at most every TV_POWER_SCAN_MS while nothing is found", async () => {
+    vi.mocked(getState).mockReset();
+    vi.mocked(getStates).mockReset();
+    vi.mocked(executeOnDevice).mockReset();
+    saveLiftwatch({ enabled: true, lastDown: false, tvPowerScanMs: Date.now() - TV_POWER_SCAN_MS / 2 });
+    vi.mocked(getStates).mockResolvedValue([]);
+    vi.mocked(getState).mockResolvedValue({ state: "off" } as never);
+    await tickLiftwatch();
+    expect(getStates).not.toHaveBeenCalled();
+    saveLiftwatch({ enabled: true, lastDown: false, tvPowerScanMs: Date.now() - TV_POWER_SCAN_MS - 1 });
+    await tickLiftwatch();
+    expect(getStates).toHaveBeenCalledTimes(1);
+    expect(loadLiftwatch().tvPower).toBeUndefined();
+  });
+
+  it("a discovered entity HA no longer has is forgotten (fallback to the Cast receiver)", async () => {
+    vi.mocked(getState).mockReset();
+    vi.mocked(getStates).mockReset();
+    vi.mocked(executeOnDevice).mockReset();
+    saveLiftwatch({ enabled: true, lastDown: false, tvPower: "media_player.samsung_55_qled" });
+    vi.mocked(getState).mockImplementation(async (id: string) =>
+      (id === TV_LIFT_ENTITY ? { state: "off" } : null) as never,
+    );
+    await tickLiftwatch();
+    expect(loadLiftwatch().tvPower).toBeUndefined();
+    expect(tvTruthEntity()).toBe(TV_ENTITY);
+  });
+});
+
 describe("the Samsung TV integration entity (LIFTWATCH_TV_ENTITY)", () => {
   const SAMSUNG = "media_player.samsung_qled_tv";
 
   beforeEach(() => {
     vi.mocked(getState).mockReset();
+    vi.mocked(getStates).mockReset();
     vi.mocked(executeOnDevice).mockReset();
   });
 

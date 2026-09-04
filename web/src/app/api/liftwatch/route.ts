@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { canProgram } from "@/lib/permissions";
 import { audit } from "@/lib/audit";
-import { liftwatchAvailable, loadLiftwatch, saveLiftwatch } from "@/lib/liftwatch";
+import { liftwatchAvailable, loadLiftwatch, saveLiftwatch, tvPowerEntity } from "@/lib/liftwatch";
 
 /** The TV follower's switchboard: read status for the Automations card,
  *  flip enabled. The rule itself runs in the scheduler (lib/liftwatch). */
@@ -13,6 +13,10 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     enabled: st.enabled,
     available: liftwatchAvailable(),
+    /** The TV's own entity (Samsung TV integration), env-named or
+     *  discovered; null until the integration exists — the card then
+     *  says what to add. */
+    tvPower: tvPowerEntity() || null,
     canToggle: canProgram(auth.role),
   });
 }
@@ -31,7 +35,9 @@ export async function POST(req: NextRequest) {
   // Re-enabling starts with a fresh baseline: the next readable relay state
   // is recorded without acting, so flipping the rule on with the lift down
   // doesn't command anything until the lift next moves.
-  saveLiftwatch({ enabled: body.enabled, lastDown: null });
+  // The discovered TV entity survives a toggle — it is a fact about HA,
+  // not part of the episode.
+  saveLiftwatch({ enabled: body.enabled, lastDown: null, ...(st.tvPower ? { tvPower: st.tvPower } : {}) });
   audit({
     ts: new Date().toISOString(), user: auth.user, deviceId: "automations",
     entityId: "liftwatch", command: body.enabled ? "liftwatch_enable" : "liftwatch_disable",

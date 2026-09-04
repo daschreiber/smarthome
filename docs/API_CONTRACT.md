@@ -171,9 +171,11 @@ TV follower (the Master Bedroom TV mirrors its ceiling lift: lift down →
 TV on on the edge; lift up → TV off, one command per stow by default
 (`LIFTWATCH_OFF_ATTEMPTS` re-enables the still-reads-on enforcement); a
 circuit breaker stands the rule down for 10 min if the lift moves six
-times in five). GET: `{ enabled,
-available, canToggle }`. POST (canProgram): `{ enabled }` — re-enabling
-resets the baseline so it never acts on a stale edge.
+times in five). GET: `{ enabled, available, tvPower, canToggle }` —
+`tvPower` is the TV's own (Samsung TV integration) entity, discovered or
+env-named, null until the integration exists. POST (canProgram):
+`{ enabled }` — re-enabling resets the baseline so it never acts on a
+stale edge.
 
 ### `GET | POST /api/sleepwatch`
 Sleep sense (white noise; home-only by design — stands down while Away).

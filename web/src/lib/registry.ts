@@ -42,6 +42,11 @@ export interface MapRow {
   /** Locks: the separate battery sensor entity (Yale reports battery there,
    * not as a lock attribute); associated by build_entity_map.py. */
   battery_entity?: string;
+  /** Other entity ids this device may be known by in HA. Rows added from a
+   *  screenshot rather than an export (the Dining Frames, 2026-09-09) can't
+   *  know whether renaming the device in HA also renamed its entity id, so
+   *  the map lists both and `reconcileEntityIds` keeps whichever HA has. */
+  entity_aliases?: string[];
 }
 
 export interface Device {
@@ -63,6 +68,8 @@ export interface Device {
   pinned?: boolean;
   /** See MapRow.battery_entity. */
   batteryEntity?: string;
+  /** See MapRow.entity_aliases. */
+  entityAliases?: string[];
 }
 
 /** Shared app-wide slug: scene and automation ids use the same rules as
@@ -156,9 +163,37 @@ export function buildDevices(rows: MapRow[]): Device[] {
       ...(row.domain === "lock" ? { requiresConfirmation: true } : {}),
       ...(row.coolmaster_units?.length ? { coolmasterUnits: row.coolmaster_units } : {}),
       ...(row.battery_entity ? { batteryEntity: row.battery_entity } : {}),
+      ...(row.entity_aliases?.length ? { entityAliases: row.entity_aliases } : {}),
       ...(row.pinned ? { pinned: true } : {}),
     };
   });
+}
+
+/**
+ * Settle aliased devices onto the entity id HA actually has. Called with a
+ * fresh bulk-states read (the home snapshot fetches one anyway): a device
+ * whose current entityId is absent while an alias is present switches to
+ * the alias, and the id it left joins the alias list so it can switch back
+ * if HA is later renamed the other way. Every later lookup, command, and
+ * audit line uses the settled id, because the registry hands out the same
+ * device objects. A device with neither id present is left alone — that is
+ * an outage or a missing integration, not a rename.
+ */
+export function reconcileEntityIds(
+  devices: Device[],
+  present: (entityId: string) => boolean,
+): string[] {
+  const switched: string[] = [];
+  for (const d of devices) {
+    if (!d.entityAliases?.length || present(d.entityId)) continue;
+    const live = d.entityAliases.find(present);
+    if (!live) continue;
+    const previous = d.entityId;
+    d.entityAliases = [previous, ...d.entityAliases.filter((a) => a !== live)];
+    d.entityId = live;
+    switched.push(`${d.id}: ${previous} -> ${live}`);
+  }
+  return switched;
 }
 
 /**

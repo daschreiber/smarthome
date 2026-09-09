@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDevices, type MapRow } from "../registry";
+import { buildDevices, reconcileEntityIds, type MapRow } from "../registry";
 
 const rows: MapRow[] = [
   {
@@ -110,5 +110,56 @@ describe("buildDevices", () => {
     const [spots] = buildDevices([{ ...rows[0], pinned: true }]);
     expect(spots.pinned).toBe(true);
     expect(devices[0].pinned).toBeUndefined();
+  });
+
+  it("carries entity aliases through to the device", () => {
+    const [tv] = buildDevices([frameRow]);
+    expect(tv.id).toBe("dining__dining_left");
+    expect(tv.entityAliases).toEqual(["media_player.left_32"]);
+    expect(devices[0].entityAliases).toBeUndefined();
+  });
+});
+
+// The Dining Frames (2026-09-09) were mapped from a screenshot: HA showed
+// the device renamed "Dining Left" from "Left 32", but not whether the
+// entity id followed the rename. Both ids are in the map.
+const frameRow: MapRow = {
+  entity_id: "media_player.dining_left",
+  domain: "media_player",
+  original_name: "Dining Left",
+  display_name: "Dining Left",
+  room: "Dining",
+  floor: 6,
+  category: "media",
+  group: "Media",
+  visible: true,
+  entity_aliases: ["media_player.left_32"],
+};
+
+describe("reconcileEntityIds", () => {
+  it("keeps the mapped id when HA has it", () => {
+    const devices = buildDevices([frameRow]);
+    const switched = reconcileEntityIds(devices, (id) => id === "media_player.dining_left");
+    expect(switched).toEqual([]);
+    expect(devices[0].entityId).toBe("media_player.dining_left");
+  });
+
+  it("settles onto the alias HA actually has, keeping the old id as an alias", () => {
+    const devices = buildDevices([frameRow]);
+    const switched = reconcileEntityIds(devices, (id) => id === "media_player.left_32");
+    expect(switched).toEqual(["dining__dining_left: media_player.dining_left -> media_player.left_32"]);
+    expect(devices[0].entityId).toBe("media_player.left_32");
+    expect(devices[0].entityAliases).toEqual(["media_player.dining_left"]);
+    // A later rename the other way switches back.
+    reconcileEntityIds(devices, (id) => id === "media_player.dining_left");
+    expect(devices[0].entityId).toBe("media_player.dining_left");
+    expect(devices[0].entityAliases).toEqual(["media_player.left_32"]);
+  });
+
+  it("leaves a device alone when HA has neither id (outage, not a rename)", () => {
+    const devices = buildDevices([frameRow, rows[0]]);
+    expect(reconcileEntityIds(devices, () => false)).toEqual([]);
+    expect(devices[0].entityId).toBe("media_player.dining_left");
+    expect(devices[1].entityId).toBe(rows[0].entity_id);
   });
 });

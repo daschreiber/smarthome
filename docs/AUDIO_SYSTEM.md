@@ -88,6 +88,19 @@ added 2026-09-04), is the real power control. The TV follower
 (lib/liftwatch) uses the Cast receiver for ON and the Samsung entity for
 OFF and for "is the panel on?". The house's second 55" QLED
 (QE55Q60DAUXSQ) was deliberately left un-added.
+
+**The Frames (2026-09-09).** Six Samsung The Frame sets are in HA's Samsung
+TV integration, each with a media_player + remote: the three 32" screens in
+the Dining area (QE32LS03CBUXIL — devices **Dining Left / Dining Middle /
+Dining Right**, HA area Dining, set up under the TVs' own names "Left 32" /
+"Middle 32" / "Right 32"), the Den TV (75", QE75LS03DAUXSQ), the Lounge TV
+(85", QE85LS03DAUXSQ) and the master bedroom wall TV (43",
+QE43LS03BGUXSQ). The three Dining screens are in the entity map as
+`media_player.dining_left|middle|right` with `media_player.left_32|…` as
+`entity_aliases` (the map was written from a screenshot of HA's device
+list, which shows the rename but not whether the entity ids followed it;
+`reconcileEntityIds` in lib/registry settles each on the id HA actually
+has). The Den, Lounge and bedroom-wall Frames are not mapped yet.
 Apple TV "Basement Jerusalem". Rack has its own AC (`climate.rack_unit_109`).
 
 ## Spotify device-picker decoder

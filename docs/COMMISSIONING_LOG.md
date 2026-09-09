@@ -1470,3 +1470,48 @@ photo of the HA Cast idle screen.
   owns the rule.
 - [ ] The second 55" QLED sits in HA's Discovered list; Ignore it there
   if the card annoys, or add it when a card for that room is wanted.
+
+## 2026-09-09 — The Dining Frames are in HA; mapped from a screenshot
+
+The owner asked where the three Samsung Frame screens in the Dining area
+were. Nothing in the repo knew them: the inventory is the frozen July
+snapshot, and the entity map had no Dining media device at all. The
+owner's screenshot of HA → Settings → Devices & services → Samsung TV
+settled it — the integration now holds six Frames, each with 2 entities
+(media_player + remote):
+
+| Config entry | Device (area) | Model |
+|---|---|---|
+| Left 32 | **Dining Left** (Dining) | QE32LS03CBUXIL, 32" |
+| Middle 32 | **Dining Middle** (Dining) | QE32LS03CBUXIL, 32" |
+| Right 32 | **Dining Right** (Dining) | QE32LS03CBUXIL, 32" |
+| Den TV | Den TV (Den, 4 entities) | QE75LS03DAUXSQ, 75" |
+| Lounge TV | Lounge TV (Lounge) | QE85LS03DAUXSQ, 85" |
+| TV in master bedroom wall | (Master Bedroom) | QE43LS03BGUXSQ, 43" |
+
+### What changed
+
+- `data/entity_map.json` (+ `web/data/`): three rows appended at the end,
+  room Dining, floor 6, group Media — `media_player.dining_left`,
+  `media_player.dining_middle`, `media_player.dining_right`. They get the
+  standard MediaCard (power, volume, source chips from the TV's own
+  `source_list`) like every other media_player.
+- **`entity_aliases`** (new optional map field): the screenshot shows the
+  devices renamed from "Left 32" → "Dining Left", but not whether HA's
+  "rename entity ids too?" was accepted, so each row also lists
+  `media_player.left_32` etc. `reconcileEntityIds` (lib/registry) runs on
+  every home snapshot: a device whose mapped id is missing from HA's
+  states while an alias is present switches to the alias (logged once,
+  `[registry] entity id settled`), and all later commands/audits use it.
+  Neither id present = untouched (an outage, not a rename).
+
+### Follow-ups
+
+- [ ] First home load after deploy: check the deploy log for
+  `entity id settled` lines — if present, the entity ids are still
+  `*_32`; either rename them in HA or swap the map's primary and alias.
+- [ ] Map the Den, Lounge and master-bedroom-wall Frames when cards for
+  those rooms are wanted (same recipe; get the entity ids from the
+  device page, or run `tools/export_inventory.py` from the house LAN).
+- [ ] The Den TV's 4 entities suggest its soundbar/`dlna_dmr` pair — check
+  before mapping it that the media_player chosen is the TV, not the bar.

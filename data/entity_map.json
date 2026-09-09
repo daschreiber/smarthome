@@ -2133,5 +2133,47 @@
   "category": "media",
   "group": "Media",
   "visible": false
+ },
+ {
+  "entity_id": "media_player.dining_left",
+  "domain": "media_player",
+  "original_name": "Dining Left",
+  "display_name": "Dining Left",
+  "room": "Dining",
+  "floor": 6,
+  "category": "media",
+  "group": "Media",
+  "visible": true,
+  "entity_aliases": [
+   "media_player.left_32"
+  ]
+ },
+ {
+  "entity_id": "media_player.dining_middle",
+  "domain": "media_player",
+  "original_name": "Dining Middle",
+  "display_name": "Dining Middle",
+  "room": "Dining",
+  "floor": 6,
+  "category": "media",
+  "group": "Media",
+  "visible": true,
+  "entity_aliases": [
+   "media_player.middle_32"
+  ]
+ },
+ {
+  "entity_id": "media_player.dining_right",
+  "domain": "media_player",
+  "original_name": "Dining Right",
+  "display_name": "Dining Right",
+  "room": "Dining",
+  "floor": 6,
+  "category": "media",
+  "group": "Media",
+  "visible": true,
+  "entity_aliases": [
+   "media_player.right_32"
+  ]
  }
 ]

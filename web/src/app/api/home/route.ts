@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStates, type HaState } from "@/lib/ha";
-import { registry } from "@/lib/registry";
+import { reconcileEntityIds, registry } from "@/lib/registry";
 import { authenticate } from "@/lib/auth";
 import { canOperateLocks } from "@/lib/permissions";
 import { coolmasterEntityId } from "@/lib/coolmaster";
@@ -58,6 +58,12 @@ export async function GET(req: NextRequest) {
         : Promise.resolve(null),
     ]);
     const states = new Map(haStates.map((s) => [s.entity_id, s]));
+    // Devices mapped under more than one possible entity id (see
+    // MapRow.entity_aliases) settle onto the one HA reports. Logged once per
+    // switch, so a deploy's log says which id the house actually has.
+    for (const line of reconcileEntityIds(registry().devices, (id) => states.has(id))) {
+      console.info(`[registry] entity id settled — ${line}`);
+    }
     const devices = registry()
       .devices.filter((d) => d.visible)
       .map((d) => {

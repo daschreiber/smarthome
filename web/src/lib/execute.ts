@@ -1,7 +1,7 @@
 import { CommandSchema, assertCommandAllowed, buildServiceCall, type Command } from "./commands";
 import { bedSetLevel, bedSideForDeviceId, bedSideOff, bedSideOn } from "./eightsleep";
-import { SLOW_SERVICE_TIMEOUT_MS, callService } from "./ha";
-import { artFrameFollow, artFrames } from "./artframes";
+import { SLOW_SERVICE_TIMEOUT_MS, callService, getStates } from "./ha";
+import { artFrameFollow, artFrames, spareWatched } from "./artframes";
 import { audit } from "./audit";
 import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
@@ -92,14 +92,25 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
   const frames = artFrames();
   if (frames.length === 0) return;
   const started = Date.now();
-  const result = await executeOnDevices(frames, follow);
+  // A Night press spares a set that is showing television (lib/artframes).
+  // One bulk read; a failed read spares nothing — only positive evidence.
+  const states = follow.command === "turn_off"
+    ? new Map((await getStates().catch(() => [])).map((s) => [s.entity_id, s.state]))
+    : new Map<string, string>();
+  const { targets, spared } = spareWatched(frames, follow, (id) => states.get(id));
+  const result = targets.length ? await executeOnDevices(targets, follow) : { total: 0, failed: [] };
   audit({
     ts: new Date().toISOString(),
     user,
     deviceId: "system:artframes",
     entityId: device.entityId,
     command: `frames_${follow.command}`,
-    args: { after: device.id, targets: frames.map((f) => f.id), failed: result.failed },
+    args: {
+      after: device.id,
+      targets: targets.map((f) => f.id),
+      ...(spared.length ? { spared: spared.map((f) => f.id) } : {}),
+      failed: result.failed,
+    },
     ok: result.failed.length === 0,
     durationMs: Date.now() - started,
     error: result.failed.length ? result.failed.map((f) => `${f.target}: ${f.error}`).join("; ") : undefined,

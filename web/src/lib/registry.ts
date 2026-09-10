@@ -67,6 +67,12 @@ export interface MapRow {
    *  out to every row with this flag (lib/artframes). The three Dining
    *  32" sets, the Den TV and the Lounge TV (2026-09-10). */
   art_frame?: boolean;
+  /** The sensor that says whether an art_frame is showing pictures or
+   *  television: SmartThings' `tvChannelName`, which reads `art` in art
+   *  mode and the channel or input name otherwise. A Frame that is not in
+   *  art is being watched, and a Night press leaves it alone. Set on the
+   *  Den and Lounge TVs; the Dining sets are never used as televisions. */
+  art_mode_entity?: string;
 }
 
 export interface Device {
@@ -96,6 +102,8 @@ export interface Device {
   wakeEntityId?: string;
   /** See MapRow.art_frame. */
   artFrame?: boolean;
+  /** See MapRow.art_mode_entity. */
+  artModeEntityId?: string;
 }
 
 /** Shared app-wide slug: scene and automation ids use the same rules as
@@ -193,6 +201,7 @@ export function buildDevices(rows: MapRow[]): Device[] {
       ...(row.retry_power ? { retryPower: true } : {}),
       ...(row.wake_entity ? { wakeEntityId: row.wake_entity } : {}),
       ...(row.art_frame ? { artFrame: true } : {}),
+      ...(row.art_mode_entity ? { artModeEntityId: row.art_mode_entity } : {}),
       ...(row.pinned ? { pinned: true } : {}),
     };
   });

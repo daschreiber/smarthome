@@ -1816,6 +1816,23 @@ if the owner uses the keypad more than the app.
   rule or a stale ARP/lease for that address; then swap Den TV's row back
   to the Samsung entity with `wake_entity: media_player.den_den_tv`.
 - [ ] Wall-keypad presses (above).
-- [ ] Refinements the owner asked to defer: home/away gating, "not while
-  being watched" for Den/Lounge (SmartThings `mediaPlayback` / input
-  source tells), the floor 6 all-lights-off keypad, the bedroom-wall Frame.
+- [x] "Not while being watched" — added the same afternoon (below).
+- [ ] Refinements the owner asked to defer: home/away gating, the floor 6
+  all-lights-off keypad, the bedroom-wall Frame.
+
+### Same day — a Night press spares a set that is showing television
+
+Owner: "on a Night press, a Den or Lounge set that is not in art mode is
+left alone." How the house knows: SmartThings' `tvChannelName` — `art` in
+art mode, the channel or input name when the set is used as a television
+(`sensor.den_den_tv_tv_channel_name`,
+`sensor.living_room_lounge_tv_tv_channel_name`). Named on the two rows as
+**`art_mode_entity`**; the Dining sets have none (never televisions).
+`followArtFrames` takes one bulk state read on a Night press and
+`spareWatched` (lib/artframes) drops any Frame whose sensor reads
+something other than art. Only positive evidence spares: an unavailable
+or unknown sensor, or a failed read, darkens the set as before — a missing
+signal must never leave a Frame lit all night. The audit line lists
+`spared`. Morning is unchanged: turning on a set that is on changes
+nothing. The "abandoned for hours with the receiver off" tail discussed
+was not asked for and is not in.

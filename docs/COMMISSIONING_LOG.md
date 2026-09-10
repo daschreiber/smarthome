@@ -1653,10 +1653,10 @@ gotchas cost us three attempts:
 
 Linked as location **My home**. HA created 14 devices / 71 entities —
 sensors (energy, power, TV channel) and the Frames' light/sound sensor
-sub-devices — and put the Frames in a new HA area **Living room** (their
-SmartThings room); the Samsung TV devices stay in Dining. Entity ids are
-prefixed `living_room_` (`sensor.living_room_right_32_tv_channel_name`
-= `art`, which is the art-mode tell).
+sub-devices — and assigned the Frames to HA's **Dining** area. Entity ids are
+prefixed `living_room_` from SmartThings' own room label
+(`sensor.living_room_right_32_tv_channel_name` = `art`, which is the
+art-mode tell).
 
 ### No media players — an HA bug, not a capability gap
 
@@ -1712,11 +1712,18 @@ morning woke on the first cloud command, into art mode.
 
 ### Follow-ups
 
-- [ ] Retest all three from the card once Railway has this deploy; the
-  audit line should read `reasserted: 1` for Right with `on`.
-- [x] HA area "Living room" (created by the SmartThings assign dialog):
-  the three Frames and their sensor sub-devices moved to Dining, the
-  area deleted, same morning.
+- [x] Retested from the card once Railway had the deploy (06:40Z):
+  Right `turn_off` → off in 8.2 s (no more false "aborted"); Right
+  `turn_on` → **on, `reasserted: 1`, 17.4 s** — the magic packet at 0 s
+  ignored as always, the SmartThings re-assert at 7 s, the set up ten
+  seconds later. A cycle a few minutes earlier, while the previous deploy
+  was still live, had also woken it (`reasserted: 2`, 19 s), so the set
+  is not entirely deaf to WoL after a recent cloud wake — but the cloud
+  path is the one that is reliable. Left and Middle unchanged.
+- [x] ~~HA area "Living room"~~ — checked: the assign dialog put the
+  SmartThings Frames and their sensor sub-devices in **Dining** (Lounge
+  TV in Lounge, Den TV in Den); no stray area exists. Only the entity ids
+  carry a `living_room_` prefix, from SmartThings' own room label.
 - [ ] File the `None` guard bug against home-assistant/core (smartthings
   media_player `_determine_features`: `"play" in playback_commands` with
   `supportedPlaybackCommands: null` on a dead device takes the whole

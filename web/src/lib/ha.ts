@@ -2,9 +2,22 @@
  * Home Assistant adapter. The only module that talks to HA; everything above
  * works with application models (DESIGN_AND_DELIVERY_LOOP Loop 3).
  * 5s timeout, no blind retries for commands (IMPLEMENTATION_SPEC §10).
+ *
+ * The one exception to the 5s is a caller that names a longer `timeoutMs`
+ * on callService: Home Assistant's REST service call blocks until the
+ * integration's handler returns (HA caps that wait at 10s), and a handful
+ * of handlers legitimately take longer than 5s — the Samsung TV
+ * integration turns a Frame off with a HELD power key (a short press only
+ * toggles art mode), which is a 3s hold plus the websocket round trip.
+ * Aborting at 5s reported those offs as failed while the screens obeyed
+ * (COMMISSIONING_LOG 2026-09-10).
  */
 
 const TIMEOUT_MS = 5000;
+
+/** Long enough to outlast HA's own 10s service-call cap, so a slow handler
+ *  comes back as HA's answer rather than our abort. */
+export const SLOW_SERVICE_TIMEOUT_MS = 12_000;
 
 export interface HaState {
   entity_id: string;
@@ -21,11 +34,15 @@ function baseUrl(): string {
   return url.replace(/\/+$/, "");
 }
 
-async function haFetch(pathname: string, init?: RequestInit): Promise<Response> {
+async function haFetch(
+  pathname: string,
+  init?: RequestInit,
+  timeoutMs: number = TIMEOUT_MS,
+): Promise<Response> {
   const token = process.env.HA_TOKEN;
   if (!token) throw new Error("HA_TOKEN is not set");
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(`${baseUrl()}${pathname}`, {
       ...init,
@@ -66,16 +83,19 @@ export async function getState(entityId: string): Promise<HaState | null> {
   return (await res.json()) as HaState;
 }
 
-/** POST /api/services/<domain>/<service>. Never sets states directly. */
+/** POST /api/services/<domain>/<service>. Never sets states directly.
+ *  `timeoutMs` only for handlers known to block past 5s (see the header). */
 export async function callService(
   domain: string,
   service: string,
   data: Record<string, unknown>,
+  opts: { timeoutMs?: number } = {},
 ): Promise<void> {
-  const res = await haFetch(`/api/services/${domain}/${service}`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+  const res = await haFetch(
+    `/api/services/${domain}/${service}`,
+    { method: "POST", body: JSON.stringify(data) },
+    opts.timeoutMs ?? TIMEOUT_MS,
+  );
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`service ${domain}.${service} failed: HTTP ${res.status} ${text.slice(0, 200)}`);

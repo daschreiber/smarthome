@@ -1575,14 +1575,56 @@ is untested (the owner was not on site to look at the panel).
 - The alias machinery (`reconcileEntityIds`) stays, unused by any row, for
   the next device mapped from a screenshot.
 
+### On-site test, same morning (owner at the screens, app open)
+
+All three powered off and on from their cards on harakevet.app (the
+Railway deploy of PR #120), owner watching the panels.
+
+| Card tap | Left | Middle | Right | Audit line |
+|---|---|---|---|---|
+| Off | off | off | off | all three `ok: false` "This operation was aborted", ~5.2 s |
+| On | on, `reasserted: 1`, 10.3 s | on, `reasserted: 1`, 9.9 s | **off (unverified)**, `reasserted: 2`, 30.5 s | card: "didn't answer — try again" |
+
+- **The retry belt works.** Both screens that ignored the first packet got
+  a second one 7 s later without anyone tapping twice, and came up.
+- **The off was a false failure.** Every Frame off was logged as failed
+  and never verified, yet the screens obeyed. The Samsung TV integration
+  turns a Frame off with a *held* power key (a short press only toggles
+  art mode) — a 3 s hold inside HA's service handler — and the app's HA
+  adapter aborts every call at 5 s. Fixed the same morning: `callService`
+  takes a `timeoutMs`, and a `retry_power` device's power sends use
+  `SLOW_SERVICE_TIMEOUT_MS` (12 s, past HA's own 10 s cap) so HA's answer
+  is what gets recorded. Lights and everything else keep the 5 s.
+- **The companion entities are DLNA.** HA's device list shows them under
+  DLNA Digital Media Renderer (devices "Left 32", "Right 32", "Dinning
+  Middle"), linked to the Samsung TV devices. Not a control path; they
+  drop to `unavailable` the moment a set powers down.
+- **Right does not wake on magic packets at all.** Its HA device page
+  shows MAC `94:E6:BA:F1:BF:FE`; a broadcast ping from the Mac on the LAN
+  found that MAC at **10.0.0.24**, answering ping while the set was "off",
+  so it is in network standby with the right address on file. From the
+  Mac: one magic packet unicast to 10.0.0.24 (ports 9 and 7) — nothing;
+  a 10 s burst of 150 packets, unicast + subnet broadcast + limited
+  broadcast, ports 9 and 7 — nothing. A second off/on cycle from the card
+  after the set had been switched on at the panel: off obeyed, on ignored
+  three more packets. The owner checked the set's own menu (Connection →
+  Network → Expert Settings): **Power On with Mobile was already On**,
+  and the set is on **Wi‑Fi**. So the address is right, the packets
+  arrive, the wake feature is enabled, and the set still ignores them:
+  Samsung's wake-over-Wi‑Fi simply does not work on this unit, while the
+  other two (network path unconfirmed) wake on the second packet.
+
 ### Follow-ups
 
-- [ ] **On-site test** (owner at the screens, app open): power each Frame
-  off then on from its card; watch the audit log for `reasserted: n` and
-  whether the right screen wakes on a 2nd/3rd packet. If it never does,
-  the next escalation is the paired `remote.*` entity or SmartThings.
+- [ ] **Right Frame needs a different wake path.** Two candidates, in
+  order of simplicity: (a) put it on Ethernet — check first whether Left
+  and Middle are wired (Network → Network Status), which would explain the
+  difference outright; (b) add HA's SmartThings integration (Samsung
+  account OAuth) and give the row a `wake_entity` so turn_on goes through
+  SmartThings' cloud standby channel while turn_off and state stay on the
+  Samsung TV entity — the liftwatch pattern (Cast for ON, Samsung for
+  OFF). Until then the card honestly says "didn't answer" after 30 s.
 - [ ] The HA Settings badge went 1 → 4 during the test — three new
   repairs/notifications appeared as the sets cycled. Not investigated.
-- [ ] Rename the "Dinning Middle" device in HA (typo) if the companion
-  integration is kept; otherwise consider removing that integration's
-  three entities to stop the `unavailable` noise.
+- [ ] Rename the "Dinning Middle" DLNA device in HA (typo), or remove the
+  three DLNA renderers to stop the `unavailable` noise.

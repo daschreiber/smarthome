@@ -10,9 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * never answered so the card can stop claiming they did.
  */
 
-vi.mock("../ha", () => ({ callService: vi.fn(), getStates: vi.fn() }));
+vi.mock("../ha", () => ({ SLOW_SERVICE_TIMEOUT_MS: 12_000, callService: vi.fn(), getStates: vi.fn() }));
 
-import { callService, getStates } from "../ha";
+import { SLOW_SERVICE_TIMEOUT_MS, callService, getStates } from "../ha";
 import {
   LIGHT_ATTEMPTS,
   LIGHT_VERIFY_MS,
@@ -193,6 +193,13 @@ describe("retryPolicy", () => {
     expect(TV_VERIFY_MS).toBeGreaterThanOrEqual(TV_ATTEMPTS * TV_REASSERT_AFTER_MS);
     expect(p.agrees({ command: "turn_on" }, "on", null)).toBe(true);
     expect(p.agrees({ command: "turn_on" }, "off", null)).toBe(false);
+  });
+
+  it("a TV send may block past the adapter's 5s — a Frame's off is a held key", () => {
+    expect(retryPolicy(frame, { command: "turn_off" })!.sendTimeoutMs).toBe(SLOW_SERVICE_TIMEOUT_MS);
+    expect(SLOW_SERVICE_TIMEOUT_MS).toBeGreaterThan(10_000);
+    // Lights answer inside 5s; they keep the default.
+    expect(retryPolicy(dimmer, { command: "turn_on" })!.sendTimeoutMs).toBeUndefined();
   });
 
   it("a TV's retry is a plain repeat — there is no level to escalate to", () => {

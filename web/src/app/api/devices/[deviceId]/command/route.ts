@@ -330,7 +330,11 @@ export async function POST(
     const retriable = policy != null;
     const claim = retriable ? claimLight(deviceId) : 0;
     const call = buildServiceCall(device, cmd);
-    await callService(call.domain, call.service, call.data);
+    // A send that HA's handler holds open (a Frame's held power key) waits
+    // for HA's answer instead of being aborted and logged as a failure the
+    // screen then disproves.
+    const sendOpts = policy?.sendTimeoutMs ? { timeoutMs: policy.sendTimeoutMs } : {};
+    await callService(call.domain, call.service, call.data, sendOpts);
 
     // HA accepted the command — answer NOW ("sent") so the UI settles
     // instantly, and verify in the background (the server is long-lived;
@@ -420,7 +424,7 @@ export async function POST(
           Date.now() - lastSent >= policy.reassertAfterMs
         ) {
           const again = reassertCall(device, cmd, attempts);
-          await callService(again.domain, again.service, again.data).catch(() => {});
+          await callService(again.domain, again.service, again.data, sendOpts).catch(() => {});
           attempts += 1;
           lastSent = Date.now();
         }

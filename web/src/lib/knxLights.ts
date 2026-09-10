@@ -1,6 +1,6 @@
 import { buildServiceCall, type Command, type ServiceCall } from "./commands";
 import { audit } from "./audit";
-import { callService, getStates } from "./ha";
+import { SLOW_SERVICE_TIMEOUT_MS, callService, getStates } from "./ha";
 import type { Device } from "./registry";
 
 /**
@@ -108,6 +108,10 @@ export interface RetryPolicy {
   reassertAfterMs: number;
   verifyMs: number;
   agrees: (cmd: Command, state: string, brightness: number | null) => boolean;
+  /** How long one send may block in HA before we give up waiting for its
+   *  answer. Unset = the adapter's 5s. A Frame's turn_off is a held power
+   *  key inside HA's handler and takes longer than that. */
+  sendTimeoutMs?: number;
 }
 
 /** The policy for this device and command, or null when a single send and a
@@ -128,6 +132,7 @@ export function retryPolicy(device: Device, cmd: Command): RetryPolicy | null {
       reassertAfterMs: TV_REASSERT_AFTER_MS,
       verifyMs: TV_VERIFY_MS,
       agrees: (c, state) => mediaAgrees(c, state),
+      sendTimeoutMs: SLOW_SERVICE_TIMEOUT_MS,
     };
   }
   return null;

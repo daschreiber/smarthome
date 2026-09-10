@@ -96,11 +96,17 @@ Dining Right**, HA area Dining, set up under the TVs' own names "Left 32" /
 "Middle 32" / "Right 32"), the Den TV (75", QE75LS03DAUXSQ), the Lounge TV
 (85", QE85LS03DAUXSQ) and the master bedroom wall TV (43",
 QE43LS03BGUXSQ). The three Dining screens are in the entity map as
-`media_player.dining_left|middle|right` with `media_player.left_32|…` as
-`entity_aliases` (the map was written from a screenshot of HA's device
-list, which shows the rename but not whether the entity ids followed it;
-`reconcileEntityIds` in lib/registry settles each on the id HA actually
-has). The Den, Lounge and bedroom-wall Frames are not mapped yet.
+`media_player.left_32|middle_32|right_32_qe32ls03cbuxil` — the Samsung TV
+integration's own ids, read from HA on 2026-09-10 (the 2026-09-09 mapping
+from a screenshot had guessed wrong; COMMISSIONING_LOG has the table). Each
+also has a `remote.*_qe32ls03cbuxil`, and a second integration exposes a
+companion `media_player.left_32` / `right_32` / `dining_dinning_middle`
+that goes `unavailable` whenever the set is off — not a control path. Their
+turn_off is reliable; turn_on is a Wake-on-LAN packet that lands about
+half the time, so the rows are flagged `retry_power` and the command route
+re-sends power commands while the set disagrees (lib/knxLights
+`retryPolicy`, the KNX dimmer belt with TV timings). The Den, Lounge and
+bedroom-wall Frames are not mapped yet.
 Apple TV "Basement Jerusalem". Rack has its own AC (`climate.rack_unit_109`).
 
 ## Spotify device-picker decoder

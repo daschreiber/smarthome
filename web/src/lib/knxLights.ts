@@ -31,6 +31,13 @@ import type { Device } from "./registry";
  *    never stands down fights the person at the wall switch. Three attempts,
  *    then the command is recorded unverified and the card says so instead of
  *    showing a light that isn't lit.
+ *
+ * The same belt fits one more thing that drops its command: a TV whose
+ * turn_on is a Wake-on-LAN packet. The Dining Frames (2026-09-10, driven
+ * from HA's own Actions page): one screen woke on the first packet, one on
+ * the second, one not at all in two — while turn_off landed every time.
+ * Rows flagged `retry_power` in the map get `retryPolicy` below: same loop,
+ * TV-shaped timings, and "agrees" read the media_player way.
  */
 
 /** Total sends per command, including the first one. */
@@ -54,6 +61,76 @@ export function lightRetriable(device: Device, cmd: Command): boolean {
       cmd.command === "turn_off" ||
       cmd.command === "set_brightness")
   );
+}
+
+/** Sends per TV power command, including the first. A magic packet that
+ *  vanished twice is not going to appear on the third try either; three is
+ *  where the lights stop too. */
+export const TV_ATTEMPTS = 3;
+
+/** A Frame that heard its packet takes several seconds to boot and the
+ *  Samsung TV integration polls it on its own clock, so a re-send goes out
+ *  only once a first packet has had a fair chance to show up as "on". A
+ *  second packet at a set that is already booting costs nothing. */
+export const TV_REASSERT_AFTER_MS = 7000;
+
+/** Verification window for a TV power command: three sends at
+ *  TV_REASSERT_AFTER_MS apart, plus a boot and a poll for the last one. */
+export const TV_VERIFY_MS = 30_000;
+
+/** Media players the map marks `retry_power`, and only their on/off — a
+ *  volume or source command has a value to read back, not a state. */
+export function powerRetriable(device: Device, cmd: Command): boolean {
+  return (
+    device.kind === "media_player" &&
+    device.retryPower === true &&
+    (cmd.command === "turn_on" || cmd.command === "turn_off")
+  );
+}
+
+/**
+ * Has the set done what was asked? A media_player has more states than a
+ * light: a TV that came up reads "on", a receiver "idle" or "playing", and
+ * some integrations say "standby" for off. Anything that is not off — and
+ * not the two states that prove nothing — counts as awake; only off and
+ * standby count as asleep.
+ */
+export function mediaAgrees(cmd: Command, state: string): boolean {
+  const asleep = state === "off" || state === "standby";
+  if (cmd.command === "turn_off") return asleep;
+  return !asleep && state !== "unavailable" && state !== "unknown";
+}
+
+/** How a retriable command is chased: how many sends, how far apart, how
+ *  long to keep watching, and what "it obeyed" looks like in a state read. */
+export interface RetryPolicy {
+  attempts: number;
+  reassertAfterMs: number;
+  verifyMs: number;
+  agrees: (cmd: Command, state: string, brightness: number | null) => boolean;
+}
+
+/** The policy for this device and command, or null when a single send and a
+ *  plain read-back is all it gets. Lights keep their KNX timings; flagged
+ *  media players get the slower TV ones. */
+export function retryPolicy(device: Device, cmd: Command): RetryPolicy | null {
+  if (lightRetriable(device, cmd)) {
+    return {
+      attempts: LIGHT_ATTEMPTS,
+      reassertAfterMs: REASSERT_AFTER_MS,
+      verifyMs: LIGHT_VERIFY_MS,
+      agrees: lightAgrees,
+    };
+  }
+  if (powerRetriable(device, cmd)) {
+    return {
+      attempts: TV_ATTEMPTS,
+      reassertAfterMs: TV_REASSERT_AFTER_MS,
+      verifyMs: TV_VERIFY_MS,
+      agrees: (c, state) => mediaAgrees(c, state),
+    };
+  }
+  return null;
 }
 
 /**

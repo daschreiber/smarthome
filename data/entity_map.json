@@ -2135,7 +2135,7 @@
   "visible": false
  },
  {
-  "entity_id": "media_player.dining_left",
+  "entity_id": "media_player.left_32_qe32ls03cbuxil",
   "domain": "media_player",
   "original_name": "Dining Left",
   "display_name": "Dining Left",
@@ -2144,12 +2144,10 @@
   "category": "media",
   "group": "Media",
   "visible": true,
-  "entity_aliases": [
-   "media_player.left_32"
-  ]
+  "retry_power": true
  },
  {
-  "entity_id": "media_player.dining_middle",
+  "entity_id": "media_player.middle_32_qe32ls03cbuxil",
   "domain": "media_player",
   "original_name": "Dining Middle",
   "display_name": "Dining Middle",
@@ -2158,12 +2156,10 @@
   "category": "media",
   "group": "Media",
   "visible": true,
-  "entity_aliases": [
-   "media_player.middle_32"
-  ]
+  "retry_power": true
  },
  {
-  "entity_id": "media_player.dining_right",
+  "entity_id": "media_player.right_32_qe32ls03cbuxil",
   "domain": "media_player",
   "original_name": "Dining Right",
   "display_name": "Dining Right",
@@ -2172,8 +2168,6 @@
   "category": "media",
   "group": "Media",
   "visible": true,
-  "entity_aliases": [
-   "media_player.right_32"
-  ]
+  "retry_power": true
  }
 ]

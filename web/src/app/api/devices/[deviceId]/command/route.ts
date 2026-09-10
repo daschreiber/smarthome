@@ -9,16 +9,12 @@ import { getUser, verifyPassword } from "@/lib/users";
 import { throttleStatus, recordFailure, recordSuccess, clientIp } from "@/lib/loginThrottle";
 import { unitEntityIds } from "@/lib/coolmaster";
 import {
-  LIGHT_ATTEMPTS,
-  LIGHT_VERIFY_MS,
-  REASSERT_AFTER_MS,
   claimLight,
   clearUnverified,
   holdsClaim,
-  lightAgrees,
-  lightRetriable,
   noteUnverified,
   reassertCall,
+  retryPolicy,
 } from "@/lib/knxLights";
 import { commandEntityIds, deviceUnreachable } from "@/lib/reachability";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
@@ -324,10 +320,14 @@ export async function POST(
       return NextResponse.json({ status: "failed", error: message }, { status: 503 });
     }
 
-    // A light command claims the device before it goes out: any verification
-    // loop still running from an earlier tap stands down instead of
-    // re-asserting a superseded intent over this one (lib/knxLights).
-    const retriable = lightRetriable(device, cmd);
+    // A retriable command — a KNX light, or a TV whose turn_on is a
+    // Wake-on-LAN packet — claims the device before it goes out: any
+    // verification loop still running from an earlier tap stands down
+    // instead of re-asserting a superseded intent over this one
+    // (lib/knxLights). `policy` carries the timings and the read that
+    // proves the command; null means one send and a plain read-back.
+    const policy = retryPolicy(device, cmd);
+    const retriable = policy != null;
     const claim = retriable ? claimLight(deviceId) : 0;
     const call = buildServiceCall(device, cmd);
     await callService(call.domain, call.service, call.data);
@@ -375,14 +375,18 @@ export async function POST(
       // the light disagrees (lib/knxLights) — which needs a longer window
       // than a plain read-back to fit its attempts. And "on" is not proof of
       // a DIM: an already-lit fixture satisfies it the instant the command is
-      // sent, so lightAgrees reads the level back too.
-      const lightReached = (ss: Read[]) =>
+      // sent, so lightAgrees reads the level back too. The Dining Frames
+      // ride the same loop with TV timings: their turn_on is one
+      // Wake-on-LAN packet, and a lost packet looks exactly like a lost
+      // telegram (screen stays dark, HA says 200).
+      const policyReached = (ss: Read[]) =>
+        !!policy &&
         ss.length > 0 &&
         ss.every((s) => {
           const b = s?.attributes.brightness;
-          return !!s && lightAgrees(cmd, s.state, typeof b === "number" ? b : null);
+          return !!s && policy.agrees(cmd, s.state, typeof b === "number" ? b : null);
         });
-      const deadline = Date.now() + (retriable ? LIGHT_VERIFY_MS : 8000);
+      const deadline = Date.now() + (policy ? policy.verifyMs : 8000);
       let attempts = 1;
       let lastSent = started;
       let reads: Read[] = [];
@@ -396,8 +400,8 @@ export async function POST(
           if (fanReached(reads)) break;
         } else if (wantedSource != null) {
           if (sourceReached(reads)) break;
-        } else if (retriable) {
-          if (lightReached(reads)) break;
+        } else if (policy) {
+          if (policyReached(reads)) break;
         } else if (!expected) break;
         else if (stateReached(reads)) break;
         if (Date.now() >= deadline) break;
@@ -408,12 +412,12 @@ export async function POST(
         // unavailable proves nothing, and shouting at it helps nothing.
         const seen = reads[0]?.state;
         if (
-          retriable &&
-          attempts < LIGHT_ATTEMPTS &&
+          policy &&
+          attempts < policy.attempts &&
           seen != null &&
           seen !== "unavailable" &&
           seen !== "unknown" &&
-          Date.now() - lastSent >= REASSERT_AFTER_MS
+          Date.now() - lastSent >= policy.reassertAfterMs
         ) {
           const again = reassertCall(device, cmd, attempts);
           await callService(again.domain, again.service, again.data).catch(() => {});
@@ -427,8 +431,8 @@ export async function POST(
           ? fanReached(reads)
           : wantedSource != null
             ? sourceReached(reads)
-            : retriable
-              ? lightReached(reads)
+            : policy
+              ? policyReached(reads)
               : stateReached(reads);
       const seen = [...new Set(reads.filter(Boolean).map((s) => s!.state))].join("/");
       // A light that never showed up in its own state is remembered, so the

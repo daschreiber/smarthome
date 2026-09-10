@@ -1,2 +1,3 @@
 web/pnpm-lock.yaml
 __pycache__/
+.DS_Store

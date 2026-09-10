@@ -1836,3 +1836,50 @@ signal must never leave a Frame lit all night. The audit line lists
 `spared`. Morning is unchanged: turning on a set that is on changes
 nothing. The "abandoned for hours with the receiver off" tail discussed
 was not asked for and is not in.
+
+## 2026-09-10 — Den TV experiment: out of art via SmartThings, back via the Frame's local Art API
+
+Owner next to the Den TV (QE75LS03DAUXSQ, 10.0.0.3). Question: can the
+house put a Frame into television mode at one time and back into art at
+another? Yes — and the experiment also showed a limit of the sensor the
+"being watched" rule relies on.
+
+| Step | Channel | What happened | Owner saw |
+|---|---|---|---|
+| `art().get_artmode()` from the Mac (`samsungtvws` 3.0.5, port 8002, name "HomeApp") | local Art API | "Allow" prompt on the set; then `artmode: on`, current artwork `MY_F0043` (category `myphoto`, matte `shadowbox_polar`) | the prompt, art unchanged |
+| `media_player.select_source hdmi3` on `media_player.den_den_tv` | SmartThings cloud | set left art mode (local API read `artmode: off` 30 s later) | screen went dark, then **HDMI 3 "No Signal"** |
+| `art().set_artmode(True)` from the Mac | local Art API | `artmode: on` within 8 s | back to the sunset |
+
+Findings:
+
+- **Selecting an input pulls a Frame out of art; the local Art API puts
+  it back.** Both are a single call. Nothing on HDMI 3 was live, hence
+  "No Signal" — the schedule the owner has in mind ("come on to TV mode
+  at 19:00") needs a source that is actually on, which in this house is
+  Control4's Den zone (`media_player.den`, source_list from the matrix)
+  rather than a bare HDMI number.
+- **The SmartThings `tvChannelName` sensor did not move.** 15 minutes of
+  history: `art` throughout, while the set spent ~30 s on HDMI 3. It is a
+  *tuner* channel name; an HDMI input does not change it. So the
+  "spare a set that is being watched" rule (PR #125) only sees
+  television watched through the built-in tuner. The authoritative signal
+  is the local Art API's `get_artmode`, which nothing in the stack can
+  currently call for the Den: the app runs on Railway (no LAN), and HA
+  cannot reach 10.0.0.3 (open follow-up). The SmartThings `media_player`
+  `source` attribute is no help either: it read `hdmi3` while in art.
+- The local Art API from the Mac saved no token file — the Frame's
+  art channel accepted the connection after "Allow" without one;
+  `send_key` on the remote channel would.
+
+### Follow-ups
+
+- [ ] Decide where the local Art API lives for the house: it must be on
+  the LAN, so on the Green — a small service or custom integration
+  exposing `artmode` as a sensor + `set_artmode` as a service, per Frame.
+  That gives the app a truthful "in art?" read for every Frame and the
+  "back to art" command the schedule needs. Blocked for the Den by
+  HA → 10.0.0.3 reachability.
+- [ ] What feeds Den HDMI 3? (Control4 matrix output / Apple TV / cable
+  box.) Needed to define "TV mode" for the schedule.
+- [ ] Until the Art API sensor exists, note in the owner's mind that the
+  Night sparing rule does not see HDMI viewing.

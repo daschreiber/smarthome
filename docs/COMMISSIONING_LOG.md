@@ -1728,3 +1728,94 @@ morning woke on the first cloud command, into art mode.
   media_player `_determine_features`: `"play" in playback_commands` with
   `supportedPlaybackCommands: null` on a dead device takes the whole
   platform down).
+
+## 2026-09-10 — Picture Frames follow Night and Morning; Den and Lounge TVs mapped
+
+Owner's brief: the Frames are photo frames. All five — the three Dining
+32" sets plus the Den TV and the Lounge TV, which show art whenever
+nobody is watching them — go dark in Night mode and come back on, as art,
+in Day mode. Refinements (home/away, "only when not being watched", the
+floor 6 all-lights-off keypad) deliberately deferred until the owner has
+lived with the simple rule.
+
+### The morning's proof, all three in turn from the app
+
+| Frame | Off | On | Mode after |
+|---|---|---|---|
+| Left | off in 7.8 s | on in 3.6 s, first packet | art |
+| Middle | off in 7.8 s | on in 3.6 s, first packet | art |
+| Right | off in 8.2 s | on in 11.3 s, one re-assert via SmartThings | art |
+
+"Mode after" is SmartThings' `tvChannelName` (HA:
+`sensor.living_room_*_32_tv_channel_name`), the same field the SmartThings
+app labels "Art Mode". It only changes when the mode changes, which is why
+it read `art` with a 06:30 timestamp all morning: the sets never left art,
+power cycles included. Every wake this house has seen lands in art, so
+"on as art" is just "on". An Art-API adapter (force art, choose photos) is
+not needed for this rule; parked.
+
+### What "Night mode" and "Day mode" are
+
+Not app scenes. `light.knx_switch_all_house_night` and
+`light.knx_switch_all_house_morning` are KNX scene switches (map category
+`scene_switch`, group Scenes) — the app's Night / Morning buttons send them
+`turn_on`. Their HA state is not a mode: 7-day history shows Night flip on
+at 19:17 on 09-03 and never return to off; both have read `on` since. So
+the only usable signal is the press itself.
+
+### What changed
+
+- **`art_frame`** map flag (→ `Device.artFrame`) on the three Dining rows
+  and two new rows: **Lounge TV** (`media_player.lounge_tv_qe85ls03dauxsq`,
+  `retry_power`, `wake_entity: media_player.living_room_lounge_tv`, Lounge,
+  floor 6) and **Den TV** (`media_player.den_den_tv` — the SmartThings
+  entity, see below — `retry_power`, Den, floor 5). Both get the standard
+  MediaCard in their rooms.
+- **lib/artframes**: `artFrameFollow(device, cmd)` — a `turn_on` to the
+  Night switch means Frames `turn_off`, to the Morning switch means
+  Frames `turn_on`; nothing else moves them. `artFrames()` = the flagged
+  rows.
+- **lib/execute `followArtFrames`**: fans the follow command across the
+  Frames and writes one audit line (`system:artframes`,
+  `frames_turn_off` / `frames_turn_on`, targets + failures). Hooked in the
+  command route right after a press is accepted, and in `executeAction`'s
+  device branch, so an automation step that presses Night at 23:00 darkens
+  the Frames too.
+- **lib/execute `executeOnDevice`**: the batch path has no read-back, so a
+  Frame's `turn_on` now sends the local packet *and* the cloud wake
+  (`wake_entity`) together, and a `retry_power` device's sends use the
+  slow HA timeout. The interactive route keeps escalating instead.
+- Tests: `artframes.test.ts`, `execute.frames.test.ts` (450 pass).
+
+### Den TV: reachable from the LAN, not from HA
+
+`media_player.den_tv_qe75ls03dauxsq` (Samsung TV integration, host
+10.0.0.3, MAC bc:45:5b:b5:6c:b0) has read `unavailable` since 2026-09-04
+14:22Z. The IP is right: the Mac finds that MAC at 10.0.0.3 and the set
+answers `https://10.0.0.3:8002/api/v2/` (PowerState on, FrameTVSupport
+true). A reload of the entry did not help; HA's log shows it failing to
+connect to 10.0.0.3 on 8009 (Cast) and 9197 (DLNA) as well, so HA (Green,
+10.0.0.69) cannot reach that host at all while a laptop on the same /24
+can. Mapped through SmartThings for now (cloud on/off, art state), with
+the Samsung entity to be swapped back once the path is found.
+
+### Not seen: the wall keypad
+
+A Night press on a KNX keypad bypasses the app, and the switch's HA state
+does not change, so the Frames do not follow it. Catching that needs the
+KNX bus event (`knx_event` on the scene group address) → an HA automation
+that presses the app's hook, or reads of the scene GA. First refinement
+if the owner uses the keypad more than the app.
+
+### Follow-ups
+
+- [ ] Live check after deploy: press Morning and Night in the app (owner's
+  call — they switch the house lights) and read `system:artframes` in the
+  activity log; Den TV's SmartThings off/on is unproven.
+- [ ] Why can HA not reach 10.0.0.3? Check the FortiGate for an isolation
+  rule or a stale ARP/lease for that address; then swap Den TV's row back
+  to the Samsung entity with `wake_entity: media_player.den_den_tv`.
+- [ ] Wall-keypad presses (above).
+- [ ] Refinements the owner asked to defer: home/away gating, "not while
+  being watched" for Den/Lounge (SmartThings `mediaPlayback` / input
+  source tells), the floor 6 all-lights-off keypad, the bedroom-wall Frame.

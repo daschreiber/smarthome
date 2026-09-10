@@ -19,7 +19,7 @@ import {
 import { commandEntityIds, deviceUnreachable } from "@/lib/reachability";
 import { saunaSetTemperature, saunaStart, saunaStatus, saunaStop } from "@/lib/sauna";
 import { noiseStatusFresh, noiseTurnOff, noiseTurnOn, setNoiseVolume } from "@/lib/whitenoise";
-import { executeOnDevice } from "@/lib/execute";
+import { executeOnDevice, followArtFrames } from "@/lib/execute";
 
 /**
  * Command execution flow per IMPLEMENTATION_SPEC §9:
@@ -335,6 +335,10 @@ export async function POST(
     // screen then disproves.
     const sendOpts = policy?.sendTimeoutMs ? { timeoutMs: policy.sendTimeoutMs } : {};
     await callService(call.domain, call.service, call.data, sendOpts);
+    // A press of the Night or Morning scene switch takes the picture Frames
+    // with it (lib/artframes) — in the background, the press itself has
+    // already been accepted.
+    void followArtFrames(device, cmd, auth.user);
 
     // HA accepted the command — answer NOW ("sent") so the UI settles
     // instantly, and verify in the background (the server is long-lived;

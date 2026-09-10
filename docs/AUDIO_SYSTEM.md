@@ -105,8 +105,17 @@ that goes `unavailable` whenever the set is off — not a control path. Their
 turn_off is reliable; turn_on is a Wake-on-LAN packet that lands about
 half the time, so the rows are flagged `retry_power` and the command route
 re-sends power commands while the set disagrees (lib/knxLights
-`retryPolicy`, the KNX dimmer belt with TV timings). The Den, Lounge and
-bedroom-wall Frames are not mapped yet.
+`retryPolicy`, the KNX dimmer belt with TV timings); the right set ignores
+magic packets altogether, so each row also names a `wake_entity` — the
+SmartThings `media_player.living_room_*_32` — that the re-assert escalates
+to. **Den TV** (`media_player.den_den_tv`, SmartThings — its Samsung TV
+entity has been unreachable from HA since 2026-09-04 although the set
+answers on the LAN) and **Lounge TV** (`media_player.lounge_tv_qe85ls03dauxsq`,
+wake entity `media_player.living_room_lounge_tv`) are mapped the same way.
+All five carry `art_frame`: **a press of the Night scene switch turns them
+off, a press of Morning turns them on** (lib/artframes, hooked into the
+command route and automation steps). A Frame that is on sits in art mode,
+so "on" is "on as art". The bedroom-wall Frame is not mapped.
 Apple TV "Basement Jerusalem". Rack has its own AC (`climate.rack_unit_109`).
 
 ## Spotify device-picker decoder

@@ -1,6 +1,8 @@
 import { CommandSchema, assertCommandAllowed, buildServiceCall, type Command } from "./commands";
 import { bedSetLevel, bedSideForDeviceId, bedSideOff, bedSideOn } from "./eightsleep";
-import { callService } from "./ha";
+import { SLOW_SERVICE_TIMEOUT_MS, callService } from "./ha";
+import { artFrameFollow, artFrames } from "./artframes";
+import { audit } from "./audit";
 import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
 import { noiseTurnOff, noiseTurnOn, setNoiseVolume } from "./whitenoise";
@@ -60,7 +62,48 @@ export async function executeOnDevice(device: Device, cmd: Command): Promise<voi
     return;
   }
   const call = buildServiceCall(device, cmd);
-  await callService(call.domain, call.service, call.data);
+  // A Frame's off is a held power key inside HA's handler — let HA answer
+  // (lib/ha SLOW_SERVICE_TIMEOUT_MS) instead of aborting at 5s.
+  const opts = device.retryPower ? { timeoutMs: SLOW_SERVICE_TIMEOUT_MS } : {};
+  await callService(call.domain, call.service, call.data, opts);
+  // No read-back on this path (scenes, automations, the assistant), so a
+  // TV whose Wake-on-LAN packet may be ignored gets its cloud wake in the
+  // same breath rather than as an escalation: the interactive route
+  // re-asserts and escalates (lib/knxLights), this path sends both. A
+  // second "on" at a set that is already coming up costs nothing.
+  if (cmd.command === "turn_on" && device.kind === "media_player" && device.wakeEntityId) {
+    await callService("media_player", "turn_on", { entity_id: device.wakeEntityId }, opts).catch((err) => {
+      console.warn(`[execute] ${device.id}: cloud wake via ${device.wakeEntityId} failed:`, err);
+    });
+  }
+}
+
+/**
+ * The picture Frames follow a press of the Night or Morning scene switch
+ * (lib/artframes): fan the matching power command across every flagged
+ * Frame and write one audit line for the sweep. Fire-and-forget by design —
+ * the caller has already answered for the press itself. Called from the
+ * interactive command route and from executeOnDevice's batch callers alike,
+ * so an automation step that presses Night at 23:00 darkens the Frames too.
+ */
+export async function followArtFrames(device: Device, cmd: Command, user: string): Promise<void> {
+  const follow = artFrameFollow(device, cmd);
+  if (!follow) return;
+  const frames = artFrames();
+  if (frames.length === 0) return;
+  const started = Date.now();
+  const result = await executeOnDevices(frames, follow);
+  audit({
+    ts: new Date().toISOString(),
+    user,
+    deviceId: "system:artframes",
+    entityId: device.entityId,
+    command: `frames_${follow.command}`,
+    args: { after: device.id, targets: frames.map((f) => f.id), failed: result.failed },
+    ok: result.failed.length === 0,
+    durationMs: Date.now() - started,
+    error: result.failed.length ? result.failed.map((f) => `${f.target}: ${f.error}`).join("; ") : undefined,
+  });
 }
 
 export interface BatchResult {
@@ -228,5 +271,8 @@ export async function executeAction(action: Action): Promise<BatchResult> {
   if (!device) return { total: 1, failed: [{ target: action.deviceId, error: "unknown device" }] };
   const parsed = CommandSchema.safeParse(action.command);
   if (!parsed.success) return { total: 1, failed: [{ target: action.deviceId, error: "invalid command" }] };
-  return runBatch([{ target: device.id, run: () => executeOnDevice(device, parsed.data) }]);
+  const result = await runBatch([{ target: device.id, run: () => executeOnDevice(device, parsed.data) }]);
+  // A step that presses Night or Morning takes the picture Frames with it.
+  if (result.failed.length === 0) void followArtFrames(device, parsed.data, "automation");
+  return result;
 }

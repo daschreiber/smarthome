@@ -62,6 +62,11 @@ export interface MapRow {
    *  set keeps open in standby. turn_off and state stay on `entity_id`.
    *  Same shape as the lift TV (Cast for ON, Samsung for OFF, lib/liftwatch). */
   wake_entity?: string;
+  /** A Samsung Frame used as a picture: on (in art mode) whenever the house
+   *  is up, off at night. The house's Night and Morning scene switches fan
+   *  out to every row with this flag (lib/artframes). The three Dining
+   *  32" sets, the Den TV and the Lounge TV (2026-09-10). */
+  art_frame?: boolean;
 }
 
 export interface Device {
@@ -89,6 +94,8 @@ export interface Device {
   retryPower?: boolean;
   /** See MapRow.wake_entity. */
   wakeEntityId?: string;
+  /** See MapRow.art_frame. */
+  artFrame?: boolean;
 }
 
 /** Shared app-wide slug: scene and automation ids use the same rules as
@@ -185,6 +192,7 @@ export function buildDevices(rows: MapRow[]): Device[] {
       ...(row.entity_aliases?.length ? { entityAliases: row.entity_aliases } : {}),
       ...(row.retry_power ? { retryPower: true } : {}),
       ...(row.wake_entity ? { wakeEntityId: row.wake_entity } : {}),
+      ...(row.art_frame ? { artFrame: true } : {}),
       ...(row.pinned ? { pinned: true } : {}),
     };
   });

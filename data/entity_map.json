@@ -2188,7 +2188,8 @@
   "visible": true,
   "retry_power": true,
   "wake_entity": "media_player.living_room_lounge_tv",
-  "art_frame": true
+  "art_frame": true,
+  "art_mode_entity": "sensor.living_room_lounge_tv_tv_channel_name"
  },
  {
   "entity_id": "media_player.den_den_tv",
@@ -2201,6 +2202,7 @@
   "group": "Media",
   "visible": true,
   "retry_power": true,
-  "art_frame": true
+  "art_frame": true,
+  "art_mode_entity": "sensor.den_den_tv_tv_channel_name"
  }
 ]

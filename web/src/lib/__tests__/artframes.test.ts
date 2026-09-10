@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MORNING_SCENE_SWITCH, NIGHT_SCENE_SWITCH, artFrameFollow, artFrames } from "../artframes";
+import { MORNING_SCENE_SWITCH, NIGHT_SCENE_SWITCH, artFrameFollow, artFrames, beingWatched, spareWatched } from "../artframes";
 import type { Device } from "../registry";
 
 /**
@@ -55,5 +55,67 @@ describe("artFrames", () => {
       expect(d.kind).toBe("media_player");
       expect(d.retryPower).toBe(true);
     }
+  });
+});
+
+const lounge: Device = {
+  id: "lounge__lounge_tv",
+  entityId: "media_player.lounge_tv_qe85ls03dauxsq",
+  kind: "media_player",
+  label: "Lounge TV",
+  room: "Lounge",
+  floor: 6,
+  group: "Media",
+  category: "media",
+  visible: true,
+  capabilities: ["on_off"],
+  artFrame: true,
+  retryPower: true,
+  artModeEntityId: "sensor.living_room_lounge_tv_tv_channel_name",
+};
+const diningLeft: Device = {
+  ...lounge,
+  id: "dining__dining_left",
+  entityId: "media_player.left_32_qe32ls03cbuxil",
+  label: "Dining Left",
+  room: "Dining",
+  artModeEntityId: undefined,
+};
+
+describe("beingWatched", () => {
+  it("television is anything the sensor reports that is not art", () => {
+    expect(beingWatched(lounge, "art")).toBe(false);
+    expect(beingWatched(lounge, "HDMI 1")).toBe(true);
+    expect(beingWatched(lounge, "BBC One")).toBe(true);
+  });
+
+  it("only positive evidence spares a set — no sensor, no reading, unavailable all read as art", () => {
+    expect(beingWatched(lounge, undefined)).toBe(false);
+    expect(beingWatched(lounge, "")).toBe(false);
+    expect(beingWatched(lounge, "unavailable")).toBe(false);
+    expect(beingWatched(lounge, "unknown")).toBe(false);
+    expect(beingWatched(diningLeft, "HDMI 1")).toBe(false); // no art_mode_entity on the row
+  });
+});
+
+describe("spareWatched", () => {
+  const states: Record<string, string> = { "sensor.living_room_lounge_tv_tv_channel_name": "HDMI 1" };
+  const stateOf = (id: string) => states[id];
+
+  it("Night spares the set that is showing television and darkens the rest", () => {
+    const { targets, spared } = spareWatched([lounge, diningLeft], { command: "turn_off" }, stateOf);
+    expect(spared.map((d) => d.id)).toEqual(["lounge__lounge_tv"]);
+    expect(targets.map((d) => d.id)).toEqual(["dining__dining_left"]);
+  });
+
+  it("Morning takes them all — turning on a set that is on changes nothing", () => {
+    const { targets, spared } = spareWatched([lounge, diningLeft], { command: "turn_on" }, stateOf);
+    expect(spared).toEqual([]);
+    expect(targets).toHaveLength(2);
+  });
+
+  it("a set back in art is darkened like the others", () => {
+    const { spared } = spareWatched([lounge], { command: "turn_off" }, () => "art");
+    expect(spared).toEqual([]);
   });
 });

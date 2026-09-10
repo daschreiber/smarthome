@@ -114,8 +114,12 @@ answers on the LAN) and **Lounge TV** (`media_player.lounge_tv_qe85ls03dauxsq`,
 wake entity `media_player.living_room_lounge_tv`) are mapped the same way.
 All five carry `art_frame`: **a press of the Night scene switch turns them
 off, a press of Morning turns them on** (lib/artframes, hooked into the
-command route and automation steps). A Frame that is on sits in art mode,
-so "on" is "on as art". The bedroom-wall Frame is not mapped.
+command route and automation steps), with one exception: **a Night press
+leaves a Den or Lounge set that is not in art mode alone** — it is being
+watched. "In art" is SmartThings' `tvChannelName` sensor (`art_mode_entity`
+on the row); only positive evidence spares a set, an unavailable sensor
+reads as art. A Frame that is on sits in art mode, so "on" is "on as art".
+The bedroom-wall Frame is not mapped.
 Apple TV "Basement Jerusalem". Rack has its own AC (`climate.rack_unit_109`).
 
 ## Spotify device-picker decoder

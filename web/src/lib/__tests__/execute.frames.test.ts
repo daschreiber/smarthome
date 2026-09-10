@@ -8,11 +8,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../ha", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../ha")>();
-  return { ...actual, callService: vi.fn(async () => {}) };
+  return { ...actual, callService: vi.fn(async () => {}), getStates: vi.fn(async () => []) };
 });
 vi.mock("../audit", () => ({ audit: vi.fn() }));
 
-import { callService } from "../ha";
+import { callService, getStates } from "../ha";
 import { audit } from "../audit";
 import { executeOnDevice, followArtFrames } from "../execute";
 import { getDevice } from "../registry";
@@ -78,6 +78,28 @@ describe("followArtFrames", () => {
     expect(calls).toHaveBeenCalledTimes(9);
     expect(calls.mock.calls.every((c) => c[1] === "turn_on")).toBe(true);
     expect(audits.mock.calls[0][0]).toMatchObject({ command: "frames_turn_on", ok: true });
+  });
+
+  it("Night spares a Den or Lounge set that is showing television, and says so", async () => {
+    vi.mocked(getStates).mockResolvedValueOnce([
+      { entity_id: "sensor.living_room_lounge_tv_tv_channel_name", state: "HDMI 1", attributes: {}, last_updated: "", last_changed: "" },
+      { entity_id: "sensor.den_den_tv_tv_channel_name", state: "art", attributes: {}, last_updated: "", last_changed: "" },
+    ]);
+    const night = getDevice("whole_house__all_house_night")!;
+    await followArtFrames(night, { command: "turn_on" }, "daniel");
+    const targets = calls.mock.calls.map((c) => c[2].entity_id);
+    expect(targets).not.toContain("media_player.lounge_tv_qe85ls03dauxsq");
+    expect(targets).toContain("media_player.den_den_tv");
+    expect(targets).toHaveLength(4);
+    expect(audits.mock.calls[0][0].args).toMatchObject({ spared: ["lounge__lounge_tv"] });
+  });
+
+  it("a failed state read spares nothing — only positive evidence", async () => {
+    vi.mocked(getStates).mockRejectedValueOnce(new Error("HA down"));
+    const night = getDevice("whole_house__all_house_night")!;
+    await followArtFrames(night, { command: "turn_on" }, "daniel");
+    expect(calls).toHaveBeenCalledTimes(5);
+    expect(audits.mock.calls[0][0].args).not.toHaveProperty("spared");
   });
 
   it("any other press is not the Frames' business", async () => {

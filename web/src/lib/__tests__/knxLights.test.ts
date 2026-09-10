@@ -208,6 +208,18 @@ describe("retryPolicy", () => {
     );
   });
 
+  it("a TV with a wake entity escalates its turn_on to it — off and the first send stay local", () => {
+    const cloudFrame: Device = { ...frame, wakeEntityId: "media_player.st_dining_right" };
+    expect(reassertCall(cloudFrame, { command: "turn_on" }, 0)).toEqual({
+      domain: "media_player", service: "turn_on", data: { entity_id: frame.entityId },
+    });
+    expect(reassertCall(cloudFrame, { command: "turn_on" }, 1)).toEqual({
+      domain: "media_player", service: "turn_on", data: { entity_id: "media_player.st_dining_right" },
+    });
+    expect(reassertCall(cloudFrame, { command: "turn_on" }, 2).data.entity_id).toBe("media_player.st_dining_right");
+    expect(reassertCall(cloudFrame, { command: "turn_off" }, 1).data.entity_id).toBe(frame.entityId);
+  });
+
   it("everything else gets no policy: one send, one read-back", () => {
     expect(retryPolicy(receiver, { command: "turn_on" })).toBeNull();
     expect(retryPolicy(shade, { command: "open" })).toBeNull();

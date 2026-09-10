@@ -1616,15 +1616,108 @@ Railway deploy of PR #120), owner watching the panels.
 
 ### Follow-ups
 
-- [ ] **Right Frame needs a different wake path.** Two candidates, in
-  order of simplicity: (a) put it on Ethernet — check first whether Left
-  and Middle are wired (Network → Network Status), which would explain the
-  difference outright; (b) add HA's SmartThings integration (Samsung
-  account OAuth) and give the row a `wake_entity` so turn_on goes through
-  SmartThings' cloud standby channel while turn_off and state stay on the
-  Samsung TV entity — the liftwatch pattern (Cast for ON, Samsung for
-  OFF). Until then the card honestly says "didn't answer" after 30 s.
+- [ ] **Right Frame needs a different wake path** — in progress, see the
+  SmartThings section below. (Ethernet ruled out as the explanation:
+  Middle is on Wi‑Fi too and wakes on the second packet.)
 - [ ] The HA Settings badge went 1 → 4 during the test — three new
   repairs/notifications appeared as the sets cycled. Not investigated.
 - [ ] Rename the "Dinning Middle" DLNA device in HA (typo), or remove the
   three DLNA renderers to stop the `unavailable` noise.
+
+## 2026-09-10 — SmartThings linked to HA; its media players blocked by an HA bug
+
+Why: the right Frame ignores every magic packet (above), and the forums'
+one working alternative for a Wi‑Fi Samsung set is SmartThings' cloud
+standby channel. Plan: `wake_entity` on the map row — first send stays
+the local Wake-on-LAN, every re-assert goes through the SmartThings
+media_player's turn_on (lib/knxLights `reassertCall`, same escalation
+shape as the dimmers' explicit level). Code and tests are in.
+
+### Linking (owner at the Mac)
+
+HA → Settings → Devices & services → SmartThings → Add account. The
+external step is a three-hop chain: account-link.nabucasa.com →
+api.smartthings.com/oauth/authorize → account.samsung.com sign-in →
+account.smartthings.com/ssoCallback → back through Nabu Casa to HA. Two
+gotchas cost us three attempts:
+
+- Samsung's sign-in page **always** asks for the password again, even
+  with a live Samsung session in the same browser.
+- The chain must run in **one browser**: opening only the
+  account.samsung.com hop in a different browser signs in fine but then
+  `ssoCallback` fails with "An unexpected error occurred" (Reference IDs
+  b94aa7ce…, c265026f…) because the SmartThings cookie from the hop before
+  it is missing. The `state` parameter carries the api.smartthings.com
+  authorize URL base64-encoded after a 64-hex prefix, so the second hop
+  can be reconstructed and the chain restarted from there.
+
+Linked as location **My home**. HA created 14 devices / 71 entities —
+sensors (energy, power, TV channel) and the Frames' light/sound sensor
+sub-devices — and put the Frames in a new HA area **Living room** (their
+SmartThings room); the Samsung TV devices stay in Dining. Entity ids are
+prefixed `living_room_` (`sensor.living_room_right_32_tv_channel_name`
+= `art`, which is the art-mode tell).
+
+### No media players — an HA bug, not a capability gap
+
+`system_log`: *"Error while setting up smartthings platform for
+media_player: argument of type 'NoneType' is not a container or
+iterable"*. The platform sets up every device in one pass
+(`media_player.py` `async_setup_entry`), and `_determine_features` does
+`"play" in playback_commands` unguarded. One device in the account,
+**"Samsung TV 3072"** (no model, every attribute `null` — an old set that
+is gone), returns `supportedPlaybackCommands: null`, the comprehension
+throws, and *no* TV gets a media_player — not the Frames, not the Lounge
+or Den TV either. Diagnostics confirm the Frames themselves are fine:
+`audioMute`/`audioVolume`/`switch`/`mediaPlayback` present,
+`supportsPowerOnByOcf: true` on all three, nothing relevant in
+`custom.disabledCapabilities`.
+
+Workaround: remove "Samsung TV 3072" from the SmartThings account (the
+phone app; my.smartthings.com is a beta dashboard that neither lists it
+nor deletes), then reload the SmartThings entry. Worth an upstream issue:
+guard `playback_commands` (and the other `get_attribute_value` reads)
+against `None` so one dead device cannot take the platform down.
+
+### Unblocked, and the cloud wake proven
+
+The owner deleted "Samsung TV 3072" in the SmartThings app; a reload of
+the SmartThings entry then created the media players:
+`media_player.living_room_left_32`, `…_middle_32`, `…_right_32` (plus
+Lounge TV, Den TV, and the four offline/other sets).
+
+Proof, driven from HA's frontend with the right Frame as the subject:
+
+| Step | Samsung TV entity | SmartThings entity |
+|---|---|---|
+| `turn_off` on `media_player.right_32_qe32ls03cbuxil` | off within 20 s | off |
+| `turn_on` on `media_player.living_room_right_32` | **on within 10 s** | on; `tv_channel_name` = art |
+
+The set that ignored single packets, unicast, and a 150-packet burst all
+morning woke on the first cloud command, into art mode.
+
+### What changed
+
+- `data/entity_map.json` (+ `web/data/`): `wake_entity` on all three
+  Frame rows → their `media_player.living_room_*_32`.
+- **`wake_entity` → `wakeEntityId`** (lib/registry) and
+  `reassertCall` (lib/knxLights): attempt 0 of a turn_on is still the
+  Samsung TV entity's own Wake-on-LAN (local, works with the internet
+  down); every re-assert (7 s later, then again) goes through the wake
+  entity's turn_on instead. turn_off, the read-back and the card's state
+  stay on the Samsung TV entity. Same shape as the dimmers' explicit-level
+  escalation and the lift TV's Cast-for-ON / Samsung-for-OFF split.
+  Expected from the card: Left/Middle on the first or second send, Right
+  on the second (~7 s + boot).
+
+### Follow-ups
+
+- [ ] Retest all three from the card once Railway has this deploy; the
+  audit line should read `reasserted: 1` for Right with `on`.
+- [x] HA area "Living room" (created by the SmartThings assign dialog):
+  the three Frames and their sensor sub-devices moved to Dining, the
+  area deleted, same morning.
+- [ ] File the `None` guard bug against home-assistant/core (smartthings
+  media_player `_determine_features`: `"play" in playback_commands` with
+  `supportedPlaybackCommands: null` on a dead device takes the whole
+  platform down).

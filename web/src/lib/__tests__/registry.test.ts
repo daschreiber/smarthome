@@ -125,6 +125,13 @@ describe("buildDevices", () => {
     expect(tv.retryPower).toBe(true);
     expect(devices[0].retryPower).toBeUndefined();
   });
+
+  it("carries a wake entity through to the device", () => {
+    const [tv] = buildDevices([{ ...frameRow, wake_entity: "media_player.st_dining_left" }]);
+    expect(tv.wakeEntityId).toBe("media_player.st_dining_left");
+    const [plain] = buildDevices([frameRow]);
+    expect(plain.wakeEntityId).toBeUndefined();
+  });
 });
 
 // A Dining Frame as the map has it since 2026-09-10: the Samsung TV

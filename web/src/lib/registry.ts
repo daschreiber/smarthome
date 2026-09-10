@@ -55,6 +55,13 @@ export interface MapRow {
    *  single Wake-on-LAN packet over Wi-Fi — on 2026-09-10 one screen woke on
    *  the first packet, one on the second, one not at all in two. */
   retry_power?: boolean;
+  /** A second entity that can wake this device when its own turn_on can't:
+   *  the Dining Frames' turn_on is a Wake-on-LAN packet their Wi‑Fi radio
+   *  may ignore (Right never wakes; Left/Middle need two), so the re-assert
+   *  escalates to this entity's turn_on — the SmartThings cloud channel the
+   *  set keeps open in standby. turn_off and state stay on `entity_id`.
+   *  Same shape as the lift TV (Cast for ON, Samsung for OFF, lib/liftwatch). */
+  wake_entity?: string;
 }
 
 export interface Device {
@@ -80,6 +87,8 @@ export interface Device {
   entityAliases?: string[];
   /** See MapRow.retry_power. */
   retryPower?: boolean;
+  /** See MapRow.wake_entity. */
+  wakeEntityId?: string;
 }
 
 /** Shared app-wide slug: scene and automation ids use the same rules as
@@ -175,6 +184,7 @@ export function buildDevices(rows: MapRow[]): Device[] {
       ...(row.battery_entity ? { batteryEntity: row.battery_entity } : {}),
       ...(row.entity_aliases?.length ? { entityAliases: row.entity_aliases } : {}),
       ...(row.retry_power ? { retryPower: true } : {}),
+      ...(row.wake_entity ? { wakeEntityId: row.wake_entity } : {}),
       ...(row.pinned ? { pinned: true } : {}),
     };
   });

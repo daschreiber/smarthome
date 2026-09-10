@@ -2144,7 +2144,8 @@
   "category": "media",
   "group": "Media",
   "visible": true,
-  "retry_power": true
+  "retry_power": true,
+  "wake_entity": "media_player.living_room_left_32"
  },
  {
   "entity_id": "media_player.middle_32_qe32ls03cbuxil",
@@ -2156,7 +2157,8 @@
   "category": "media",
   "group": "Media",
   "visible": true,
-  "retry_power": true
+  "retry_power": true,
+  "wake_entity": "media_player.living_room_middle_32"
  },
  {
   "entity_id": "media_player.right_32_qe32ls03cbuxil",
@@ -2168,6 +2170,7 @@
   "category": "media",
   "group": "Media",
   "visible": true,
-  "retry_power": true
+  "retry_power": true,
+  "wake_entity": "media_player.living_room_right_32"
  }
 ]

@@ -147,7 +147,17 @@ export function retryPolicy(device: Device, cmd: Command): RetryPolicy | null {
 export function reassertCall(device: Device, cmd: Command, attempt: number): ServiceCall {
   const base = buildServiceCall(device, cmd);
   if (attempt === 0) return base;
-  if (cmd.command !== "turn_on" || !device.capabilities.includes("brightness")) return base;
+  if (cmd.command !== "turn_on") return base;
+  // A TV with a wake entity escalates the same way a dimmer does — same
+  // intent, different telegram: the first send is the integration's own
+  // Wake-on-LAN packet (local, works with the internet down), every
+  // re-assert goes through the wake entity instead (SmartThings' cloud
+  // standby channel, which the set answers even when its Wi‑Fi radio
+  // drops magic packets). State is still read from the device's own entity.
+  if (device.kind === "media_player" && device.wakeEntityId) {
+    return { domain: "media_player", service: "turn_on", data: { entity_id: device.wakeEntityId } };
+  }
+  if (!device.capabilities.includes("brightness")) return base;
   return { ...base, data: { ...base.data, brightness_pct: 100 } };
 }
 

@@ -120,7 +120,8 @@ Current references:
 - [Test plan](docs/TEST_PLAN.md)
 - [Apple Home setup](docs/APPLE_HOME_SETUP.md)
 - [Audio system & Spotify](docs/AUDIO_SYSTEM.md)
-- [Alexa "Sleep sound"](docs/ALEXA_WHITE_NOISE.md)
+- [Alexa "Sleep sound"](docs/ALEXA_WHITE_NOISE.md) ·
+  [iPhone Shortcut "Sleep sound on"](docs/IOS_SHORTCUT_WHITE_NOISE.md)
 - [Eight Sleep bed — on-site setup](docs/EIGHT_SLEEP_SETUP.md)
 - [Conversational layer & expansion](docs/CONVERSATIONAL_LAYER_AND_EXPANSION.md)
 

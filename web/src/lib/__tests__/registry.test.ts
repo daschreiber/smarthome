@@ -113,18 +113,24 @@ describe("buildDevices", () => {
   });
 
   it("carries entity aliases through to the device", () => {
-    const [tv] = buildDevices([frameRow]);
+    const [tv] = buildDevices([aliasedRow]);
     expect(tv.id).toBe("dining__dining_left");
     expect(tv.entityAliases).toEqual(["media_player.left_32"]);
     expect(devices[0].entityAliases).toBeUndefined();
   });
+
+  it("carries retry_power through to the device", () => {
+    const [tv] = buildDevices([frameRow]);
+    expect(tv.entityId).toBe("media_player.left_32_qe32ls03cbuxil");
+    expect(tv.retryPower).toBe(true);
+    expect(devices[0].retryPower).toBeUndefined();
+  });
 });
 
-// The Dining Frames (2026-09-09) were mapped from a screenshot: HA showed
-// the device renamed "Dining Left" from "Left 32", but not whether the
-// entity id followed the rename. Both ids are in the map.
+// A Dining Frame as the map has it since 2026-09-10: the Samsung TV
+// integration's own entity id, and power commands flagged for re-sending.
 const frameRow: MapRow = {
-  entity_id: "media_player.dining_left",
+  entity_id: "media_player.left_32_qe32ls03cbuxil",
   domain: "media_player",
   original_name: "Dining Left",
   display_name: "Dining Left",
@@ -133,19 +139,31 @@ const frameRow: MapRow = {
   category: "media",
   group: "Media",
   visible: true,
+  retry_power: true,
+};
+
+// The alias mechanism's fixture: the same screen as it was first mapped on
+// 2026-09-09, from a screenshot that showed the device renamed "Dining
+// Left" from "Left 32" but not whether the entity id followed. (It hadn't
+// — neither id existed; see the 2026-09-10 commissioning entry.) No map
+// row uses aliases today; the mechanism stays for the next screenshot.
+const aliasedRow: MapRow = {
+  ...frameRow,
+  entity_id: "media_player.dining_left",
+  retry_power: undefined,
   entity_aliases: ["media_player.left_32"],
 };
 
 describe("reconcileEntityIds", () => {
   it("keeps the mapped id when HA has it", () => {
-    const devices = buildDevices([frameRow]);
+    const devices = buildDevices([aliasedRow]);
     const switched = reconcileEntityIds(devices, (id) => id === "media_player.dining_left");
     expect(switched).toEqual([]);
     expect(devices[0].entityId).toBe("media_player.dining_left");
   });
 
   it("settles onto the alias HA actually has, keeping the old id as an alias", () => {
-    const devices = buildDevices([frameRow]);
+    const devices = buildDevices([aliasedRow]);
     const switched = reconcileEntityIds(devices, (id) => id === "media_player.left_32");
     expect(switched).toEqual(["dining__dining_left: media_player.dining_left -> media_player.left_32"]);
     expect(devices[0].entityId).toBe("media_player.left_32");
@@ -157,7 +175,7 @@ describe("reconcileEntityIds", () => {
   });
 
   it("leaves a device alone when HA has neither id (outage, not a rename)", () => {
-    const devices = buildDevices([frameRow, rows[0]]);
+    const devices = buildDevices([aliasedRow, rows[0]]);
     expect(reconcileEntityIds(devices, () => false)).toEqual([]);
     expect(devices[0].entityId).toBe("media_player.dining_left");
     expect(devices[1].entityId).toBe(rows[0].entity_id);

@@ -1507,11 +1507,82 @@ settled it — the integration now holds six Frames, each with 2 entities
 
 ### Follow-ups
 
-- [ ] First home load after deploy: check the deploy log for
-  `entity id settled` lines — if present, the entity ids are still
-  `*_32`; either rename them in HA or swap the map's primary and alias.
+- [x] ~~First home load after deploy: check the deploy log for
+  `entity id settled` lines~~ — moot: neither id existed (2026-09-10
+  below). The map now carries the ids HA actually has.
 - [ ] Map the Den, Lounge and master-bedroom-wall Frames when cards for
   those rooms are wanted (same recipe; get the entity ids from the
   device page, or run `tools/export_inventory.py` from the house LAN).
 - [ ] The Den TV's 4 entities suggest its soundbar/`dlna_dmr` pair — check
   before mapping it that the media_player chosen is the TV, not the bar.
+
+## 2026-09-10 — The Dining Frames, for real: ids settled, turn_on made an intent
+
+Driven from HA's own Developer tools (Actions in YAML mode, then States),
+over the Nabu Casa URL, with the owner away from the screens.
+
+### What HA actually has
+
+Neither of the 2026-09-09 guesses exists. `media_player.dining_left|
+middle|right` match nothing, and of the `*_32` form only `left_32` and
+`right_32` exist — and they are not the Samsung TV integration. The three
+Frames are:
+
+| Device (area Dining) | media_player | remote | Companion entity |
+|---|---|---|---|
+| Dining Left | `media_player.left_32_qe32ls03cbuxil` | `remote.left_32_qe32ls03cbuxil` | `media_player.left_32` |
+| Dining Middle | `media_player.middle_32_qe32ls03cbuxil` | `remote.middle_32_qe32ls03cbuxil` | `media_player.dining_dinning_middle` (sic) |
+| Dining Right | `media_player.right_32_qe32ls03cbuxil` | `remote.right_32_qe32ls03cbuxil` | `media_player.right_32` |
+
+The `_qe32ls03cbuxil` entities are the Samsung TV integration's (device
+name Dining Left/Middle/Right, `device_class: tv`, `source_list: TV, HDMI`,
+`supported_features 24509` — TURN_ON included, so the MAC is known and
+turn_on is Wake-on-LAN). The companion entities (devices "Left 32",
+"Right 32", "Dinning Middle"; `sound_mode_list: FactoryDefaults`, shuffle /
+repeat, features 217663) belong to a second integration's view of the same
+sets; they read `idle` while the TV is up and drop to `unavailable` the
+moment it powers down, so they are not a control path.
+
+### What the screens did
+
+| Step | Left | Middle | Right |
+|---|---|---|---|
+| `media_player.turn_off` (all three) | off within 15 s | off within 15 s | off within 15 s |
+| `media_player.turn_on` #1, +45 s | **on** | off | off |
+| `media_player.turn_on` #2, +40 s | on | **on** | off |
+
+turn_off is reliable. turn_on is one magic packet over Wi-Fi and lands
+maybe half the time — exactly the KNX dimmer symptom of 2026-07-30, on a
+different bus. The right screen never woke in two tries; whether a third
+packet, a longer wait, or an HDMI-CEC / SmartThings path would have done it
+is untested (the owner was not on site to look at the panel).
+
+### What changed
+
+- `data/entity_map.json` (+ `web/data/`): the three rows now carry the
+  `_qe32ls03cbuxil` ids. `entity_aliases` dropped from them (nothing to
+  alias; the companion entities are a different integration and must not
+  be settled onto). New optional row field **`retry_power: true`** on all
+  three.
+- **`retry_power` → `retryPolicy` (lib/knxLights)**: the KNX light belt is
+  now a policy the command route asks for on every command. Lights keep
+  their timings (3 sends, 4.2 s apart, 16 s window, level-aware read).
+  A flagged media player's turn_on/turn_off gets TV timings — 3 sends,
+  7 s apart, 30 s window — and `mediaAgrees`: awake is anything but
+  off/standby (unavailable and unknown prove nothing), asleep is off or
+  standby. Same claim/stand-down rules, same `(unverified)` audit mark,
+  same "didn't answer — try again" on the card.
+- The alias machinery (`reconcileEntityIds`) stays, unused by any row, for
+  the next device mapped from a screenshot.
+
+### Follow-ups
+
+- [ ] **On-site test** (owner at the screens, app open): power each Frame
+  off then on from its card; watch the audit log for `reasserted: n` and
+  whether the right screen wakes on a 2nd/3rd packet. If it never does,
+  the next escalation is the paired `remote.*` entity or SmartThings.
+- [ ] The HA Settings badge went 1 → 4 during the test — three new
+  repairs/notifications appeared as the sets cycled. Not investigated.
+- [ ] Rename the "Dinning Middle" device in HA (typo) if the companion
+  integration is kept; otherwise consider removing that integration's
+  three entities to stop the `unavailable` noise.

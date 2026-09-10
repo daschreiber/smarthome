@@ -15,15 +15,23 @@ vi.mock("../ha", () => ({ callService: vi.fn(), getStates: vi.fn() }));
 import { callService, getStates } from "../ha";
 import {
   LIGHT_ATTEMPTS,
+  LIGHT_VERIFY_MS,
+  REASSERT_AFTER_MS,
+  TV_ATTEMPTS,
+  TV_REASSERT_AFTER_MS,
+  TV_VERIFY_MS,
   UNVERIFIED_TTL_MS,
   claimLight,
   clearUnverified,
   holdsClaim,
   lightAgrees,
   lightRetriable,
+  mediaAgrees,
   noteUnverified,
+  powerRetriable,
   reassertCall,
   resetUnverified,
+  retryPolicy,
   unverifiedFor,
   verifyLightSweep,
 } from "../knxLights";
@@ -99,6 +107,105 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+// A Dining Frame: a Samsung TV whose turn_on is one Wake-on-LAN packet.
+const frame: Device = {
+  id: "dining__dining_left",
+  entityId: "media_player.left_32_qe32ls03cbuxil",
+  kind: "media_player",
+  label: "Dining Left",
+  room: "Dining",
+  floor: 6,
+  group: "Media",
+  category: "media",
+  visible: true,
+  capabilities: ["on_off", "volume", "select_source", "transport"],
+  retryPower: true,
+};
+
+// A receiver the map does NOT flag: one send, plain read-back, as before.
+const receiver: Device = {
+  ...frame,
+  id: "lounge__receiver",
+  entityId: "media_player.lounge_receiver",
+  label: "Receiver",
+  room: "Lounge",
+  retryPower: undefined,
+};
+
+describe("powerRetriable", () => {
+  it("covers on and off for a media player the map flags retry_power", () => {
+    expect(powerRetriable(frame, { command: "turn_on" })).toBe(true);
+    expect(powerRetriable(frame, { command: "turn_off" })).toBe(true);
+  });
+
+  it("leaves value commands alone — they verify by the echoed attribute", () => {
+    expect(powerRetriable(frame, { command: "set_volume", volumePct: 20 })).toBe(false);
+    expect(powerRetriable(frame, { command: "select_source", source: "HDMI" })).toBe(false);
+  });
+
+  it("an unflagged media player, and every light, stays out of it", () => {
+    expect(powerRetriable(receiver, { command: "turn_on" })).toBe(false);
+    expect(powerRetriable(dimmer, { command: "turn_on" })).toBe(false);
+  });
+});
+
+describe("mediaAgrees", () => {
+  it("a set that came up is anything but off/standby; unavailable proves nothing", () => {
+    expect(mediaAgrees({ command: "turn_on" }, "on")).toBe(true);
+    expect(mediaAgrees({ command: "turn_on" }, "idle")).toBe(true);
+    expect(mediaAgrees({ command: "turn_on" }, "playing")).toBe(true);
+    expect(mediaAgrees({ command: "turn_on" }, "off")).toBe(false);
+    expect(mediaAgrees({ command: "turn_on" }, "standby")).toBe(false);
+    expect(mediaAgrees({ command: "turn_on" }, "unavailable")).toBe(false);
+    expect(mediaAgrees({ command: "turn_on" }, "unknown")).toBe(false);
+  });
+
+  it("off is proven by off or standby only", () => {
+    expect(mediaAgrees({ command: "turn_off" }, "off")).toBe(true);
+    expect(mediaAgrees({ command: "turn_off" }, "standby")).toBe(true);
+    expect(mediaAgrees({ command: "turn_off" }, "on")).toBe(false);
+    expect(mediaAgrees({ command: "turn_off" }, "unavailable")).toBe(false);
+  });
+});
+
+describe("retryPolicy", () => {
+  it("lights keep the KNX timings and the level-aware read", () => {
+    const p = retryPolicy(dimmer, { command: "set_brightness", brightnessPct: 40 })!;
+    expect(p).toMatchObject({
+      attempts: LIGHT_ATTEMPTS,
+      reassertAfterMs: REASSERT_AFTER_MS,
+      verifyMs: LIGHT_VERIFY_MS,
+    });
+    expect(p.agrees({ command: "set_brightness", brightnessPct: 40 }, "on", 102)).toBe(true);
+    expect(p.agrees({ command: "set_brightness", brightnessPct: 40 }, "on", 255)).toBe(false);
+  });
+
+  it("a flagged TV gets the slower TV timings and the media read", () => {
+    const p = retryPolicy(frame, { command: "turn_on" })!;
+    expect(p).toMatchObject({
+      attempts: TV_ATTEMPTS,
+      reassertAfterMs: TV_REASSERT_AFTER_MS,
+      verifyMs: TV_VERIFY_MS,
+    });
+    expect(TV_REASSERT_AFTER_MS).toBeGreaterThan(REASSERT_AFTER_MS);
+    expect(TV_VERIFY_MS).toBeGreaterThanOrEqual(TV_ATTEMPTS * TV_REASSERT_AFTER_MS);
+    expect(p.agrees({ command: "turn_on" }, "on", null)).toBe(true);
+    expect(p.agrees({ command: "turn_on" }, "off", null)).toBe(false);
+  });
+
+  it("a TV's retry is a plain repeat — there is no level to escalate to", () => {
+    expect(reassertCall(frame, { command: "turn_on" }, 1)).toEqual(
+      reassertCall(frame, { command: "turn_on" }, 0),
+    );
+  });
+
+  it("everything else gets no policy: one send, one read-back", () => {
+    expect(retryPolicy(receiver, { command: "turn_on" })).toBeNull();
+    expect(retryPolicy(shade, { command: "open" })).toBeNull();
+    expect(retryPolicy(frame, { command: "set_volume", volumePct: 20 })).toBeNull();
+  });
 });
 
 describe("lightRetriable", () => {

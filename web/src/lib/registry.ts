@@ -42,11 +42,19 @@ export interface MapRow {
   /** Locks: the separate battery sensor entity (Yale reports battery there,
    * not as a lock attribute); associated by build_entity_map.py. */
   battery_entity?: string;
-  /** Other entity ids this device may be known by in HA. Rows added from a
-   *  screenshot rather than an export (the Dining Frames, 2026-09-09) can't
-   *  know whether renaming the device in HA also renamed its entity id, so
-   *  the map lists both and `reconcileEntityIds` keeps whichever HA has. */
+  /** Other entity ids this device may be known by in HA. For rows written
+   *  without an export to hand (a screenshot shows a device rename, not
+   *  whether the entity id followed it): list every candidate and
+   *  `reconcileEntityIds` keeps whichever HA has. No row needs it today —
+   *  the Dining Frames (2026-09-09) were mapped this way and settled on
+   *  2026-09-10 by reading HA's states directly. */
   entity_aliases?: string[];
+  /** Power commands to this device are intents, not one-shot calls: the
+   *  command route re-sends turn_on/turn_off while the entity still
+   *  disagrees (lib/knxLights). Set on the Dining Frames, whose turn_on is a
+   *  single Wake-on-LAN packet over Wi-Fi — on 2026-09-10 one screen woke on
+   *  the first packet, one on the second, one not at all in two. */
+  retry_power?: boolean;
 }
 
 export interface Device {
@@ -70,6 +78,8 @@ export interface Device {
   batteryEntity?: string;
   /** See MapRow.entity_aliases. */
   entityAliases?: string[];
+  /** See MapRow.retry_power. */
+  retryPower?: boolean;
 }
 
 /** Shared app-wide slug: scene and automation ids use the same rules as
@@ -164,6 +174,7 @@ export function buildDevices(rows: MapRow[]): Device[] {
       ...(row.coolmaster_units?.length ? { coolmasterUnits: row.coolmaster_units } : {}),
       ...(row.battery_entity ? { batteryEntity: row.battery_entity } : {}),
       ...(row.entity_aliases?.length ? { entityAliases: row.entity_aliases } : {}),
+      ...(row.retry_power ? { retryPower: true } : {}),
       ...(row.pinned ? { pinned: true } : {}),
     };
   });

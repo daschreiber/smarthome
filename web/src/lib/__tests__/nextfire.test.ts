@@ -89,3 +89,33 @@ describe("nextFireLabel", () => {
     expect(nextFireLabel({ dayOffset: 9, time: "09:00", date: "2026-07-25" }, NOW)).toBe("2026-07-25 09:00");
   });
 });
+
+describe("nextStepFire with a day resolver", () => {
+  it("matches weekly steps against the substituted weekday, not the civil one", () => {
+    // Thursday 2026-09-10; Sat 12 + Sun 13 are Rosh Hashanah, so Sunday runs
+    // as Saturday and Shabbat's evening runs as Friday (flip at 17:40).
+    const now = { minutes: 16 * 60, day: 4, date: "2026-09-10" };
+    const holy = ["2026-09-12", "2026-09-13"];
+    const dayAt = (dayOffset: number, minutes: number) => {
+      const date = new Date(Date.parse(now.date) + dayOffset * 86_400_000).toISOString().slice(0, 10);
+      const civil = (now.day + dayOffset) % 7;
+      const isHoly = (d: string) => holy.includes(d) || new Date(Date.parse(d)).getUTCDay() === 6;
+      const next = new Date(Date.parse(date) + 86_400_000).toISOString().slice(0, 10);
+      if (isHoly(date)) return isHoly(next) && minutes >= 17 * 60 + 40 ? 5 : 6;
+      return isHoly(next) ? 5 : civil;
+    };
+    // A Sunday-only step skips the holiday Sunday; the Sunday after is the
+    // eve of Yom Kippur (runs as Friday), so it lands on 27 Sep.
+    const holyYK = "2026-09-21";
+    holy.push(holyYK);
+    const nf = nextStepFire({ time: "09:00", days: [0] }, now, dayAt);
+    expect(nf).toEqual({ dayOffset: 17, time: "09:00" });
+    expect(nextFireLabel(nf!, now)).toBe("Sun 27 Sep 09:00");
+    // A Saturday-only morning step still fires Saturday first…
+    expect(nextStepFire({ time: "09:00", days: [6] }, now, dayAt)).toEqual({ dayOffset: 2, time: "09:00" });
+    // …but a Saturday-only evening step waits for the holiday Sunday.
+    expect(nextStepFire({ time: "20:30", days: [6] }, now, dayAt)).toEqual({ dayOffset: 3, time: "20:30" });
+    // Without a resolver the civil weekday rules, as before.
+    expect(nextStepFire({ time: "09:00", days: [0] }, now)).toEqual({ dayOffset: 3, time: "09:00" });
+  });
+});

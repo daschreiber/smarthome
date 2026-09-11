@@ -143,10 +143,22 @@ POST `action`:
 ## Automations & standing rules
 
 ### `GET | POST /api/automations`
-GET: `{ automations[], tz, sun, away }`. POST `action`:
-`create`/`update` (spec validated), `delete` (ownership), `toggle`,
-`active_when` (`always|home|away` — the Away-mode gate), and `run`
-(fire now; the only action guests may call).
+GET: `{ automations[], tz, sun, away, holidays }`. `holidays` is
+`{ rows[], holy[] }`: the coming year's Jewish holidays (Israel's
+calendar, one day each) as `{ date, name, enabled, manual }`, and the
+holy dates within the next 14 days that the next-fire hints need. POST
+`action`: `create`/`update` (spec validated), `delete` (ownership),
+`toggle`, `active_when` (`always|home|away` — the Away-mode gate),
+`holiday` (`{ date, enabled }` — follow a date as a holy day or stop; a
+calendar Yom Tov is switched, any other date is added or removed by
+hand; Saturdays and past dates are refused), and `run` (fire now; the
+only action guests may call).
+
+Holidays follow Shabbat by weekday substitution (`lib/yomtov.ts`): on a
+holy day the scheduler matches `days` as Saturday, on the day before as
+Friday, flipping to Friday an hour before sunset when one holy day leads
+into another. Ordinary weeks are unchanged. State: `holidays.json` on the
+volume (`HOLIDAYS_PATH` to override).
 
 ### `GET | POST /api/away`
 The house-wide Away switch. GET: `{ away, since, setBy, homeOnlyCount,

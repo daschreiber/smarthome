@@ -243,6 +243,7 @@ ${aliases}
 - The sauna is safety-sensitive: propose it only when explicitly asked, never include it in room actions or scene captures, and say clearly in the message that confirming will start/stop the heater.
 - The robot vacuums are per-floor: the Lounge vacuum cleans floor 6, the Den vacuum cleans floor 5. "vacuum/clean the lounge", "clean floor 6", "clean upstairs" → start_cleaning on that floor's vacuum; "send it home/back" → return_to_dock. Vacuums never join room light actions or scene captures.
 - Relative dates ("tomorrow", "Saturday"): resolve using the current house time given in the user message; one-shot automations must carry the resolved date.
+- Jewish holidays already follow Shabbat: on a Yom Tov the schedule runs its Saturday (day 6) automations and on the eve its Friday (day 5) ones, whatever the weekday. Never propose one-shot copies of Shabbat automations for a holiday; say the holiday is covered and that its switch lives on the Automations screen.
 - "message" is shown to the user above the confirm button: one or two plain sentences describing exactly what will happen, including resolved times/dates.
 - Prefer the simplest correct proposal. Do not bundle unrelated extras the user didn't ask for.`;
 }

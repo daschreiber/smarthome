@@ -9,6 +9,7 @@ import {
 import { ACTIVE_WHEN_VALUES, isAway, type ActiveWhen } from "@/lib/away";
 import { executeAction } from "@/lib/execute";
 import { nextSun } from "@/lib/sun";
+import { holidayRows, holyDatesAhead, setHolyDate } from "@/lib/holidays";
 
 export async function GET(req: NextRequest) {
   const auth = authenticate(req);
@@ -23,6 +24,10 @@ export async function GET(req: NextRequest) {
     tz: process.env.APP_TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     sun: await nextSun(),
     away: isAway(),
+    // Jewish holidays the schedule follows as Shabbat (lib/yomtov.ts):
+    // the year's rows with their switches, and the holy dates within
+    // reach of the next-fire hints.
+    holidays: { rows: holidayRows(), holy: holyDatesAhead() },
   });
 }
 
@@ -32,8 +37,8 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as
     | {
-        action?: "create" | "update" | "delete" | "toggle" | "active_when" | "run";
-        id?: string; enabled?: boolean; activeWhen?: string; spec?: unknown;
+        action?: "create" | "update" | "delete" | "toggle" | "active_when" | "run" | "holiday";
+        id?: string; enabled?: boolean; activeWhen?: string; spec?: unknown; date?: string;
       }
     | null;
   if (!body?.action) return NextResponse.json({ error: "action required" }, { status: 400 });
@@ -57,6 +62,18 @@ export async function POST(req: NextRequest) {
         args: { steps: auto.steps.length }, ok: true, durationMs: 0,
       });
       return NextResponse.json({ ok: true, automation: auto });
+    }
+    if (body.action === "holiday") {
+      // Follow (or stop following) a date as a holy day — a calendar Yom
+      // Tov's switch, or an owner-added date.
+      if (typeof body.date !== "string") return NextResponse.json({ error: "date required" }, { status: 400 });
+      setHolyDate(body.date, body.enabled !== false);
+      audit({
+        ts: new Date().toISOString(), user: auth.user, deviceId: "automations",
+        entityId: "automation.holidays", command: "set_holiday",
+        args: { date: body.date, enabled: body.enabled !== false }, ok: true, durationMs: 0,
+      });
+      return NextResponse.json({ ok: true, holidays: { rows: holidayRows(), holy: holyDatesAhead() } });
     }
     if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
     if (body.action === "run") {

@@ -8,18 +8,22 @@ import { nowParts } from "./automations";
 /**
  * Which holy days the schedule follows (see lib/yomtov.ts for the rules).
  * Every Israeli Yom Tov counts by default — the feature works without
- * attention. The owner can switch an individual holiday off (Yom Kippur,
- * say: the strictures match Shabbat but a sauna cycling during the fast
- * is odd) or add a date by hand for anything the calendar doesn't cover.
+ * attention — except Yom Kippur: the strictures match Shabbat, but the
+ * sauna and gym cycling through the fast is odd, so it starts OFF (owner's
+ * call, 2026-09-11). Any holiday can be switched either way on the card,
+ * and a date can be added by hand for anything the calendar doesn't cover.
  * Past entries are pruned on load so the file never grows.
  */
 
 export interface HolidayState {
-  /** Yom Tov dates (YYYY-MM-DD) the owner switched off. */
+  /** Default-on Yom Tov dates (YYYY-MM-DD) the owner switched off. */
   skipped: string[];
-  /** Owner-added holy dates (YYYY-MM-DD). */
+  /** Dates switched ON by the owner: hand-added days, and default-off holidays turned on. */
   manual: string[];
 }
+
+/** Yom Tov days that start switched off; turning one on records it in `manual`. */
+const DEFAULT_OFF = new Set(["Yom Kippur"]);
 
 export interface HolidayRow extends YomTov {
   enabled: boolean;
@@ -58,13 +62,15 @@ function save(st: HolidayState): void {
 /** Is this date a holy day beyond Saturdays (an enabled Yom Tov, or owner-added)? */
 export function isHolyDate(date: string, st = loadHolidays()): boolean {
   if (st.manual.includes(date)) return true;
-  return yomTovOn(date) !== null && !st.skipped.includes(date);
+  const yt = yomTovOn(date);
+  return yt !== null && !DEFAULT_OFF.has(yt.name) && !st.skipped.includes(date);
 }
 
 /**
- * Follow (or stop following) a date as a holy day. A calendar Yom Tov is
- * toggled through the skipped list; any other date through the manual
- * list. Saturdays are refused: they are holy already.
+ * Follow (or stop following) a date as a holy day. A default-on Yom Tov is
+ * toggled through the skipped list; a default-off one (Yom Kippur) and any
+ * other date through the manual list. Saturdays are refused: they are holy
+ * already.
  */
 export function setHolyDate(date: string, enabled: boolean, today = nowParts().date): HolidayState {
   // Date.parse normalizes a nonexistent day (2026-02-30 → March 2) rather
@@ -76,7 +82,8 @@ export function setHolyDate(date: string, enabled: boolean, today = nowParts().d
   if (weekdayOf(date) === 6) throw new Error("Saturday is a holy day already");
   const st = loadHolidays(today);
   const without = (arr: string[]) => arr.filter((d) => d !== date);
-  if (yomTovOn(date)) {
+  const yt = yomTovOn(date);
+  if (yt && !DEFAULT_OFF.has(yt.name)) {
     st.skipped = enabled ? without(st.skipped) : [...without(st.skipped), date].sort();
   } else {
     st.manual = enabled ? [...without(st.manual), date].sort() : without(st.manual);
@@ -89,7 +96,7 @@ export function setHolyDate(date: string, enabled: boolean, today = nowParts().d
 export function holidayRows(today = nowParts().date, days = 366): HolidayRow[] {
   const st = loadHolidays(today);
   const rows: HolidayRow[] = upcomingYomTov(today, days).map((y) => ({
-    ...y, enabled: !st.skipped.includes(y.date), manual: false,
+    ...y, enabled: isHolyDate(y.date, st), manual: false,
   }));
   for (const date of st.manual) {
     if (!rows.some((r) => r.date === date)) rows.push({ date, name: "Added by hand", enabled: true, manual: true });

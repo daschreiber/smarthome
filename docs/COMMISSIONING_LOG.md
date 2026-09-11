@@ -1920,9 +1920,14 @@ the app know the Israeli holidays and run them as Friday/Saturday?
   holidays follow Shabbat". Collapsed it says what today is doing
   ("today runs as Saturday — Rosh Hashanah II") or which holiday comes
   next; open, it lists the year with a switch per holiday and a date
-  field to add a holy day by hand. Every Yom Tov is on by default. Yom
-  Kippur is the one an owner may want off: the strictures match
-  Shabbat, but a sauna cycling during the fast is odd.
+  field to add a holy day by hand. Every Yom Tov is on by default
+  except Yom Kippur, which starts off: the strictures match Shabbat,
+  but the sauna and gym cycling through the fast is odd (owner's call,
+  the same afternoon). Its switch turns it on like any other.
+- First look on the iPad found the card's title squeezed to a word per
+  line: the "Holidays" button reused the Home screen's `expander` style,
+  which is width:100% for drill-down rows. The header is now the tap
+  target itself, like an automation row.
 - The next-fire hints walk the same effective weekdays (a Sunday-only
   automation now shows its next real Sunday, 27 Sep, rather than the
   holiday), and hints more than a week out name their date.
@@ -1935,8 +1940,8 @@ the app know the Israeli holidays and run them as Friday/Saturday?
 | Sat 12 Sep | Saturday by day, Friday from ~17:40 | Shabbat leading into Rosh Hashanah II |
 | Sun 13 Sep | Saturday, all day and evening | the holiday; its "Shabbat over" offs replay here |
 | Mon 14 Sep | Monday | ordinary |
-| Sun 20 Sep | Friday | eve of Yom Kippur |
-| Mon 21 Sep | Saturday | Yom Kippur (switch it off on the card if the sauna should stay quiet) |
+| Sun 20 Sep | Sunday | Yom Kippur starts switched off (owner, same day): the sauna and gym stay quiet through the fast. Its switch on the card turns it on. |
+| Mon 21 Sep | Monday | Yom Kippur, off by default |
 
 Not covered: anything programmed on the Control4 or KNX side (the
 "Gym AC Shabbat" KNX programme, for one) knows nothing of this — only

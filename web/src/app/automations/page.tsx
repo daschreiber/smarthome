@@ -1292,8 +1292,20 @@ function HolidayCard({ holidays, today, todayRole, busy, onSet }: {
       ? `next: ${next.name}, ${shortDate(next.date)} · runs as Shabbat`
       : "no holidays in the coming year";
   return (
-    <div className="dev-block">
-      <div className="dev" style={{ alignItems: "flex-start" }}>
+    // Same shape as an automation row: the text is the tap target and the
+    // controls sit in a footer below it. (The first cut put a `.mini-btn
+    // expander` beside the text — that class is width:100% for the Home
+    // screen's drill-downs, and squeezed the title to a word per line.)
+    <div className="dev" style={{ flexDirection: "column", alignItems: "stretch" }}>
+      <button
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "flex", alignItems: "flex-start", gap: 10, width: "100%",
+          background: "none", border: "none", padding: 0,
+          textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer",
+        }}
+      >
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="nm">Jewish holidays follow Shabbat</div>
           <div className="st">
@@ -1301,19 +1313,23 @@ function HolidayCard({ holidays, today, todayRole, busy, onSet }: {
             {!open && " · a holiday runs your Friday-evening and Saturday automations on its own dates"}
           </div>
         </div>
-        <button className="mini-btn expander" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? "Close" : "Holidays"}
-        </button>
-      </div>
+        <span className="st" aria-hidden="true" style={{ flexShrink: 0, paddingTop: 4 }}>
+          {open ? "▴" : "▾"}
+        </span>
+      </button>
       {open && (
-        <div style={{ padding: "0 14px 14px" }}>
+        <div style={{ marginTop: 10 }}>
           <p className="st" style={{ margin: "0 0 8px", color: "var(--dim)" }}>
             On a holy day the schedule runs as Saturday; the day before it runs as Friday
             (from an hour before sunset when one holy day leads into another). Ordinary weeks
             are untouched. Israel&apos;s calendar: one day per festival, no chol ha-moed.
           </p>
           {rows.map((r) => (
-            <div key={r.date} className={`dev${r.enabled ? "" : " paused"}`}>
+            <div
+              key={r.date}
+              className={`dev${r.enabled ? "" : " paused"}`}
+              style={{ border: "none", background: "none", padding: "8px 0", margin: 0 }}
+            >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="nm">{r.name}</div>
                 <div className="st">

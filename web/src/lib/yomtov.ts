@@ -53,9 +53,15 @@ export function yomTovOn(date: string): YomTov | null {
   return name ? { date, name } : null;
 }
 
-/** YYYY-MM-DD plus n days (exact: date-only strings are UTC midnight). */
+/**
+ * YYYY-MM-DD plus n days (exact: date-only strings are UTC midnight).
+ * Throws on an unparseable string; a nonexistent day (2026-02-30) is
+ * normalized, so `addDays(d, 0) === d` doubles as an existence check.
+ */
 export function addDays(date: string, n: number): string {
-  return new Date(Date.parse(date) + n * 86_400_000).toISOString().slice(0, 10);
+  const t = Date.parse(date);
+  if (Number.isNaN(t)) throw new Error(`not a date: ${date}`);
+  return new Date(t + n * 86_400_000).toISOString().slice(0, 10);
 }
 
 /** Civil weekday (0=Sunday) of a YYYY-MM-DD date. */

@@ -39,6 +39,8 @@ describe("Hebrew calendar", () => {
   it("date arithmetic is exact across month ends", () => {
     expect(addDays("2026-09-30", 1)).toBe("2026-10-01");
     expect(addDays("2026-01-01", -1)).toBe("2025-12-31");
+    expect(addDays("2026-02-30", 0)).toBe("2026-03-02"); // normalized, not rejected — callers compare
+    expect(() => addDays("nope", 1)).toThrow(/not a date/);
     expect(weekdayOf("2026-09-13")).toBe(0);
     expect(weekdayOf("2026-09-12")).toBe(6);
   });

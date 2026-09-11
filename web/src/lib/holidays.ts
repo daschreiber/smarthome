@@ -67,7 +67,11 @@ export function isHolyDate(date: string, st = loadHolidays()): boolean {
  * list. Saturdays are refused: they are holy already.
  */
 export function setHolyDate(date: string, enabled: boolean, today = nowParts().date): HolidayState {
-  if (!DATE_RE.test(date) || Number.isNaN(Date.parse(date))) throw new Error("date must be YYYY-MM-DD");
+  // Date.parse normalizes a nonexistent day (2026-02-30 → March 2) rather
+  // than rejecting it; a stored "Feb 30" would never match a civil date.
+  if (!DATE_RE.test(date) || Number.isNaN(Date.parse(date)) || addDays(date, 0) !== date) {
+    throw new Error("date must be a real YYYY-MM-DD date");
+  }
   if (date < today) throw new Error("that date has passed");
   if (weekdayOf(date) === 6) throw new Error("Saturday is a holy day already");
   const st = loadHolidays(today);
@@ -93,8 +97,14 @@ export function holidayRows(today = nowParts().date, days = 366): HolidayRow[] {
   return rows.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** Holy dates (beyond Saturdays) in the next `days` days — what the UI's next-fire hints need. */
-export function holyDatesAhead(today = nowParts().date, days = 14): string[] {
+/**
+ * Holy dates (beyond Saturdays) in the next `days` days — what the UI's
+ * next-fire hints need. The hints scan 28 days ahead and each day looks at
+ * the one after it (lib/nextfire.ts, lib/yomtov.ts), so serve past that.
+ */
+export const HOLY_DATES_AHEAD_DAYS = 31;
+
+export function holyDatesAhead(today = nowParts().date, days = HOLY_DATES_AHEAD_DAYS): string[] {
   const st = loadHolidays(today);
   const out: string[] = [];
   for (let i = 0; i < days; i++) {

@@ -146,7 +146,7 @@ POST `action`:
 GET: `{ automations[], tz, sun, away, holidays }`. `holidays` is
 `{ rows[], holy[] }`: the coming year's Jewish holidays (Israel's
 calendar, one day each) as `{ date, name, enabled, manual }`, and the
-holy dates within the next 14 days that the next-fire hints need. POST
+holy dates within the next 31 days that the next-fire hints need (their scan looks 28 days ahead). POST
 `action`: `create`/`update` (spec validated), `delete` (ownership),
 `toggle`, `active_when` (`always|home|away` — the Away-mode gate),
 `holiday` (`{ date, enabled }` — follow a date as a holy day or stop; a

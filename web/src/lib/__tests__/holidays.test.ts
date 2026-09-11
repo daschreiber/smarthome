@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  effectiveDayNow, holidayRows, holyDatesAhead, isHolyDate, loadHolidays, needsSunsetToday, setHolyDate,
-  sunsetMinutesOn,
+  HOLY_DATES_AHEAD_DAYS, effectiveDayNow, holidayRows, holyDatesAhead, isHolyDate, loadHolidays,
+  needsSunsetToday, setHolyDate, sunsetMinutesOn,
 } from "../holidays";
 import { createAutomation, dueSteps, type Automation } from "../automations";
 
@@ -56,6 +56,10 @@ describe("holiday state", () => {
     expect(() => setHolyDate("2026-09-09", true, TODAY)).toThrow(/passed/);
     expect(() => setHolyDate("14/10/2026", true, TODAY)).toThrow(/YYYY-MM-DD/);
     expect(() => setHolyDate("2026-13-40", true, TODAY)).toThrow(/YYYY-MM-DD/);
+    // Syntactically fine, but no such day: Date.parse would quietly make it 2 March.
+    expect(() => setHolyDate("2026-02-30", true, TODAY)).toThrow(/real/);
+    expect(() => setHolyDate("2026-11-31", true, TODAY)).toThrow(/real/);
+    expect(loadHolidays(TODAY).manual).toEqual([]);
   });
 
   it("prunes past entries and ignores junk on load", () => {
@@ -75,6 +79,13 @@ describe("holiday state", () => {
     expect(holyDatesAhead(TODAY, 14)).toEqual(["2026-09-12", "2026-09-13", "2026-09-21"]);
     setHolyDate("2026-09-13", false, TODAY);
     expect(holyDatesAhead(TODAY, 14)).toEqual(["2026-09-12", "2026-09-21"]);
+  });
+
+  it("serves past the hints' 28-day scan plus its one-day lookahead", () => {
+    expect(HOLY_DATES_AHEAD_DAYS).toBeGreaterThanOrEqual(30);
+    // From 10 Sep the default window must still see Shemini Atzeret on 3 Oct
+    // (day 23) and Sukkot on 26 Sep — everything a 28-day scan can land on.
+    expect(holyDatesAhead(TODAY)).toEqual(["2026-09-12", "2026-09-13", "2026-09-21", "2026-09-26", "2026-10-03"]);
   });
 });
 

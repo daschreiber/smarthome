@@ -25,19 +25,31 @@ beforeEach(() => {
 });
 
 describe("holiday state", () => {
-  it("defaults to every Yom Tov on, nothing added", () => {
+  it("defaults to every Yom Tov on except Yom Kippur, nothing added", () => {
     expect(loadHolidays(TODAY)).toEqual({ skipped: [], manual: [] });
     expect(isHolyDate("2026-09-13", loadHolidays(TODAY))).toBe(true);
     expect(isHolyDate("2026-09-14", loadHolidays(TODAY))).toBe(false);
+    expect(isHolyDate("2026-09-21", loadHolidays(TODAY))).toBe(false); // Yom Kippur: the sauna stays quiet
+    expect(holidayRows(TODAY).find((r) => r.date === "2026-09-21")).toMatchObject({ name: "Yom Kippur", enabled: false, manual: false });
   });
 
   it("switches a Yom Tov off and back on", () => {
-    setHolyDate("2026-09-21", false, TODAY); // Yom Kippur
-    expect(loadHolidays(TODAY).skipped).toEqual(["2026-09-21"]);
-    expect(isHolyDate("2026-09-21", loadHolidays(TODAY))).toBe(false);
-    expect(holidayRows(TODAY).find((r) => r.date === "2026-09-21")).toMatchObject({ name: "Yom Kippur", enabled: false });
-    setHolyDate("2026-09-21", true, TODAY);
+    setHolyDate("2026-09-13", false, TODAY); // Rosh Hashanah II (Sukkot falls on a Saturday this year)
+    expect(loadHolidays(TODAY).skipped).toEqual(["2026-09-13"]);
+    expect(isHolyDate("2026-09-13", loadHolidays(TODAY))).toBe(false);
+    expect(holidayRows(TODAY).find((r) => r.date === "2026-09-13")).toMatchObject({ name: "Rosh Hashanah II", enabled: false });
+    setHolyDate("2026-09-13", true, TODAY);
     expect(loadHolidays(TODAY).skipped).toEqual([]);
+  });
+
+  it("switches Yom Kippur on and back off, keeping its name on the card", () => {
+    setHolyDate("2026-09-21", true, TODAY);
+    expect(loadHolidays(TODAY)).toEqual({ skipped: [], manual: ["2026-09-21"] });
+    expect(isHolyDate("2026-09-21", loadHolidays(TODAY))).toBe(true);
+    expect(holidayRows(TODAY).find((r) => r.date === "2026-09-21")).toMatchObject({ name: "Yom Kippur", enabled: true, manual: false });
+    expect(holidayRows(TODAY).filter((r) => r.date === "2026-09-21")).toHaveLength(1);
+    setHolyDate("2026-09-21", false, TODAY);
+    expect(loadHolidays(TODAY)).toEqual({ skipped: [], manual: [] });
   });
 
   it("adds and removes a date by hand, listed among the calendar rows", () => {
@@ -76,8 +88,9 @@ describe("holiday state", () => {
   });
 
   it("lists the holy dates within reach of the hints", () => {
-    expect(holyDatesAhead(TODAY, 14)).toEqual(["2026-09-12", "2026-09-13", "2026-09-21"]);
+    expect(holyDatesAhead(TODAY, 14)).toEqual(["2026-09-12", "2026-09-13"]);
     setHolyDate("2026-09-13", false, TODAY);
+    setHolyDate("2026-09-21", true, TODAY);
     expect(holyDatesAhead(TODAY, 14)).toEqual(["2026-09-12", "2026-09-21"]);
   });
 
@@ -85,7 +98,7 @@ describe("holiday state", () => {
     expect(HOLY_DATES_AHEAD_DAYS).toBeGreaterThanOrEqual(30);
     // From 10 Sep the default window must still see Shemini Atzeret on 3 Oct
     // (day 23) and Sukkot on 26 Sep — everything a 28-day scan can land on.
-    expect(holyDatesAhead(TODAY)).toEqual(["2026-09-12", "2026-09-13", "2026-09-21", "2026-09-26", "2026-10-03"]);
+    expect(holyDatesAhead(TODAY)).toEqual(["2026-09-12", "2026-09-13", "2026-09-26", "2026-10-03"]);
   });
 });
 
@@ -133,8 +146,9 @@ describe("scheduler helpers", () => {
     // Shabbat 12 Sep evening: Friday's lights come on; "Shabbat over" stays quiet.
     expect(names({ hhmm: "18:30", day: 6, date: "2026-09-12" }, sun)).toEqual(["Lights at sunset"]);
     expect(names({ hhmm: "20:30", day: 6, date: "2026-09-12" }, sun)).toEqual([]);
-    // An ordinary Sunday a week later is itself.
-    expect(names({ hhmm: "09:00", day: 0, date: "2026-09-20" })).toEqual([]); // 20 Sep runs as Friday (erev Yom Kippur)
-    expect(names({ hhmm: "09:00", day: 0, date: "2026-09-27" })).toEqual(["Sunday vacuum"]);
+    // Yom Kippur is off by default, so its eve (Sun 20 Sep) is an ordinary Sunday.
+    expect(names({ hhmm: "09:00", day: 0, date: "2026-09-20" })).toEqual(["Sunday vacuum"]);
+    setHolyDate("2026-09-21", true, "2026-09-10");
+    expect(names({ hhmm: "09:00", day: 0, date: "2026-09-20" })).toEqual([]); // now it runs as Friday
   });
 });

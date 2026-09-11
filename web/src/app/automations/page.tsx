@@ -7,6 +7,7 @@ import {
   type NextSunIso,
 } from "@/lib/nextfire";
 import { automationGroup } from "@/lib/automationGroups";
+import { addDays, dayRoleResolver, effectiveDay, roleLabel, weekdayOf } from "@/lib/yomtov";
 import { temperatureBounds } from "@/lib/commandRules";
 import { appKeyHeaders } from "@/lib/appKey";
 
@@ -49,6 +50,10 @@ interface Automation {
 }
 
 interface SceneMeta { id: string; name: string; }
+
+/** A holy day the schedule follows as Shabbat — see lib/yomtov.ts. */
+interface HolidayRow { date: string; name: string; enabled: boolean; manual: boolean }
+interface Holidays { rows: HolidayRow[]; holy: string[] }
 
 interface TimerRule {
   id: string;
@@ -201,6 +206,7 @@ export default function Automations() {
   const [scenes, setScenes] = useState<SceneMeta[]>([]);
   const [tz, setTz] = useState("");
   const [away, setAway] = useState(false);
+  const [holidays, setHolidays] = useState<Holidays>({ rows: [], holy: [] });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -256,6 +262,7 @@ export default function Automations() {
     setItems(body.automations);
     setTz(body.tz);
     setAway(body.away === true);
+    setHolidays(body.holidays ?? { rows: [], holy: [] });
     setSunTimes(body.sun ?? null);
     const [sc, home, tm] = await Promise.all([
       fetch("/api/scenes", { headers: appKeyHeaders() }),
@@ -589,6 +596,13 @@ export default function Automations() {
   const label = (id: string) => deviceIndex[id]?.label ?? id;
 
   const now = houseNow(tz || undefined);
+  // Jewish holidays run as Shabbat by weekday substitution (lib/yomtov.ts):
+  // the hints walk the same effective weekdays the scheduler will, using
+  // the next sunset's clock time for the double-day evening flip.
+  const isHoly = (d: string) => holidays.holy.includes(d);
+  const sunsetMinutes = sunTimes?.sunset ? houseNow(tz || undefined, new Date(sunTimes.sunset)).minutes : null;
+  const dayAt = dayRoleResolver(now, isHoly, sunsetMinutes);
+  const todayRole = effectiveDay({ ...now, isHoly, sunsetMinutes });
   // Soonest-first; enabled-but-spent (fired one-shots) next; paused last.
   // Sun steps resolve against the served next-event instants; when those are
   // unknown (HA blip) the row still names its sun trigger instead of a time.
@@ -599,7 +613,7 @@ export default function Automations() {
         .filter((s) => s !== null);
       return {
         a,
-        nf: a.enabled ? nextAutomationFire(resolved, now) : null,
+        nf: a.enabled ? nextAutomationFire(resolved, now, dayAt) : null,
         sunFallback: a.steps.find((s) => s.sun)?.sun ?? null,
       };
     })
@@ -740,6 +754,13 @@ export default function Automations() {
       <p className="h-sub" style={{ marginTop: 0 }}>
         Scheduled by time of day or the sun.
       </p>
+      <HolidayCard
+        holidays={holidays}
+        today={now}
+        todayRole={todayRole}
+        busy={busy}
+        onSet={(date, enabled) => post({ action: "holiday", date, enabled })}
+      />
       {grouped.map((g) => (
         <Fragment key={g.name}>
           {grouped.length > 1 && <div className="section-label">{g.name}</div>}
@@ -1231,6 +1252,102 @@ function TvFollower() {
         disabled={busy || !st.canToggle}
         onClick={toggle}
       />
+    </div>
+  );
+}
+
+/** "Sat 12 Sep" for a YYYY-MM-DD date. */
+function shortDate(date: string): string {
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const [, m, d] = date.split("-").map(Number);
+  return `${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][weekdayOf(date)]} ${d} ${MONTHS[m - 1]}`;
+}
+
+/**
+ * Jewish holidays follow Shabbat: the year's Yom Tov days (Israel's
+ * calendar), each with a switch, plus owner-added dates. Collapsed, the
+ * card says what today is doing or which holiday comes next; open, it
+ * lists the year. Every Yom Tov is on by default — the feature works
+ * without attention; Yom Kippur is the one an owner may want off.
+ */
+function HolidayCard({ holidays, today, todayRole, busy, onSet }: {
+  holidays: Holidays;
+  today: { date: string; day: number };
+  todayRole: number;
+  busy: boolean;
+  onSet: (date: string, enabled: boolean) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [newDate, setNewDate] = useState("");
+  const rows = holidays.rows;
+  const nameOf = (date: string) => rows.find((r) => r.date === date && r.enabled)?.name;
+  const label = roleLabel(todayRole, today.day);
+  // The holiday behind today's substitution: today's own, or tomorrow's
+  // when today is its eve.
+  const cause = label && (nameOf(today.date) ?? nameOf(addDays(today.date, 1)));
+  const next = rows.find((r) => r.enabled && r.date >= today.date);
+  const summary = label
+    ? `today ${label}${cause ? ` — ${cause}` : ""}`
+    : next
+      ? `next: ${next.name}, ${shortDate(next.date)} · runs as Shabbat`
+      : "no holidays in the coming year";
+  return (
+    <div className="dev-block">
+      <div className="dev" style={{ alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="nm">Jewish holidays follow Shabbat</div>
+          <div className="st">
+            {summary}
+            {!open && " · a holiday runs your Friday-evening and Saturday automations on its own dates"}
+          </div>
+        </div>
+        <button className="mini-btn expander" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? "Close" : "Holidays"}
+        </button>
+      </div>
+      {open && (
+        <div style={{ padding: "0 14px 14px" }}>
+          <p className="st" style={{ margin: "0 0 8px", color: "var(--dim)" }}>
+            On a holy day the schedule runs as Saturday; the day before it runs as Friday
+            (from an hour before sunset when one holy day leads into another). Ordinary weeks
+            are untouched. Israel&apos;s calendar: one day per festival, no chol ha-moed.
+          </p>
+          {rows.map((r) => (
+            <div key={r.date} className={`dev${r.enabled ? "" : " paused"}`}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="nm">{r.name}</div>
+                <div className="st">
+                  {shortDate(r.date)}
+                  {r.date === today.date ? " · today" : r.date === addDays(today.date, 1) ? " · tomorrow" : ""}
+                  {r.enabled ? "" : " · ordinary day"}
+                </div>
+              </div>
+              <button
+                className="toggle"
+                aria-pressed={r.enabled}
+                aria-label={`${r.name} ${r.enabled ? "follows Shabbat" : "ordinary day"}`}
+                disabled={busy}
+                onClick={() => onSet(r.date, !r.enabled)}
+              />
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+            <input
+              type="date" value={newDate} min={today.date}
+              onChange={(e) => setNewDate(e.target.value)}
+              style={{ ...field, flex: "1 1 160px" }}
+              aria-label="Date to treat as a holy day"
+            />
+            <button
+              className="mini-btn"
+              disabled={busy || !newDate}
+              onClick={async () => { if (await onSet(newDate, true)) setNewDate(""); }}
+            >
+              + Treat as a holy day
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

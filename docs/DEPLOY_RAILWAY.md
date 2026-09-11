@@ -68,6 +68,7 @@ network-scoped, only the login restriction was.
    | `RESEND_API_KEY` | optional — enables password-reset emails (resend.com) |
    | `EMAIL_FROM` | optional — sender for reset emails, needs a verified domain on Resend |
    | `AWAY_PATH` | `/data/away.json` — the Away switch's state file |
+   | `HOLIDAYS_PATH` | optional — the Jewish-holiday switches (which Yom Tov days follow Shabbat, owner-added dates) default to `/data/holidays.json` whenever the volume is mounted |
    | `SAUNAWATCH_PATH` | `/data/saunawatch.json` — the sauna-follower watcher's state file |
    | `LIFTWATCH_PATH` | optional since 2026-09-04 — the TV follower's state file defaults to `/data/liftwatch.json` whenever the volume is mounted (MBR TV mirrors the ceiling lift's edges: down → on, up → off; toggle on the Automations screen) |
    | `LIFTWATCH_TV_ENTITY` | optional — the follower **discovers** the Samsung TV integration's `media_player.*` for the bedroom TV by itself once the integration is configured in HA (`media_player.55_qled` is the TV's Google Cast receiver, whose "off" only quits the cast); set only to pin a specific entity. It is the off target and the power truth; the ON stays on the Cast receiver |

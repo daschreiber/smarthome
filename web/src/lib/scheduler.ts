@@ -10,6 +10,7 @@ import { tickLiftwatch } from "./liftwatch";
 import { loadSleepwatch, tickSleepwatch } from "./sleepwatch";
 import { getStates } from "./ha";
 import { sunEvents } from "./sun";
+import { effectiveDayNow, needsSunsetToday } from "./holidays";
 import { audit } from "./audit";
 
 /**
@@ -19,6 +20,9 @@ import { audit } from "./audit";
  */
 
 const GUARD = Symbol.for("smarthome.scheduler");
+
+/** "<date>:<day>" of the last weekday substitution logged — one line per flip, not per tick. */
+let lastSubstitutionLogged = "";
 
 type GlobalWithGuard = typeof globalThis & { [GUARD]?: boolean };
 
@@ -54,12 +58,22 @@ export async function tick(): Promise<void> {
   }
   try {
     const items = listAutomations().filter((a) => automationActiveNow(a, away));
-    // Only consult HA's sun entity when a sun-triggered step could fire.
+    // Only consult HA's sun entity when a sun-triggered step could fire —
+    // or when today's weekday substitution turns on sunset (a holy day
+    // running into another; see lib/yomtov.ts).
     let sun: SunEvents | undefined;
-    if (items.some((a) => a.enabled && a.steps.some((s) => s.sun))) {
+    if (items.some((a) => a.enabled && a.steps.some((s) => s.sun)) || needsSunsetToday(now.date)) {
       sun = await sunEvents();
     }
-    due = dueSteps(items, now, sun);
+    // Jewish holidays follow Shabbat by weekday substitution: the due-check
+    // sees Saturday on a holy day and Friday on the day before, so every
+    // `days`-restricted step follows untouched. Date and minute stay civil.
+    const day = effectiveDayNow(now, sun);
+    if (day !== now.day && lastSubstitutionLogged !== `${now.date}:${day}`) {
+      lastSubstitutionLogged = `${now.date}:${day}`;
+      console.log(`[scheduler] ${now.date} runs as ${day === 6 ? "Saturday" : "Friday"} (Jewish holiday)`);
+    }
+    due = dueSteps(items, { ...now, day }, sun);
   } catch (err) {
     console.error("[scheduler] automations tick failed:", err);
   }

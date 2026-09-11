@@ -1883,3 +1883,61 @@ Findings:
   box.) Needed to define "TV mode" for the schedule.
 - [ ] Until the Art API sensor exists, note in the owner's mind that the
   Night sparing rule does not see HDMI viewing.
+
+## 2026-09-11 — Jewish holidays follow Shabbat
+
+Owner ask: the Friday-sunset and Saturday automations (lights on at
+sunset, the sauna and gym lights on and off through the day, the
+"Shabbat is over" offs) are exactly what a Yom Tov needs on whatever
+weekday it falls — this Sunday is the second day of Rosh Hashanah. Could
+the app know the Israeli holidays and run them as Friday/Saturday?
+
+### What was built
+
+- **Weekday substitution, not copying.** Nothing is duplicated onto
+  holiday dates. The scheduler's due-check now sees an *effective*
+  weekday (`lib/yomtov.ts`): a holy day reports Saturday, the day before
+  it reports Friday, and every `days`-restricted step follows untouched.
+  Holy days = every Saturday + the Israeli Yom Tov days + owner-added
+  dates. Ordinary weeks map to themselves, so nothing changes for a
+  week without a holiday.
+- **The double day.** When a holy day runs into another (Rosh Hashanah's
+  two days; a Shabbat into a Sunday Yom Tov; a Friday Yom Tov into
+  Shabbat) the evening belongs to the next one: from an hour before
+  sunset the weekday flips to Friday, so "lights on at sunset" fires and
+  "Shabbat over, lights off at 20:30" stays quiet — otherwise the house
+  would go dark on a Yom Tov night that nobody can undo by hand. The
+  flip uses HA's real sunset; if HA is unreachable it assumes an early
+  sunset (16:30) on purpose — flipping early costs a late-afternoon
+  Saturday step, flipping late fires the offs into the holiday.
+- **The calendar is the runtime's own.** Node's Intl Hebrew calendar
+  (full ICU) gives the Hebrew date of any civil date — no library, no
+  network, no key. Israel's rule (one day per festival): Rosh Hashanah
+  I–II, Yom Kippur, Sukkot, Shemini Atzeret, Pesach, seventh day of
+  Pesach, Shavuot. Chol ha-moed, Purim, Chanukah and fast days are
+  ordinary. The 5787 dates were checked against a printed luach.
+- **A card on the Automations tab**, under Time switches: "Jewish
+  holidays follow Shabbat". Collapsed it says what today is doing
+  ("today runs as Saturday — Rosh Hashanah II") or which holiday comes
+  next; open, it lists the year with a switch per holiday and a date
+  field to add a holy day by hand. Every Yom Tov is on by default. Yom
+  Kippur is the one an owner may want off: the strictures match
+  Shabbat, but a sauna cycling during the fast is odd.
+- The next-fire hints walk the same effective weekdays (a Sunday-only
+  automation now shows its next real Sunday, 27 Sep, rather than the
+  holiday), and hints more than a week out name their date.
+
+### This weekend (Rosh Hashanah 5787)
+
+| Day | Runs as | Why |
+|---|---|---|
+| Fri 11 Sep | Friday | precedes a holy day, as every Friday does |
+| Sat 12 Sep | Saturday by day, Friday from ~17:40 | Shabbat leading into Rosh Hashanah II |
+| Sun 13 Sep | Saturday, all day and evening | the holiday; its "Shabbat over" offs replay here |
+| Mon 14 Sep | Monday | ordinary |
+| Sun 20 Sep | Friday | eve of Yom Kippur |
+| Mon 21 Sep | Saturday | Yom Kippur (switch it off on the card if the sauna should stay quiet) |
+
+Not covered: anything programmed on the Control4 or KNX side (the
+"Gym AC Shabbat" KNX programme, for one) knows nothing of this — only
+app automations follow the holiday.

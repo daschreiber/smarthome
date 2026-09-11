@@ -82,7 +82,10 @@ Deployed on Railway (branch `main` auto-deploys), installed as a PWA:
 - **Scenes** — captured and applied server-side, with surgical per-device
   editing.
 - **Automations & timers** — "If → then" rules and time switches, with a
-  minute scheduler; sauna follower and Sleep sense standing rules.
+  minute scheduler; sauna follower and Sleep sense standing rules. Jewish
+  holidays follow Shabbat: on a Yom Tov (Israel's calendar) the schedule
+  runs its Saturday automations, and the day before runs its Friday ones,
+  whatever the weekday — each holiday switchable from the Automations tab.
 - **Extras beyond Control4** — sauna (timer, watcher), Eight Sleep bed,
   white-noise/"Sleep sound" streaming with a sleep watcher, two Roborocks
   with per-room cleaning, Spotify on the Yamaha receivers, Away mode.

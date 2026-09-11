@@ -56,7 +56,14 @@ export function resolveStepTime(step: StepTiming, sun: NextSunIso | null, tz?: s
   return { ...step, sun: undefined, time: hhmm };
 }
 
-export function nextStepFire(step: StepTiming, now: HouseNow): NextFire | null {
+/**
+ * The weekday to match `dayOffset` days from now at `minutes` — defaults to
+ * the civil weekday; the Automations screen passes lib/yomtov's resolver so
+ * the hints follow the same holiday substitution the scheduler applies.
+ */
+export type DayAt = (dayOffset: number, minutes: number) => number;
+
+export function nextStepFire(step: StepTiming, now: HouseNow, dayAt?: DayAt): NextFire | null {
   if (!step.time) return null; // unresolved sun step — no concrete hint
   const t = toMinutes(step.time);
   if (step.date) {
@@ -69,8 +76,12 @@ export function nextStepFire(step: StepTiming, now: HouseNow): NextFire | null {
     const dayOffset = Math.round((Date.parse(step.date) - Date.parse(now.date)) / 86_400_000);
     return { dayOffset, time: step.time, date: step.date };
   }
-  for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
-    const day = (now.day + dayOffset) % 7;
+  // A plain week repeats within 7 days; with holiday substitution a
+  // weekday can be borrowed for a while (Tishrei: two holy days, then Yom
+  // Kippur's eve, all inside three weeks), so look further ahead.
+  const horizon = dayAt ? 28 : 7;
+  for (let dayOffset = 0; dayOffset <= horizon; dayOffset++) {
+    const day = dayAt ? dayAt(dayOffset, t) : (now.day + dayOffset) % 7;
     if (step.days && step.days.length > 0 && !step.days.includes(day)) continue;
     if (dayOffset === 0 && t <= now.minutes) continue;
     return { dayOffset, time: step.time };
@@ -79,10 +90,10 @@ export function nextStepFire(step: StepTiming, now: HouseNow): NextFire | null {
 }
 
 /** Soonest upcoming fire across an automation's steps, or null if none. */
-export function nextAutomationFire(steps: StepTiming[], now: HouseNow): NextFire | null {
+export function nextAutomationFire(steps: StepTiming[], now: HouseNow, dayAt?: DayAt): NextFire | null {
   let best: NextFire | null = null;
   for (const s of steps) {
-    const nf = nextStepFire(s, now);
+    const nf = nextStepFire(s, now, dayAt);
     if (!nf) continue;
     if (
       !best ||
@@ -104,5 +115,14 @@ export function nextFireLabel(nf: NextFire, now: HouseNow): string {
   if (nf.dayOffset === 0) return `today ${nf.time}`;
   if (nf.dayOffset === 1) return `tomorrow ${nf.time}`;
   if (nf.date && nf.dayOffset > 6) return `${nf.date} ${nf.time}`;
-  return `${DAYS_SHORT[(now.day + nf.dayOffset) % 7]} ${nf.time}`;
+  const weekday = DAYS_SHORT[(now.day + nf.dayOffset) % 7];
+  // Beyond a week a bare weekday is ambiguous (a weekly step displaced by
+  // holidays): say which one.
+  if (nf.dayOffset > 7) {
+    const d = new Date(Date.parse(now.date) + nf.dayOffset * 86_400_000);
+    return `${weekday} ${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${nf.time}`;
+  }
+  return `${weekday} ${nf.time}`;
 }
+
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

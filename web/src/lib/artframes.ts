@@ -18,8 +18,14 @@ import { registry, type Device } from "./registry";
  * at 19:17 and stayed on), so there is no "mode" to read — only the press.
  * The hook therefore rides the PRESS: whenever the app sends turn_on to one
  * of those switches (a card tap, or an automation step), the Frames follow.
- * A press on the wall keypad bypasses the app and is not seen; that is the
- * first refinement to make if it matters.
+ * A press on the wall keypad, or by Alexa, Siri / Apple Home or the HA
+ * dashboard, bypasses the app; since 2026-09-16 Home Assistant relays
+ * those (the KNX telegram on the scene address → `knx_event`; a service
+ * call on the switch → `call_service` → an HA automation →
+ * `POST /api/artframes`, lib/artframesHook), and the same follower runs —
+ * the owner presses the wall far more than the app. The service-call road
+ * also carries the app's own press back, so one press is one sweep
+ * (`recordPress` below).
  *
  * One refinement is in (owner, 2026-09-10): **on a Night press, a set that
  * is not in art mode is left alone** — it is being watched, or was left on
@@ -31,6 +37,48 @@ import { registry, type Device } from "./registry";
 
 /** What the art-mode sensor reads while the set shows pictures. */
 export const ART_MODE = "art";
+
+/** A press as the house names it. */
+export type Press = "night" | "morning";
+
+/** The press a follow command stands for (Night → Frames off, Morning → on). */
+export function pressOf(follow: Command): Press {
+  return follow.command === "turn_off" ? "night" : "morning";
+}
+
+/**
+ * One press, one sweep — whichever way it arrived. The same press reaches
+ * the follower by several roads at once: a card tap in the app AND, a
+ * second later, Home Assistant relaying the service call that tap made
+ * (ha/artframes_keypad.yaml, the Alexa/Siri/dashboard trigger); a keypad
+ * whose direction memory sends two telegrams; an automation reloaded while
+ * an event was in flight. A repeat of the same press inside this window is
+ * dropped by `followArtFrames` and written to the audit log as a
+ * duplicate. Night after Morning (or the reverse) is never a repeat.
+ */
+export const DUPLICATE_WINDOW_MS = 10_000;
+
+const lastPress = new Map<Press, number>();
+
+/** Peek: has this press already run inside the window? Records nothing. */
+export function duplicatePress(press: Press, now = Date.now()): boolean {
+  const prev = lastPress.get(press);
+  return prev != null && now - prev < DUPLICATE_WINDOW_MS;
+}
+
+/** Record this press as run; true when it was a repeat (the caller then
+ *  does nothing). A repeat does not extend the window — it is measured from
+ *  the press that actually ran. */
+export function recordPress(press: Press, now = Date.now()): boolean {
+  if (duplicatePress(press, now)) return true;
+  lastPress.set(press, now);
+  return false;
+}
+
+/** Tests only. */
+export function resetPressMemory(): void {
+  lastPress.clear();
+}
 
 /** Is this Frame showing television right now, as far as its sensor knows? */
 export function beingWatched(frame: Device, state: string | undefined): boolean {

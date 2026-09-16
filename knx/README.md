@@ -141,3 +141,19 @@ debugging.
   repair issue does not retract itself — dismiss it. The gateway, tunnel and
   network were fine throughout; the shades stayed controllable through the
   Control4 covers.
+
+## Scene switches: Night and Morning from the wall (2026-09-16)
+
+The whole-house Night and Morning buttons are native KNX keypads too, so HA's
+tunnel sees their telegrams (unlike the app's own presses, which arrive via
+Control4 as CON frames and are dropped — the blind spot above). HA is told
+to report the scene group address(es) as `knx_event`s and relays each press
+to the app's picture-Frame follower: `ha/artframes_keypad.yaml`, install
+walk in `ha/README.md`. The addresses are captured from the KNX panel's
+Group monitor (press the button, read Destination / Source / Payload) and
+belong in that file's `variables:`; record them here once known:
+
+| Button | GA | Payload | Keypad |
+|---|---|---|---|
+| Night | _to capture_ | | |
+| Morning | _to capture_ | | |

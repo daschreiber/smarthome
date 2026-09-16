@@ -2008,11 +2008,30 @@ integration drops. Here that 07-26 blind spot is the feature.
   configuration; reload KNX and Automations; press Night on the wall;
   read `system:artframes` in Activity.
 
+### Same day — Alexa, Siri and the dashboard too
+
+Owner: "Let's do for Alexa, Siri etc too." Those press the switch through
+HA's service bus (`light.turn_on` on the scene switch — Alexa via the
+cloud skill, Siri via the HomeKit bridge, a dashboard tap), which fires a
+`call_service` event. The same automation now has a second trigger family
+(`light.turn_on` and `homeassistant.turn_on`), and one template names the
+press from whichever event arrived: destination + payload for the keypad,
+`service_data.entity_id` (a string or a list) for a service call. Nothing
+to capture for this road. The source reaches the audit line as
+`ha:voice-or-ui` — HA cannot tell Alexa from Siri from a tap.
+
+The service road also carries the **app's own press** back to the app a
+second later (the app's HA user calls the same service). So "one press,
+one sweep" moved from the hook endpoint into the follower itself
+(`recordPress` in lib/artframes, used by `followArtFrames`): a repeat of
+the same press inside 10 s is dropped and written to Activity as
+`frames_duplicate`, whoever sent it. Night after Morning is never a
+repeat. The hook still answers `duplicate` to HA so the automation trace
+says so. Optional: the smarthome-app user's id in the yaml's
+`app_user_id` stops HA relaying the app's own presses at all.
+
 ### Follow-ups
 
-- [ ] Alexa / Siri / the HA dashboard press the switch through HA's
-  service bus and are not relayed either. If those get used: a second
-  trigger on the `call_service` event (`light.turn_on` on the two
-  switches, excluding the app's own user id) in the same automation.
-- [ ] Once a press from the wall has been seen end to end, the 09-10
-  follow-up "Wall-keypad presses" is closed.
+- [ ] Once a press from the wall and one from Alexa have each been seen
+  end to end (`frames_turn_off` with user `ha:1.1.x` and `ha:voice-or-ui`
+  in Activity), this entry is closed.

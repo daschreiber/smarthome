@@ -198,19 +198,23 @@ readingLights, closetLights, canToggle }`. POST (canProgram): `{ enabled }`.
 
 ### `POST /api/artframes`
 A press of Night or Morning that did not come through the app — the wall
-keypad, relayed by a Home Assistant automation on the KNX bus event
+keypad (a KNX bus event) or Alexa / Siri / the HA dashboard (a service
+call on the switch), relayed by one Home Assistant automation
 (`ha/artframes_keypad.yaml`). Body `{ press: "night" | "morning",
-source? }` (`source`: the keypad's KNX address, written into the audit
-line as user `ha:<source>`; anything but a short token reads as
-`ha:keypad`). Auth: the `x-hook-key` header equal to `HA_HOOK_KEY` — a
+source? }` (`source`: the keypad's KNX address or `voice-or-ui`, written
+into the audit line as user `ha:<source>`; anything but a short token
+reads as `ha:keypad`). Auth: the `x-hook-key` header equal to `HA_HOOK_KEY` — a
 secret separate from `APP_KEY`, good for this one endpoint — or a
 signed-in account with canProgram. Runs the same Frame follower a press
 in the app runs (`lib/artframes`, `followArtFrames`: every flagged Frame
 off on Night, sparing a Den or Lounge set that is showing television; all
 on as art on Morning) and answers `202 { status: "accepted", press }` as
 soon as the sweep is started — the sweep audits itself as
-`system:artframes`. A repeat of the same press within 10 s answers `200
-{ status: "duplicate" }` and does nothing. `503` when `HA_HOOK_KEY` is not
+`system:artframes`. One press is one sweep whichever roads it arrives by
+(the app's own press comes back on the service road a second later): the
+follower drops a repeat of the same press within 10 s and logs it as
+`frames_duplicate`; the endpoint answers such a repeat `200
+{ status: "duplicate" }` so HA's trace says so. `503` when `HA_HOOK_KEY` is not
 set (and the caller is not signed in), `401` on a wrong key, `400` on any
 other `press`.
 

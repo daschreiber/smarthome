@@ -15,6 +15,7 @@ vi.mock("../audit", () => ({ audit: vi.fn() }));
 import { callService, getStates } from "../ha";
 import { audit } from "../audit";
 import { executeOnDevice, followArtFrames } from "../execute";
+import { resetPressMemory } from "../artframes";
 import { getDevice } from "../registry";
 
 const calls = vi.mocked(callService);
@@ -53,6 +54,24 @@ describe("followArtFrames", () => {
   beforeEach(() => {
     calls.mockClear();
     audits.mockClear();
+    resetPressMemory();
+  });
+
+  it("one press, one sweep: the same press arriving again inside the window is logged and dropped", async () => {
+    const night = getDevice("whole_house__all_house_night")!;
+    await followArtFrames(night, { command: "turn_on" }, "daniel");
+    expect(calls).toHaveBeenCalledTimes(5);
+    // HA relaying the service call that tap made, a second later.
+    await followArtFrames(night, { command: "turn_on" }, "ha:voice-or-ui");
+    expect(calls).toHaveBeenCalledTimes(5);
+    expect(audits).toHaveBeenCalledTimes(2);
+    expect(audits.mock.calls[1][0]).toMatchObject({
+      deviceId: "system:artframes", command: "frames_duplicate", user: "ha:voice-or-ui", ok: true,
+      args: { press: "night", after: "whole_house__all_house_night" },
+    });
+    // Morning right after is a different press and sweeps.
+    await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "daniel");
+    expect(calls).toHaveBeenCalledTimes(14);
   });
 
   it("Night pressed: every Frame gets turn_off, one audit line for the sweep", async () => {

@@ -1,7 +1,7 @@
 import { CommandSchema, assertCommandAllowed, buildServiceCall, type Command } from "./commands";
 import { bedSetLevel, bedSideForDeviceId, bedSideOff, bedSideOn } from "./eightsleep";
 import { SLOW_SERVICE_TIMEOUT_MS, callService, getStates } from "./ha";
-import { artFrameFollow, artFrames, spareWatched } from "./artframes";
+import { DUPLICATE_WINDOW_MS, artFrameFollow, artFrames, pressOf, recordPress, spareWatched } from "./artframes";
 import { audit } from "./audit";
 import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
@@ -92,6 +92,22 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
   const frames = artFrames();
   if (frames.length === 0) return;
   const started = Date.now();
+  // One press, one sweep, whichever roads it arrives by (lib/artframes
+  // `recordPress`): a repeat inside the window is logged and dropped.
+  const press = pressOf(follow);
+  if (recordPress(press, started)) {
+    audit({
+      ts: new Date(started).toISOString(),
+      user,
+      deviceId: "system:artframes",
+      entityId: device.entityId,
+      command: "frames_duplicate",
+      args: { after: device.id, press, windowMs: DUPLICATE_WINDOW_MS },
+      ok: true,
+      durationMs: 0,
+    });
+    return;
+  }
   // A Night press spares a set that is showing television (lib/artframes).
   // One bulk read; a failed read spares nothing — only positive evidence.
   const states = follow.command === "turn_off"

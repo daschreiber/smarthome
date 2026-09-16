@@ -119,10 +119,11 @@ leaves a Den or Lounge set that is not in art mode alone** — it is being
 watched. "In art" is SmartThings' `tvChannelName` sensor (`art_mode_entity`
 on the row); only positive evidence spares a set, an unavailable sensor
 reads as art. A Frame that is on sits in art mode, so "on" is "on as art".
-The owner presses Night and Morning **on the wall**, which the app cannot
-see by itself; since 2026-09-16 Home Assistant relays the keypad's KNX
-telegram to `POST /api/artframes` (`ha/artframes_keypad.yaml`, key
-`HA_HOOK_KEY`), and the same follower runs. The bedroom-wall Frame is not
+The owner presses Night and Morning **on the wall**, or says it to Alexa
+or Siri, none of which the app can see by itself; since 2026-09-16 Home
+Assistant relays both the keypad's KNX telegram and the service call to
+`POST /api/artframes` (`ha/artframes_keypad.yaml`, key `HA_HOOK_KEY`), and
+the same follower runs — once per press, however many roads carry it. The bedroom-wall Frame is not
 mapped.
 Apple TV "Basement Jerusalem". Rack has its own AC (`climate.rack_unit_109`).
 

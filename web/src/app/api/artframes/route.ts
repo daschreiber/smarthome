@@ -2,20 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { canProgram } from "@/lib/permissions";
 import { followArtFrames } from "@/lib/execute";
-import {
-  duplicatePress,
-  hookConfigured,
-  hookKeyMatches,
-  parsePress,
-  pressUser,
-  sceneSwitchFor,
-} from "@/lib/artframesHook";
+import { duplicatePress } from "@/lib/artframes";
+import { hookConfigured, hookKeyMatches, parsePress, pressUser, sceneSwitchFor } from "@/lib/artframesHook";
 
 /**
  * A press of Night or Morning that did not come through the app — the wall
- * keypad, relayed by a Home Assistant automation on the KNX bus event
- * (ha/artframes_keypad.yaml). Runs the same Frame follower a card tap runs
- * (lib/artframes, lib/execute `followArtFrames`).
+ * keypad (a KNX bus event) or Alexa / Siri / the HA dashboard (a service
+ * call), relayed by a Home Assistant automation (ha/artframes_keypad.yaml).
+ * Runs the same Frame follower a card tap runs (lib/artframes, lib/execute
+ * `followArtFrames`).
  *
  * Callers: Home Assistant with `x-hook-key: <HA_HOOK_KEY>`, or a signed-in
  * account that may program automations (a hand test from the browser).
@@ -44,12 +39,15 @@ export async function POST(req: NextRequest) {
   if (!device) {
     return NextResponse.json({ error: `the ${press} scene switch is not in the entity map` }, { status: 500 });
   }
+  // The follower itself drops a repeat (and audits it); this peek only
+  // lets HA's trace say so — the app's own press relayed back a second
+  // later is the everyday case.
   if (duplicatePress(press)) {
     return NextResponse.json({ status: "duplicate", press });
   }
   const user = viaHook ? pressUser(body?.source) : authenticate(req).user;
-  // Fire-and-forget, like the command route: the press has happened on the
-  // wall already; the sweep audits itself (`system:artframes`).
+  // Fire-and-forget, like the command route: the press has happened
+  // already; the sweep audits itself (`system:artframes`).
   void followArtFrames(device, { command: "turn_on" }, user);
   return NextResponse.json({ status: "accepted", press }, { status: 202 });
 }

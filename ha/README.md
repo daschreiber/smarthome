@@ -11,12 +11,13 @@ through the File editor add-on.
 | `c4_repoint.py` | `/config/c4_repoint.py` | Rewrites the Control4 config entry's host in place, atomically, keeping credentials and every Stage 5 rename. Finds the address itself with `--mac`, or takes one on the command line. |
 | `c4_recovery.yaml` | block in `configuration.yaml` | The `shell_command`s that drive the repoints, the watch sensors, the self-baselining IP-drift alerts, and the self-heal automations — for the Control4 Core 3 and, since 2026-09-03, the CoolMaster bridge. |
 | `homekit_covers.yaml` | block in `configuration.yaml` | Deprecated 2026-07-26; see the file's own header. |
-| `artframes_keypad.yaml` | block in `configuration.yaml` + one line in `secrets.yaml` | Since 2026-09-16: the wall keypad's Night and Morning reach the app's picture-Frame follower. A `knx: event:` on the scene group address(es), a `rest_command` to the app, and the automation that joins them. |
+| `artframes_keypad.yaml` | block in `configuration.yaml` + one line in `secrets.yaml` | Since 2026-09-16: Night and Morning pressed on the wall keypad, or by Alexa, Siri / Apple Home or the HA dashboard, reach the app's picture-Frame follower. A `knx: event:` on the scene group address(es), a `rest_command` to the app, and one automation on both the KNX bus event and the service call. |
 
-## Installing the Frames keypad relay
+## Installing the Frames relay
 
 Ten minutes, no restart. The app's Frame follower only sees presses made
-in the app; the owner presses the wall. This makes HA relay the wall.
+in the app; the owner presses the wall, and the house also says it to
+Alexa and Siri. This makes HA relay all of those.
 
 1. **Capture the addresses.** HA → Settings → Devices & services → KNX →
    open the KNX panel → *Group monitor*. Press **Night** on the wall
@@ -32,21 +33,28 @@ in the app; the owner presses the wall. This makes HA relay the wall.
 3. **Paste the block** from `artframes_keypad.yaml` at the end of
    `configuration.yaml` with the addresses, values and the app's host filled
    in. If the file already has a `knx:` or `rest_command:` key, merge the
-   items into it rather than adding a second key.
+   items into it rather than adding a second key. The Alexa / Siri /
+   dashboard road needs nothing captured; optionally put the smarthome-app
+   HA user's id (Settings → People → Users) in `app_user_id` so HA does not
+   relay the app's own presses back — left blank, the app answers those
+   "duplicate", which is harmless and shows as one Activity line.
 4. **Developer tools → YAML → Check configuration**, then reload **KNX**
    and **Automations** from the same page.
 5. **Test from the wall.** Press Night. Within a few seconds the Frames go
    dark, and the app's Activity shows `system:artframes` /
    `frames_turn_off` with user `ha:1.1.x` (the keypad). Press Morning; the
-   Frames come back as art. If the app shows nothing, HA → Settings →
-   Automations → the relay → *Traces* says whether the telegram arrived and
+   Frames come back as art. Then "Alexa, turn on night mode": the same,
+   with user `ha:voice-or-ui`. If the app shows nothing, HA → Settings →
+   Automations → the relay → *Traces* says whether the press arrived and
    what the app answered (`202 accepted`, `duplicate`, `401`, `503 HA_HOOK_KEY
    is not set`).
 
-A press in the app or from one of its automations is not relayed twice: it
-goes through Control4, whose telegrams reach HA's tunnel only as
-confirmation frames that the KNX integration drops (knx/README.md, "the
-blind spot") — here that blind spot is the feature.
+One press is one sweep, whichever roads it takes. A press in the app is
+not seen on the KNX road — it goes through Control4, whose telegrams reach
+HA's tunnel only as confirmation frames that the KNX integration drops
+(knx/README.md, "the blind spot"; here the feature). It *is* seen on the
+service road, a second after the app has already swept, and the app drops
+that repeat (10 s window, `frames_duplicate` in Activity).
 
 ## Installing the Control4 recovery bundle
 

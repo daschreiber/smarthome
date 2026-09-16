@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { hookConfigured, hookKeyMatches, parsePress, pressUser, sceneSwitchFor } from "../artframesHook";
 import {
   DUPLICATE_WINDOW_MS,
+  MORNING_SCENE_SWITCH,
+  NIGHT_SCENE_SWITCH,
   duplicatePress,
-  hookConfigured,
-  hookKeyMatches,
-  parsePress,
-  pressUser,
+  pressOf,
+  recordPress,
   resetPressMemory,
-  sceneSwitchFor,
-} from "../artframesHook";
-import { MORNING_SCENE_SWITCH, NIGHT_SCENE_SWITCH } from "../artframes";
+} from "../artframes";
 
 /**
  * The contract for a press relayed by Home Assistant: only the hook key
@@ -73,25 +72,38 @@ describe("sceneSwitchFor", () => {
   });
 });
 
-describe("duplicatePress", () => {
+describe("one press, one sweep (recordPress / duplicatePress)", () => {
   beforeEach(() => resetPressMemory());
 
+  it("names the press a follow command stands for", () => {
+    expect(pressOf({ command: "turn_off" })).toBe("night");
+    expect(pressOf({ command: "turn_on" })).toBe("morning");
+  });
+
   it("lets a press through, then swallows a repeat inside the window", () => {
-    expect(duplicatePress("night", 1_000)).toBe(false);
-    expect(duplicatePress("night", 1_000 + DUPLICATE_WINDOW_MS - 1)).toBe(true);
-    expect(duplicatePress("night", 1_000 + DUPLICATE_WINDOW_MS)).toBe(false);
+    expect(recordPress("night", 1_000)).toBe(false);
+    expect(recordPress("night", 1_000 + DUPLICATE_WINDOW_MS - 1)).toBe(true);
+    expect(recordPress("night", 1_000 + DUPLICATE_WINDOW_MS)).toBe(false);
   });
 
   it("keeps Night and Morning apart — a Morning right after a Night is a real press", () => {
-    expect(duplicatePress("night", 5_000)).toBe(false);
-    expect(duplicatePress("morning", 5_500)).toBe(false);
-    expect(duplicatePress("night", 6_000)).toBe(true);
+    expect(recordPress("night", 5_000)).toBe(false);
+    expect(recordPress("morning", 5_500)).toBe(false);
+    expect(recordPress("night", 6_000)).toBe(true);
   });
 
   it("a swallowed repeat does not extend the window", () => {
-    expect(duplicatePress("morning", 0)).toBe(false);
-    expect(duplicatePress("morning", 9_000)).toBe(true);
+    expect(recordPress("morning", 0)).toBe(false);
+    expect(recordPress("morning", 9_000)).toBe(true);
     // 10 s after the FIRST press, not after the repeat.
-    expect(duplicatePress("morning", 10_000)).toBe(false);
+    expect(recordPress("morning", 10_000)).toBe(false);
+  });
+
+  it("the peek reports without recording", () => {
+    expect(duplicatePress("night", 0)).toBe(false);
+    expect(duplicatePress("night", 1)).toBe(false);
+    recordPress("night", 2);
+    expect(duplicatePress("night", 3)).toBe(true);
+    expect(duplicatePress("morning", 3)).toBe(false);
   });
 });

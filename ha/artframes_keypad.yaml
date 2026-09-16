@@ -1,36 +1,46 @@
-# Picture Frames follow the wall keypad's Night and Morning.
+# Picture Frames follow Night and Morning pressed anywhere but the app:
+# the wall keypad, Alexa, Siri / Apple Home, the Home Assistant dashboard.
 #
 # Paste this block into /config/configuration.yaml on the Green (File editor
-# add-on) after filling in the four values under `variables:` and the two
-# addresses under `knx: event:`. See ha/README.md for the capture walk.
+# add-on) after filling in the values under `variables:` and the addresses
+# under `knx: event:`. See ha/README.md for the capture walk.
 #
 # Why: the app's Frame follower (web/src/lib/artframes.ts) darkens the five
 # picture Frames on a Night press and lights them on a Morning press — but
 # it can only see presses that go THROUGH the app (a card tap, an automation
-# step). The owner presses the button on the wall. That is a KNX telegram
-# on the scene group address: Control4 acts on it, the scene switch's HA
-# state does not change (it has read `on` since 09-03), and nothing tells
-# the app. Home Assistant's own KNX tunnel does see native keypad telegrams
-# (knx/README.md — its blind spot is Control4-ORIGINATED traffic, which is
-# what the app's own presses are, so a press from the app never arrives
-# here as well: no double sweep). Told to report the scene address as a
-# `knx_event`, HA can relay the press to the app, which then runs the same
-# follower it runs for its own buttons: same Frame list, same "leave a set
-# that is being watched alone", same wake path for the sets that ignore a
-# magic packet.
+# step). The owner presses the button on the wall; the household also says
+# it to Alexa or Siri. The scene switch's HA state never changes (it has
+# read `on` since 09-03), so the app cannot read a "mode" — only a press
+# can be caught, and there are two roads a press takes without the app:
+#
+#   1. The wall keypad: a KNX telegram on the scene group address. Control4
+#      acts on it; Home Assistant's own KNX tunnel sees native keypad
+#      telegrams too (knx/README.md — its blind spot is Control4-ORIGINATED
+#      traffic). Told to report the scene address, HA fires a `knx_event`.
+#   2. Alexa, Siri / Apple Home, the HA dashboard: each calls
+#      `light.turn_on` on the switch through HA's service bus, which fires a
+#      `call_service` event. So does the app's own press — the app drops a
+#      repeat of the same press inside 10 s, so that echo does nothing
+#      (Activity shows it as `frames_duplicate`).
+#
+# One automation catches both and relays the press to the app, which runs
+# the same follower it runs for its own buttons: same Frame list, same
+# "leave a set that is being watched alone", same wake path for the sets
+# that ignore a magic packet.
 #
 # What the app needs from HA: one POST per press,
 #   POST https://<app>/api/artframes   x-hook-key: <HA_HOOK_KEY>
-#   {"press": "night" | "morning", "source": "<keypad address>"}
+#   {"press": "night" | "morning", "source": "<who>"}
 # HA_HOOK_KEY is a Railway variable on the app (docs/DEPLOY_RAILWAY.md); the
 # same string goes into /config/secrets.yaml as `smarthome_hook_key`. It is
 # deliberately NOT the app's APP_KEY: this key buys one thing only — a Night
 # or Morning sweep of the Frames — so a copy of this file is not a copy of
-# the house's keys. A repeat of the same press within 10 s is answered
-# "duplicate" by the app and does nothing (keypad double telegrams).
+# the house's keys.
 #
 # ---------------------------------------------------------------------------
-# FILL IN (capture walk, ~2 minutes):
+# FILL IN:
+#
+# The keypad (capture walk, ~2 minutes):
 #   HA → Settings → Devices & services → KNX → the KNX panel → Group monitor.
 #   Press Night on the wall keypad. The new row's "Destination" is the
 #   Night group address; "Source" is the keypad (1.1.x); "Payload"/"Value"
@@ -43,15 +53,22 @@
 #       (a byte payload shows as one number in the monitor, possibly in hex
 #       — 0x03 is 3; write it here as a one-item list. A 1-bit payload is a
 #       bare 0 or 1.)
-#   Then: Developer tools → YAML → Check configuration → reload KNX and
-#   Automations (no restart). Test: press Night on the wall, and in the app's
-#   Activity look for `system:artframes` `frames_turn_off` with user
-#   `ha:1.1.x`. HA's own Settings → Automations → traces show the press
-#   arriving even before the app is reached.
+#
+# The service road needs nothing captured. Optional: the app's own HA user
+# id in `app_user_id` (Settings → People → Users → smarthome-app → ID)
+# stops HA relaying the app's own presses at all; left blank, they are
+# relayed and the app answers "duplicate" — harmless, one line in Activity.
+#
+# Then: Developer tools → YAML → Check configuration → reload KNX and
+# Automations (no restart). Test: press Night on the wall, and in the app's
+# Activity look for `system:artframes` `frames_turn_off` with user
+# `ha:1.1.x`; say "Alexa, turn on night mode" and look for user
+# `ha:voice-or-ui`. HA's own Settings → Automations → traces show each
+# press arriving even before the app is reached.
 # ---------------------------------------------------------------------------
 
 knx:
-  # Which group addresses HA turns into `knx_event`s. Only these two are
+  # Which group addresses HA turns into `knx_event`s. Only these are
   # needed; wildcards are possible but every listed telegram costs an event.
   # Delete the second line when Night and Morning share one scene address.
   event:
@@ -76,10 +93,12 @@ rest_command:
 
 automation manual_artframes_keypad:
   - id: artframes_wall_keypad
-    alias: "Picture Frames: follow the wall keypad's Night and Morning"
+    alias: "Picture Frames: follow Night and Morning from the wall, Alexa, Siri, HA"
     description: >-
-      A Night or Morning telegram from a KNX keypad (the scene group address,
-      reported as a knx_event) is relayed to the smarthome app, whose Frame
+      A Night or Morning press that did not go through the smarthome app —
+      a KNX keypad telegram on the scene group address (knx_event), or a
+      light.turn_on on the scene switch from Alexa, Siri / Apple Home or
+      the HA dashboard (call_service) — is relayed to the app, whose Frame
       follower turns the picture Frames off (Night) or on (Morning) exactly
       as it does for a press in the app. ha/artframes_keypad.yaml.
     # Two presses in quick succession run in order rather than the second
@@ -87,38 +106,68 @@ automation manual_artframes_keypad:
     mode: queued
     max: 4
     variables:
+      # --- the keypad (capture walk in the header) ---
       night_ga: "0/0/0"      # ← Night button's group address (same as knx: event: above)
       night_value: 1         # ← what it writes: 1 for a 1-bit "on", [n] for a scene byte
       morning_ga: "0/0/0"    # ← Morning button's group address
       morning_value: 1       # ← what it writes
-      # The telegram's payload as HA hands it over: a bare 0/1 for a 1-bit
-      # write, a TUPLE of bytes otherwise — which never equals a YAML list in
-      # a template. Made a list here so it compares with the values above
-      # however they were written. Rendered per trigger (HA renders
-      # automation variables at trigger time, in order).
-      payload: >-
-        {% set d = trigger.event.data.data %}{{ d if d is number else (d | list) }}
+      # --- the service road (nothing to capture) ---
+      night_switch: light.knx_switch_all_house_night
+      morning_switch: light.knx_switch_all_house_morning
+      app_user_id: ""        # ← optional: the smarthome-app HA user's id, to skip its own presses
+      # Which press this trigger is, or "" when it is none of ours. Rendered
+      # per trigger (HA renders automation variables at trigger time, in
+      # order). A KNX byte payload arrives as a TUPLE, which never equals a
+      # YAML list in a template — hence the `| list`. A service call's
+      # entity_id may be one string or a list.
+      press: >-
+        {%- if trigger.id == 'keypad' -%}
+          {%- set d = trigger.event.data.data -%}
+          {%- set p = d if d is number else (d | list) -%}
+          {%- if trigger.event.data.destination == night_ga and p == night_value -%}night
+          {%- elif trigger.event.data.destination == morning_ga and p == morning_value -%}morning
+          {%- endif -%}
+        {%- else -%}
+          {%- set ids = trigger.event.data.service_data.entity_id | default([], true) -%}
+          {%- set ids = [ids] if ids is string else ids -%}
+          {%- if app_user_id and trigger.event.context.user_id == app_user_id -%}
+          {%- elif night_switch in ids -%}night
+          {%- elif morning_switch in ids -%}morning
+          {%- endif -%}
+        {%- endif -%}
+      # Who pressed, for the app's audit line (`ha:<source>`): the keypad's
+      # individual address (1.1.x), or `voice-or-ui` for a service call —
+      # HA cannot tell Alexa from Siri from a dashboard tap.
+      source: >-
+        {{ trigger.event.data.source if trigger.id == 'keypad' else 'voice-or-ui' }}
     trigger:
-      # Every incoming write on the addresses listed under knx: event:. The
-      # condition below picks the two presses; anything else on those
-      # addresses (a status read, a value that is not the button's) is
-      # ignored.
+      # 1. Every incoming write on the addresses listed under knx: event:.
       - platform: event
         event_type: knx_event
         event_data:
           direction: Incoming
           telegramtype: GroupValueWrite
+        id: keypad
+      # 2. Any turn_on on a light through HA's service bus — Alexa, Siri /
+      #    Apple Home (the HomeKit bridge), the dashboard, an HA script, and
+      #    the app itself. `press` above keeps only the two scene switches.
+      - platform: event
+        event_type: call_service
+        event_data:
+          domain: light
+          service: turn_on
+        id: service
+      - platform: event
+        event_type: call_service
+        event_data:
+          domain: homeassistant
+          service: turn_on
+        id: service
     condition:
       - condition: template
-        value_template: >-
-          {{ (trigger.event.data.destination == night_ga and payload == night_value)
-             or (trigger.event.data.destination == morning_ga and payload == morning_value) }}
+        value_template: "{{ press in ['night', 'morning'] }}"
     action:
       - service: rest_command.smarthome_frames_press
         data:
-          press: >-
-            {{ 'night' if (trigger.event.data.destination == night_ga and payload == night_value) else 'morning' }}
-          # The keypad's individual address (1.1.x) — the app writes the
-          # sweep's audit line as user `ha:1.1.x`, so Activity says which
-          # button on which wall did it.
-          source: "{{ trigger.event.data.source }}"
+          press: "{{ press }}"
+          source: "{{ source }}"

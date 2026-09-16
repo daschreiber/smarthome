@@ -19,6 +19,11 @@ Server-side only:
 - Application session secret
 - Database credentials
 - Remote-access URL if treated as private
+- `HA_HOOK_KEY` — what Home Assistant presents when it calls the app
+  (today: relaying the wall keypad's Night/Morning to `POST /api/artframes`).
+  Its own secret, never `APP_KEY`: the Green's `configuration.yaml` and
+  `secrets.yaml` are read by every add-on and backup, and a key found there
+  must buy one narrow, harmless action — not admin.
 
 Never commit:
 

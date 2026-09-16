@@ -1815,7 +1815,7 @@ if the owner uses the keypad more than the app.
 - [ ] Why can HA not reach 10.0.0.3? Check the FortiGate for an isolation
   rule or a stale ARP/lease for that address; then swap Den TV's row back
   to the Samsung entity with `wake_entity: media_player.den_den_tv`.
-- [ ] Wall-keypad presses (above).
+- [x] Wall-keypad presses (above) — relayed by HA since 2026-09-16 (entry below).
 - [x] "Not while being watched" — added the same afternoon (below).
 - [ ] Refinements the owner asked to defer: home/away gating, the floor 6
   all-lights-off keypad, the bedroom-wall Frame.
@@ -1946,3 +1946,73 @@ the app know the Israeli holidays and run them as Friday/Saturday?
 Not covered: anything programmed on the Control4 or KNX side (the
 "Gym AC Shabbat" KNX programme, for one) knows nothing of this — only
 app automations follow the holiday.
+
+## 2026-09-16 — The Frames did not follow the wall: Night and Morning relayed by HA
+
+Owner: "When I turn on night mode the screens don't go off, and when I
+turn on day mode they don't come on." Asked how: "I press the button on
+the wall usually."
+
+### Why
+
+The 09-10 follower rides the app's own press (a card tap, an automation
+step) and nothing else — the 09-10 entry says so under "Not seen: the
+wall keypad", and defers it. A wall press is a KNX telegram on the scene
+group address: Control4 acts on it, the scene switch's HA state stays
+`on` (it has since 09-03), and the app never hears. No bug in what
+shipped; the one path the owner actually uses was the deferred one.
+
+### How the wall now reaches the follower
+
+HA's own KNX tunnel sees native keypad telegrams (it is Control4-ORIGINATED
+traffic it misses, knx/README.md) — so a `knx: event:` on the scene
+address turns each wall press into a `knx_event`, an HA automation relays
+it to the app, and the app runs the follower it already has.
+
+- **`ha/artframes_keypad.yaml`** (new; install walk in `ha/README.md`):
+  `knx: event:` for the Night/Morning group address(es); a `rest_command`
+  that POSTs `{ press, source }` to the app with an `x-hook-key` header;
+  the automation, whose `variables:` hold the four things to capture (two
+  addresses, two payloads — the header explains the two shapes a keypad
+  scene takes: 1-bit per button, or one scene address with a scene number
+  per button). Payload matching is on the raw value, so no DPT has to be
+  guessed before the capture.
+- **`POST /api/artframes`** (new; API_CONTRACT): body
+  `{ press: "night"|"morning", source? }`; runs `followArtFrames` on the
+  matching scene-switch device exactly as the command route does, answers
+  `202` at once (HA's rest_command timeout is short; a held power key
+  alone is ~8 s), and the sweep audits itself as `system:artframes` with
+  user `ha:<keypad address>` so Activity says which wall did it. A repeat
+  of the same press within 10 s is answered `duplicate` and dropped
+  (keypad double telegrams; an automation reload).
+- **`HA_HOOK_KEY`** (new Railway variable; DEPLOY_RAILWAY, .env.example,
+  SECURITY §2): the key HA presents. Deliberately not `APP_KEY` — that one
+  acts as admin, and the Green's configuration.yaml is read by every
+  add-on and backup. This key buys a Frame sweep and nothing else. A
+  signed-in programmer can also POST it by hand.
+- **lib/artframesHook** + tests (key compare, press parsing, source
+  sanitising, scene-switch lookup, duplicate window).
+
+No double sweep from an app press: the app's press goes through Control4,
+whose telegram reaches HA's tunnel only as a CON frame the KNX
+integration drops. Here that 07-26 blind spot is the feature.
+
+### The two steps only the house can do
+
+- [ ] Capture the addresses: KNX panel → Group monitor → press Night on
+  the wall, read Destination / Source / Payload; press Morning, same.
+  Record them in the table at the end of `knx/README.md` and in the yaml's
+  `variables:` (and `knx: event:`).
+- [ ] Mint `HA_HOOK_KEY` (`openssl rand -hex 32`) → Railway variable +
+  `secrets.yaml` `smarthome_hook_key`; paste the block; Check
+  configuration; reload KNX and Automations; press Night on the wall;
+  read `system:artframes` in Activity.
+
+### Follow-ups
+
+- [ ] Alexa / Siri / the HA dashboard press the switch through HA's
+  service bus and are not relayed either. If those get used: a second
+  trigger on the `call_service` event (`light.turn_on` on the two
+  switches, excluding the app's own user id) in the same automation.
+- [ ] Once a press from the wall has been seen end to end, the 09-10
+  follow-up "Wall-keypad presses" is closed.

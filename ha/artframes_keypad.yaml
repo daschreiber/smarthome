@@ -1,0 +1,124 @@
+# Picture Frames follow the wall keypad's Night and Morning.
+#
+# Paste this block into /config/configuration.yaml on the Green (File editor
+# add-on) after filling in the four values under `variables:` and the two
+# addresses under `knx: event:`. See ha/README.md for the capture walk.
+#
+# Why: the app's Frame follower (web/src/lib/artframes.ts) darkens the five
+# picture Frames on a Night press and lights them on a Morning press — but
+# it can only see presses that go THROUGH the app (a card tap, an automation
+# step). The owner presses the button on the wall. That is a KNX telegram
+# on the scene group address: Control4 acts on it, the scene switch's HA
+# state does not change (it has read `on` since 09-03), and nothing tells
+# the app. Home Assistant's own KNX tunnel does see native keypad telegrams
+# (knx/README.md — its blind spot is Control4-ORIGINATED traffic, which is
+# what the app's own presses are, so a press from the app never arrives
+# here as well: no double sweep). Told to report the scene address as a
+# `knx_event`, HA can relay the press to the app, which then runs the same
+# follower it runs for its own buttons: same Frame list, same "leave a set
+# that is being watched alone", same wake path for the sets that ignore a
+# magic packet.
+#
+# What the app needs from HA: one POST per press,
+#   POST https://<app>/api/artframes   x-hook-key: <HA_HOOK_KEY>
+#   {"press": "night" | "morning", "source": "<keypad address>"}
+# HA_HOOK_KEY is a Railway variable on the app (docs/DEPLOY_RAILWAY.md); the
+# same string goes into /config/secrets.yaml as `smarthome_hook_key`. It is
+# deliberately NOT the app's APP_KEY: this key buys one thing only — a Night
+# or Morning sweep of the Frames — so a copy of this file is not a copy of
+# the house's keys. A repeat of the same press within 10 s is answered
+# "duplicate" by the app and does nothing (keypad double telegrams).
+#
+# ---------------------------------------------------------------------------
+# FILL IN (capture walk, ~2 minutes):
+#   HA → Settings → Devices & services → KNX → the KNX panel → Group monitor.
+#   Press Night on the wall keypad. The new row's "Destination" is the
+#   Night group address; "Source" is the keypad (1.1.x); "Payload"/"Value"
+#   is what it wrote. Press Morning; read the same three. Two shapes are
+#   common and both work here:
+#     - two 1-bit addresses (one per button, value 1 / "On"):
+#         night_ga "2/0/5" night_value 1, morning_ga "2/0/6" morning_value 1
+#     - ONE scene address, one byte, scene number per button:
+#         night_ga == morning_ga, night_value [3], morning_value [2]
+#       (a byte payload shows as one number in the monitor, possibly in hex
+#       — 0x03 is 3; write it here as a one-item list. A 1-bit payload is a
+#       bare 0 or 1.)
+#   Then: Developer tools → YAML → Check configuration → reload KNX and
+#   Automations (no restart). Test: press Night on the wall, and in the app's
+#   Activity look for `system:artframes` `frames_turn_off` with user
+#   `ha:1.1.x`. HA's own Settings → Automations → traces show the press
+#   arriving even before the app is reached.
+# ---------------------------------------------------------------------------
+
+knx:
+  # Which group addresses HA turns into `knx_event`s. Only these two are
+  # needed; wildcards are possible but every listed telegram costs an event.
+  # Delete the second line when Night and Morning share one scene address.
+  event:
+    - address:
+        - "0/0/0"   # ← the Night button's group address (night_ga below)
+        - "0/0/0"   # ← the Morning button's group address (morning_ga below)
+
+rest_command:
+  # The relay to the app. `payload` is rendered by HA and sent as JSON —
+  # a template here is safe (it becomes an HTTP body, never a shell
+  # command; cf. the shell_command warning in c4_recovery.yaml).
+  smarthome_frames_press:
+    url: "https://<the app's Railway host>/api/artframes"   # ← APP_BASE_URL, docs/DEPLOY_RAILWAY.md
+    method: POST
+    headers:
+      x-hook-key: !secret smarthome_hook_key
+    content_type: "application/json; charset=utf-8"
+    payload: '{"press": "{{ press }}", "source": "{{ source }}"}'
+    # A Frame's held power key takes ~8 s, but the app answers 202 as soon as
+    # the sweep is started, so this is only for a slow cold start on Railway.
+    timeout: 15
+
+automation manual_artframes_keypad:
+  - id: artframes_wall_keypad
+    alias: "Picture Frames: follow the wall keypad's Night and Morning"
+    description: >-
+      A Night or Morning telegram from a KNX keypad (the scene group address,
+      reported as a knx_event) is relayed to the smarthome app, whose Frame
+      follower turns the picture Frames off (Night) or on (Morning) exactly
+      as it does for a press in the app. ha/artframes_keypad.yaml.
+    # Two presses in quick succession run in order rather than the second
+    # cancelling the first; the app itself drops a repeat within 10 s.
+    mode: queued
+    max: 4
+    variables:
+      night_ga: "0/0/0"      # ← Night button's group address (same as knx: event: above)
+      night_value: 1         # ← what it writes: 1 for a 1-bit "on", [n] for a scene byte
+      morning_ga: "0/0/0"    # ← Morning button's group address
+      morning_value: 1       # ← what it writes
+      # The telegram's payload as HA hands it over: a bare 0/1 for a 1-bit
+      # write, a TUPLE of bytes otherwise — which never equals a YAML list in
+      # a template. Made a list here so it compares with the values above
+      # however they were written. Rendered per trigger (HA renders
+      # automation variables at trigger time, in order).
+      payload: >-
+        {% set d = trigger.event.data.data %}{{ d if d is number else (d | list) }}
+    trigger:
+      # Every incoming write on the addresses listed under knx: event:. The
+      # condition below picks the two presses; anything else on those
+      # addresses (a status read, a value that is not the button's) is
+      # ignored.
+      - platform: event
+        event_type: knx_event
+        event_data:
+          direction: Incoming
+          telegramtype: GroupValueWrite
+    condition:
+      - condition: template
+        value_template: >-
+          {{ (trigger.event.data.destination == night_ga and payload == night_value)
+             or (trigger.event.data.destination == morning_ga and payload == morning_value) }}
+    action:
+      - service: rest_command.smarthome_frames_press
+        data:
+          press: >-
+            {{ 'night' if (trigger.event.data.destination == night_ga and payload == night_value) else 'morning' }}
+          # The keypad's individual address (1.1.x) — the app writes the
+          # sweep's audit line as user `ha:1.1.x`, so Activity says which
+          # button on which wall did it.
+          source: "{{ trigger.event.data.source }}"

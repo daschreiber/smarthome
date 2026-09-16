@@ -18,8 +18,10 @@ import { registry, type Device } from "./registry";
  * at 19:17 and stayed on), so there is no "mode" to read — only the press.
  * The hook therefore rides the PRESS: whenever the app sends turn_on to one
  * of those switches (a card tap, or an automation step), the Frames follow.
- * A press on the wall keypad bypasses the app and is not seen; that is the
- * first refinement to make if it matters.
+ * A press on the wall keypad bypasses the app; since 2026-09-16 Home
+ * Assistant relays it (the KNX telegram on the scene address → `knx_event`
+ * → an HA automation → `POST /api/artframes`, lib/artframesHook), and the
+ * same follower runs — the owner presses the wall far more than the app.
  *
  * One refinement is in (owner, 2026-09-10): **on a Night press, a set that
  * is not in art mode is left alone** — it is being watched, or was left on

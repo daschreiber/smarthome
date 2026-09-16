@@ -2005,7 +2005,7 @@ integration drops. Here that 07-26 blind spot is the feature.
   `variables:` (and `knx: event:`).
 - [ ] Mint `HA_HOOK_KEY` (`openssl rand -hex 32`) → Railway variable +
   `secrets.yaml` `smarthome_hook_key`; paste the block; Check
-  configuration; reload KNX and Automations; press Night on the wall;
+  configuration; reload KNX, REST commands and Automations; press Night on the wall;
   read `system:artframes` in Activity.
 
 ### Same day — Alexa, Siri and the dashboard too

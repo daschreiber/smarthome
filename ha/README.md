@@ -38,8 +38,11 @@ Alexa and Siri. This makes HA relay all of those.
    HA user's id (Settings → People → Users) in `app_user_id` so HA does not
    relay the app's own presses back — left blank, the app answers those
    "duplicate", which is harmless and shows as one Activity line.
-4. **Developer tools → YAML → Check configuration**, then reload **KNX**
-   and **Automations** from the same page.
+4. **Developer tools → YAML → Check configuration**, then reload **KNX**,
+   **REST commands** and **Automations** from the same page — all three:
+   the new `rest_command` is not loaded by the other two reloads, and an
+   automation calling an unknown service fails silently in its trace. (A
+   restart does all three at once, if one is due anyway.)
 5. **Test from the wall.** Press Night. Within a few seconds the Frames go
    dark, and the app's Activity shows `system:artframes` /
    `frames_turn_off` with user `ha:1.1.x` (the keypad). Press Morning; the

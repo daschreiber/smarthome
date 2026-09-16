@@ -59,8 +59,9 @@
 # stops HA relaying the app's own presses at all; left blank, they are
 # relayed and the app answers "duplicate" — harmless, one line in Activity.
 #
-# Then: Developer tools → YAML → Check configuration → reload KNX and
-# Automations (no restart). Test: press Night on the wall, and in the app's
+# Then: Developer tools → YAML → Check configuration → reload KNX, REST
+# commands AND Automations (all three; the rest_command is loaded by none
+# of the others — or restart once). Test: press Night on the wall, and in the app's
 # Activity look for `system:artframes` `frames_turn_off` with user
 # `ha:1.1.x`; say "Alexa, turn on night mode" and look for user
 # `ha:voice-or-ui`. HA's own Settings → Automations → traces show each

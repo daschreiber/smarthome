@@ -1,7 +1,7 @@
 import { CommandSchema, assertCommandAllowed, buildServiceCall, type Command } from "./commands";
 import { bedSetLevel, bedSideForDeviceId, bedSideOff, bedSideOn } from "./eightsleep";
 import { SLOW_SERVICE_TIMEOUT_MS, callService, getStates } from "./ha";
-import { DUPLICATE_WINDOW_MS, artFrameFollow, artFrames, pressOf, recordPress, spareWatched } from "./artframes";
+import { DUPLICATE_WINDOW_MS, artFrameFollow, artFrames, pressOf, recordPress, spareWatched, sparesWatched, type PressScope } from "./artframes";
 import { audit } from "./audit";
 import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
@@ -86,23 +86,23 @@ export async function executeOnDevice(device: Device, cmd: Command): Promise<voi
  * interactive command route and from executeOnDevice's batch callers alike,
  * so an automation step that presses Night at 23:00 darkens the Frames too.
  */
-export async function followArtFrames(device: Device, cmd: Command, user: string): Promise<void> {
+export async function followArtFrames(device: Device, cmd: Command, user: string, scope: PressScope = {}): Promise<void> {
   const follow = artFrameFollow(device, cmd);
   if (!follow) return;
-  const frames = artFrames();
+  const frames = artFrames(scope.floor);
   if (frames.length === 0) return;
   const started = Date.now();
   // One press, one sweep, whichever roads it arrives by (lib/artframes
   // `recordPress`): a repeat inside the window is logged and dropped.
   const press = pressOf(follow);
-  if (recordPress(press, started)) {
+  if (recordPress(press, started, scope.floor)) {
     audit({
       ts: new Date(started).toISOString(),
       user,
       deviceId: "system:artframes",
       entityId: device.entityId,
       command: "frames_duplicate",
-      args: { after: device.id, press, windowMs: DUPLICATE_WINDOW_MS },
+      args: { after: device.id, press, ...(scope.floor ? { floor: scope.floor } : {}), windowMs: DUPLICATE_WINDOW_MS },
       ok: true,
       durationMs: 0,
     });
@@ -110,7 +110,9 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
   }
   // A Night press spares a set that is showing television (lib/artframes).
   // One bulk read; a failed read spares nothing — only positive evidence.
-  const states = follow.command === "turn_off"
+  // The door buttons ask for no sparing at all (`scope.spare === false`),
+  // and Exit never spares: the house is being left.
+  const states = follow.command === "turn_off" && scope.spare !== false && sparesWatched(device)
     ? new Map((await getStates().catch(() => [])).map((s) => [s.entity_id, s.state]))
     : new Map<string, string>();
   const { targets, spared } = spareWatched(frames, follow, (id) => states.get(id));
@@ -123,6 +125,7 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
     command: `frames_${follow.command}`,
     args: {
       after: device.id,
+      ...(scope.floor ? { floor: scope.floor } : {}),
       targets: targets.map((f) => f.id),
       ...(spared.length ? { spared: spared.map((f) => f.id) } : {}),
       failed: result.failed,

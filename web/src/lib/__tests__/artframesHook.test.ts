@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { hookConfigured, hookKeyMatches, parsePress, pressUser, sceneSwitchFor } from "../artframesHook";
+import { hookConfigured, hookKeyMatches, parsePress, parseScope, pressUser, sceneSwitchFor } from "../artframesHook";
 import {
   DUPLICATE_WINDOW_MS,
   MORNING_SCENE_SWITCH,
@@ -50,6 +50,27 @@ describe("parsePress", () => {
   });
 });
 
+describe("parseScope", () => {
+  it("Night and Morning send no scope: every Frame, watched sets spared", () => {
+    expect(parseScope({})).toEqual({});
+    expect(parseScope(null)).toEqual({});
+    expect(parseScope({ spare: true })).toEqual({});
+  });
+
+  it("the door buttons name a floor and ask for no sparing", () => {
+    expect(parseScope({ floor: 6, spare: false })).toEqual({ floor: 6, spare: false });
+    expect(parseScope({ floor: 5 })).toEqual({ floor: 5 });
+    expect(parseScope({ spare: false })).toEqual({ spare: false });
+  });
+
+  it("a floor this house does not have is refused, not ignored", () => {
+    expect(parseScope({ floor: 4 })).toBeNull();
+    expect(parseScope({ floor: "6" })).toBeNull();
+    // Only a literal false turns sparing off.
+    expect(parseScope({ spare: "false" })).toEqual({});
+  });
+});
+
 describe("pressUser", () => {
   it("names the keypad HA reports, and falls back to 'keypad' for anything odd", () => {
     expect(pressUser("1.1.24")).toBe("ha:1.1.24");
@@ -97,6 +118,15 @@ describe("one press, one sweep (recordPress / duplicatePress)", () => {
     expect(recordPress("morning", 9_000)).toBe(true);
     // 10 s after the FIRST press, not after the repeat.
     expect(recordPress("morning", 10_000)).toBe(false);
+  });
+
+  it("keeps the floors apart — Lights 6 then Lights 5 on the way out are two presses", () => {
+    expect(recordPress("night", 1_000, 6)).toBe(false);
+    expect(recordPress("night", 2_000, 5)).toBe(false);
+    expect(recordPress("night", 3_000)).toBe(false); // Exit: the whole house
+    expect(recordPress("night", 4_000, 6)).toBe(true);
+    expect(duplicatePress("night", 4_000, 5)).toBe(true);
+    expect(duplicatePress("morning", 4_000, 6)).toBe(false);
   });
 
   it("the peek reports without recording", () => {

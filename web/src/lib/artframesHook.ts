@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { MORNING_SCENE_SWITCH, NIGHT_SCENE_SWITCH, type Press } from "./artframes";
+import { MORNING_SCENE_SWITCH, NIGHT_SCENE_SWITCH, type Press, type PressScope } from "./artframes";
 import { registry, type Device } from "./registry";
 
 /**
@@ -50,6 +50,19 @@ export function hookKeyMatches(given: string | null | undefined): boolean {
 
 export function parsePress(value: unknown): Press | null {
   return value === "night" || value === "morning" ? value : null;
+}
+
+/**
+ * How far the press reaches (lib/artframes `PressScope`). The buttons by
+ * the front door send `floor` (6: the Dining sets and the Lounge TV; 5: the
+ * Den TV) and `spare: false`; Night and Morning send neither. `null` for a
+ * floor this house does not have, so a typo in the automation is a 400 in
+ * its trace rather than a sweep of the wrong rooms.
+ */
+export function parseScope(body: { floor?: unknown; spare?: unknown } | null): PressScope | null {
+  const floor = body?.floor;
+  if (floor != null && floor !== 5 && floor !== 6) return null;
+  return { ...(floor != null ? { floor } : {}), ...(body?.spare === false ? { spare: false } : {}) };
 }
 
 /** Who pressed, for the audit line: `ha:<source>`, where source is what

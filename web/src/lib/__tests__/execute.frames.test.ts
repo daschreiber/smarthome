@@ -121,9 +121,56 @@ describe("followArtFrames", () => {
     expect(audits.mock.calls[0][0].args).not.toHaveProperty("spared");
   });
 
+  it("Lights 6 off at the door: the sixth floor's four Frames, the Den TV untouched", async () => {
+    const night = getDevice("whole_house__all_house_night")!;
+    await followArtFrames(night, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
+    const targets = calls.mock.calls.map((c) => c[2].entity_id).sort();
+    expect(targets).toEqual([
+      "media_player.left_32_qe32ls03cbuxil",
+      "media_player.lounge_tv_qe85ls03dauxsq",
+      "media_player.middle_32_qe32ls03cbuxil",
+      "media_player.right_32_qe32ls03cbuxil",
+    ]);
+    expect(audits.mock.calls[0][0]).toMatchObject({ command: "frames_turn_off", args: { floor: 6 } });
+  });
+
+  it("Lights 5: the Den TV alone, off and back on", async () => {
+    await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { floor: 5, spare: false });
+    await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.18", { floor: 5, spare: false });
+    expect(calls.mock.calls.map((c) => [c[1], c[2].entity_id])).toEqual([
+      ["turn_off", "media_player.den_den_tv"],
+      ["turn_on", "media_player.den_den_tv"],
+    ]);
+  });
+
+  it("a door press does not spare: a Lounge sensor stuck on a video app still goes dark, unread", async () => {
+    vi.mocked(getStates).mockClear();
+    await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { spare: false });
+    expect(getStates).not.toHaveBeenCalled();
+    expect(calls).toHaveBeenCalledTimes(5);
+    expect(audits.mock.calls[0][0].args).not.toHaveProperty("spared");
+  });
+
+  it("Lights 6 then Lights 5 two seconds apart both sweep", async () => {
+    const night = getDevice("whole_house__all_house_night")!;
+    await followArtFrames(night, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
+    await followArtFrames(night, { command: "turn_on" }, "ha:1.1.18", { floor: 5, spare: false });
+    expect(calls).toHaveBeenCalledTimes(5);
+    expect(audits.mock.calls.map((c) => c[0].command)).toEqual(["frames_turn_off", "frames_turn_off"]);
+  });
+
+  it("Exit pressed in the app: all five off, a watched set included", async () => {
+    vi.mocked(getStates).mockClear();
+    await followArtFrames(getDevice("whole_house__all_house_exit")!, { command: "turn_on" }, "daniel");
+    expect(calls).toHaveBeenCalledTimes(5);
+    expect(calls.mock.calls.every((c) => c[1] === "turn_off")).toBe(true);
+    expect(getStates).not.toHaveBeenCalled();
+    expect(audits.mock.calls[0][0]).toMatchObject({ command: "frames_turn_off", args: { after: "whole_house__all_house_exit" } });
+  });
+
   it("any other press is not the Frames' business", async () => {
-    const exit = getDevice("whole_house__all_house_exit")!;
-    await followArtFrames(exit, { command: "turn_on" }, "daniel");
+    const welcome = getDevice("whole_house__welcome")!;
+    await followArtFrames(welcome, { command: "turn_on" }, "daniel");
     await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_off" }, "daniel");
     expect(calls).not.toHaveBeenCalled();
     expect(audits).not.toHaveBeenCalled();

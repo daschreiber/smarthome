@@ -52,6 +52,16 @@ Alexa and Siri. This makes HA relay all of those.
    what the app answered (`202 accepted`, `duplicate`, `401`, `503 HA_HOOK_KEY
    is not set`).
 
+**The buttons by the front door** (2026-09-17) ride the same relay. Each
+is one or two rows in the yaml's `buttons:` table — a toggle is two rows,
+one per value it writes — with a `floor` (6: the Dining sets and the
+Lounge TV follow "Lights 6"; 5: the Den TV follows "Lights 5"; none: Exit
+takes all five) and `spare: false`, because a press on the way out should
+not leave a set lit on the strength of a sensor that sticks. Capture them
+the same way, add each different address under `knx: event:`, reload KNX
+and Automations. The `light.knx_switch_all_house_exit` switch is in the
+`switches:` table too, so an Exit by voice or from the app does the same.
+
 One press is one sweep, whichever roads it takes. A press in the app is
 not seen on the KNX road — it goes through Control4, whose telegrams reach
 HA's tunnel only as confirmation frames that the KNX integration drops

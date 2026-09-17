@@ -35,8 +35,14 @@ describe("artFrameFollow", () => {
     expect(artFrameFollow(morning, { command: "turn_off" })).toBeNull();
   });
 
+  it("Exit pressed → Frames off, like Night", () => {
+    expect(artFrameFollow(exit, { command: "turn_on" })).toEqual({ command: "turn_off" });
+    expect(artFrameFollow(exit, { command: "turn_off" })).toBeNull();
+  });
+
   it("other scene switches and non-scene devices leave the Frames alone", () => {
-    expect(artFrameFollow(exit, { command: "turn_on" })).toBeNull();
+    const welcome: Device = { ...night, id: "whole_house__welcome", entityId: "light.knx_switch_welcome", label: "Welcome" };
+    expect(artFrameFollow(welcome, { command: "turn_on" })).toBeNull();
     expect(artFrameFollow(plainLight, { command: "turn_on" })).toBeNull();
   });
 });

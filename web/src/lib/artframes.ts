@@ -41,6 +41,30 @@ export const ART_MODE = "art";
 /** A press as the house names it. */
 export type Press = "night" | "morning";
 
+/**
+ * How far a press reaches, and whether it spares a set being watched.
+ *
+ * Night and Morning take every Frame. The three buttons by the front door
+ * (owner, 2026-09-17) take a floor's worth: "Lights 6" switches the sixth
+ * floor's lights and its Frames with them (the three Dining sets and the
+ * Lounge TV), "Lights 5" the lower floor and the Den TV, and "Exit" the
+ * whole house — all five off. Those arrive only through the HA relay
+ * (`POST /api/artframes` with `floor` / `spare`), as "night" for off and
+ * "morning" for on.
+ *
+ * `spare: false` turns the watched-set rule off for that press. The door
+ * buttons are pressed on the way out, so nobody is watching — and the
+ * sensor the rule reads is known to stick (the Lounge TV's read a video
+ * app for four days of showing art, COMMISSIONING_LOG 2026-09-17), which
+ * on those buttons would leave the biggest screen in the house lit.
+ */
+export interface PressScope {
+  /** Only the Frames on this floor; every Frame when absent. */
+  floor?: 5 | 6;
+  /** false = darken a set even if its sensor says it is being watched. */
+  spare?: boolean;
+}
+
 /** The press a follow command stands for (Night → Frames off, Morning → on). */
 export function pressOf(follow: Command): Press {
   return follow.command === "turn_off" ? "night" : "morning";
@@ -58,20 +82,26 @@ export function pressOf(follow: Command): Press {
  */
 export const DUPLICATE_WINDOW_MS = 10_000;
 
-const lastPress = new Map<Press, number>();
+const lastPress = new Map<string, number>();
+
+/** Presses are remembered per reach: "Lights 6" then "Lights 5" two
+ *  seconds apart on the way out are two presses, not a repeat. */
+function pressKey(press: Press, floor?: 5 | 6): string {
+  return floor == null ? press : `${press}:${floor}`;
+}
 
 /** Peek: has this press already run inside the window? Records nothing. */
-export function duplicatePress(press: Press, now = Date.now()): boolean {
-  const prev = lastPress.get(press);
+export function duplicatePress(press: Press, now = Date.now(), floor?: 5 | 6): boolean {
+  const prev = lastPress.get(pressKey(press, floor));
   return prev != null && now - prev < DUPLICATE_WINDOW_MS;
 }
 
 /** Record this press as run; true when it was a repeat (the caller then
  *  does nothing). A repeat does not extend the window — it is measured from
  *  the press that actually ran. */
-export function recordPress(press: Press, now = Date.now()): boolean {
-  if (duplicatePress(press, now)) return true;
-  lastPress.set(press, now);
+export function recordPress(press: Press, now = Date.now(), floor?: 5 | 6): boolean {
+  if (duplicatePress(press, now, floor)) return true;
+  lastPress.set(pressKey(press, floor), now);
   return false;
 }
 
@@ -102,23 +132,32 @@ export function spareWatched(
   return { targets: frames.filter((f) => !spared.includes(f)), spared };
 }
 
-/** HA entity ids of the two scene switches, as the KNX export named them. */
+/** HA entity ids of the scene switches, as the KNX export named them. */
 export const NIGHT_SCENE_SWITCH = "light.knx_switch_all_house_night";
 export const MORNING_SCENE_SWITCH = "light.knx_switch_all_house_morning";
+/** "Exit": the whole house off on the way out — the Frames with it, and
+ *  nobody left to be watching one (owner, 2026-09-17). */
+export const EXIT_SCENE_SWITCH = "light.knx_switch_all_house_exit";
 
-/** Every device the map flags as a picture Frame. */
-export function artFrames(): Device[] {
-  return registry().devices.filter((d) => d.artFrame === true);
+/** Does a press of this switch spare a watched set? Night does; Exit
+ *  empties the house, so it does not. */
+export function sparesWatched(device: Device): boolean {
+  return device.entityId !== EXIT_SCENE_SWITCH;
+}
+
+/** Every device the map flags as a picture Frame — on one floor, when asked. */
+export function artFrames(floor?: 5 | 6): Device[] {
+  return registry().devices.filter((d) => d.artFrame === true && (floor == null || d.floor === floor));
 }
 
 /**
  * What the Frames should do because of THIS command, or null when the
- * command is not a press of Night or Morning. Only a turn_on counts: a
+ * command is not a press of Night, Exit or Morning. Only a turn_on counts: a
  * scene switch's turn_off means nothing on the KNX side either.
  */
 export function artFrameFollow(device: Device, cmd: Command): Command | null {
   if (cmd.command !== "turn_on" || device.category !== "scene_switch") return null;
-  if (device.entityId === NIGHT_SCENE_SWITCH) return { command: "turn_off" };
+  if (device.entityId === NIGHT_SCENE_SWITCH || device.entityId === EXIT_SCENE_SWITCH) return { command: "turn_off" };
   if (device.entityId === MORNING_SCENE_SWITCH) return { command: "turn_on" };
   return null;
 }

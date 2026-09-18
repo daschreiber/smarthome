@@ -249,7 +249,34 @@ export function buildAutomationSpec(name: string, steps: McpStep[]): AutomationS
   return parsed.data;
 }
 
-/** An automation as the agent sees it: the stored shape plus whose it is. */
+/**
+ * A stored device command back in the agent's flattened (command, value)
+ * vocabulary — the inverse of lib/assistant toCommand — so what
+ * list_automations returns is exactly what update_automation accepts
+ * (Codex review, PR #132). A stored command the vocabulary can't express
+ * (select_source, fan modes: not offered to agents) is passed through
+ * as-is, named, so the agent can see it without being able to edit it.
+ */
+export function fromCommand(cmd: Record<string, unknown>): { command: string; value: number | null } | { unsupported: Record<string, unknown> } {
+  const name = cmd.command;
+  if (typeof name !== "string" || !(DEVICE_COMMANDS as readonly string[]).includes(name)) return { unsupported: cmd };
+  const num = (k: string) => (typeof cmd[k] === "number" ? (cmd[k] as number) : null);
+  switch (name) {
+    // A room-targeted clean carries segments/repeat the flattened shape has
+    // no words for; flattening it would turn a room clean into a whole-floor
+    // clean on the next update (Codex review, PR #134). Shown, not editable.
+    case "start_cleaning":
+      return cmd.segments != null || cmd.repeat != null ? { unsupported: cmd } : { command: name, value: null };
+    case "set_brightness": return { command: name, value: num("brightnessPct") };
+    case "set_position": return { command: name, value: num("positionPct") };
+    case "set_temperature": return { command: name, value: num("temperature") };
+    case "set_volume": return { command: name, value: num("volumePct") };
+    case "set_bed_level": return { command: name, value: num("level") };
+    default: return { command: name, value: null };
+  }
+}
+
+/** An automation as the agent sees it: its own step shape, plus whose it is. */
 function automationView(a: ReturnType<typeof listAutomations>[number], caller: McpCaller) {
   return {
     id: a.id,
@@ -265,7 +292,9 @@ function automationView(a: ReturnType<typeof listAutomations>[number], caller: M
       ...(s.days ? { days: s.days } : {}),
       ...(s.date ? { date: s.date } : {}),
       ...(s.holdUntil ? { holdUntil: s.holdUntil } : {}),
-      actions: s.actions,
+      actions: s.actions.map((act) =>
+        act.type === "device" ? { type: "device", deviceId: act.deviceId, ...fromCommand(act.command) } : act,
+      ),
     })),
   };
 }
@@ -564,7 +593,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
     {
       title: "Update an automation",
       description:
-        "Replace the name and steps of an automation this connection created (id from list_automations); it keeps its id and enabled state. " + STEP_DESCRIPTION,
+        "Replace the name and steps of an automation this connection created (id from list_automations); it keeps its id and enabled state. A listed action shown as `unsupported` (made in the app, e.g. a room-targeted vacuum clean) cannot be expressed here: leave that automation to the app rather than re-sending it. " + STEP_DESCRIPTION,
       inputSchema: {
         id: z4.string().min(1).max(120).describe("The automation id from list_automations."),
         name: z4.string().min(1).max(80),

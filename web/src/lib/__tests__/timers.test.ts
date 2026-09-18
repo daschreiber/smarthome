@@ -1,3 +1,8 @@
+import { vi } from "vitest";
+vi.mock("../whitenoise", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../whitenoise")>();
+  return { ...actual, noiseConfigured: () => true };
+});
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -39,6 +44,12 @@ describe("timer store", () => {
     expect(() => createTimer(light.id, 100000, "u")).toThrow(/between/);
     createTimer(light.id, 20, "u");
     expect(() => createTimer(light.id, 30, "u")).toThrow(/already/);
+  });
+
+  it("never accepts the sleep sound — a virtual device HA has no state for (Codex review, PR #132)", () => {
+    const noise = registry().devices.find((d) => d.kind === "noise");
+    expect(noise, "the mock must put the sleep sound in the registry").toBeDefined();
+    expect(() => createTimer(noise!.id, 20, "u")).toThrow(/Sleep sense/);
   });
 
   it("never accepts the sauna", () => {

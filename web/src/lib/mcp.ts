@@ -1,18 +1,29 @@
 import crypto from "node:crypto";
 import { z } from "zod";
+// zod/v4 for the automation tool only: its step shape is the assistant's
+// structured-output schema (lib/assistant, v4), reused rather than re-drawn.
+import { z as z4 } from "zod/v4";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { NextRequest } from "next/server";
-import { DEVICE_COMMANDS, loadAliases, toCommand } from "./assistant";
+import {
+  DEVICE_COMMANDS, LlmStepSchema, loadAliases, toAutomationSpec, toCommand, toInternalAction,
+  type LlmAction, type LlmProposal,
+} from "./assistant";
 import { audit } from "./audit";
 import { authenticate } from "./auth";
-import { nowParts } from "./automations";
+import {
+  AutomationSpecSchema, createAutomation, deleteAutomation, listAutomations, nowParts, setEnabled,
+  updateAutomation, type AutomationSpec,
+} from "./automations";
 import { assertCommandAllowed, temperatureBounds, type Command } from "./commands";
 import { applySceneById, executeAction, executeOnDevice, followArtFrames, roomLights } from "./execute";
 import { getState } from "./ha";
 import { homeSnapshot, type HomeDevice } from "./homeSnapshot";
+import { canDeleteRecord } from "./permissions";
 import { commandEntityIds, deviceUnreachable } from "./reachability";
 import { getDevice, registry, slug, type Device } from "./registry";
 import { getScene, listScenes } from "./scenes";
+import { createTimer, deleteTimer, listTimers } from "./timers";
 import type { Role } from "./users";
 
 /**
@@ -26,12 +37,15 @@ import type { Role } from "./users";
  * typed commands, per-kind bounds, the shared executor (lib/execute), and
  * an audit line per action. Nothing here talks to Home Assistant directly.
  *
- * Trust: an agent holding the MCP token is a GUEST of the house. It can
- * read state, command devices, and run scenes; it cannot program
- * (scenes/automations), operate the door locks (not even see them), or
- * read the activity log. The sauna heater still needs a human's explicit
- * go-ahead relayed as `confirm: true`. Locks stay out of the vocabulary
- * entirely, as they do for the assistant (lib/assistant buildSystemPrompt).
+ * Trust: an agent holding the MCP token is a GUEST of the house, plus
+ * scheduling (owner decision, 2026-09-18). It can read state, command
+ * devices, run scenes, and create automations and auto-off timers; it may
+ * edit or delete only what it created (lib/permissions canDeleteRecord,
+ * as a guest). It cannot capture scenes, flip Away, operate the door locks
+ * (not even see them), or read the activity log. The sauna heater still
+ * needs a human's explicit go-ahead relayed as `confirm: true`, and is
+ * never schedulable from here. Locks stay out of the vocabulary entirely,
+ * as they do for the assistant (lib/assistant buildSystemPrompt).
  */
 
 export interface McpCaller {
@@ -169,7 +183,97 @@ function commandHint(d: Device): string {
   return hints.join("; ");
 }
 
-const INSTRUCTIONS = `You are connected to a private smart home (Control4 + KNX behind Home Assistant, with a few extra devices) through its own app. Read state with get_home_state and act with control_device, set_room_lights and activate_scene. Only ids returned by these tools are valid: never invent a deviceId, sceneId or room. Values: brightness, shade position and volume are percent 0-100; temperatures are °C (rooms 10-32, sauna 40-100); bed warmth is Eight Sleep's -100…+100 scale, not degrees. "The lights in X" means set_room_lights, which sweeps real lights only (never fans, vents, towel rails or floor heating). The sauna heater is safety-sensitive: command it only when the person explicitly asked, tell them it will start or stop the heater, and pass confirm: true only after they agreed. Door locks, gates and alarms are not available here by policy. Commands answer "sent" the moment Home Assistant accepts them; read get_home_state a few seconds later to see the result. Every action is written to the house's audit log under this connection's name.`;
+const INSTRUCTIONS = `You are connected to a private smart home (Control4 + KNX behind Home Assistant, with a few extra devices) through its own app. Read state with get_home_state and act with control_device, set_room_lights and activate_scene. Schedule with create_automation (clock or sunrise/sunset steps, recurring by weekday or one-shot by date) and create_timer (auto-off N minutes after a device turns on). Only ids returned by these tools are valid: never invent a deviceId, sceneId, automation id or room. Values: brightness, shade position and volume are percent 0-100; temperatures are °C (rooms 10-32, sauna 40-100); bed warmth is Eight Sleep's -100…+100 scale, not degrees. "The lights in X" means set_room_lights (or a room action in an automation), which sweeps real lights only (never fans, vents, towel rails or floor heating). Relative dates ("tomorrow", "Saturday") resolve against the houseTime that get_home_state and list_automations report; a one-shot must carry its resolved date. Jewish holidays already follow Shabbat (a Yom Tov runs the Saturday automations, its eve the Friday ones), so never schedule one-shot copies of Shabbat automations for a holiday. The sauna heater is safety-sensitive: command it only when the person explicitly asked, tell them it will start or stop the heater, and pass confirm: true only after they agreed; it cannot be scheduled from here. Door locks, gates and alarms are not available here by policy. Commands answer "sent" the moment Home Assistant accepts them; read get_home_state a few seconds later to see the result. You may edit or delete only the automations and timers you created. Every action is written to the house's audit log under this connection's name.`;
+
+/** The MCP step shape: the assistant's step with every trigger field
+ *  optional (an agent should not have to spell out nulls), actions kept
+ *  required. Normalised back to the assistant's shape before conversion. */
+const McpStepSchema = LlmStepSchema.partial().required({ actions: true });
+type McpStep = z4.infer<typeof McpStepSchema>;
+
+/**
+ * Turn an agent's (name, steps) into a stored AutomationSpec, with the
+ * agent's rules applied on top of the schema: every device must be one
+ * the agent may see, the sauna (requiresConfirmation) is never scheduled
+ * unattended, rooms resolve through synonyms to their canonical name, and
+ * scene ids must exist. Throws with a plain sentence.
+ */
+export function buildAutomationSpec(name: string, steps: McpStep[]): AutomationSpec {
+  const actions = (list: LlmAction[]): LlmAction[] =>
+    list.map((a) => {
+      if (a.type === "device") {
+        const d = getDevice(a.deviceId);
+        if (!d || !agentVisible(d)) throw new Error(`unknown device "${a.deviceId}" — use ids from get_home_state`);
+        if (d.requiresConfirmation) throw new Error(`${d.label} is safety-sensitive and cannot be scheduled from here`);
+        assertCommandAllowed(d, toCommand(a)); // throws with the reason
+        return a;
+      }
+      if (a.type === "room") {
+        const r = resolveRoom(a.room);
+        if ("error" in r) throw new Error(r.error);
+        if (roomLights(r.room).length === 0) throw new Error(`${r.room} has no lights the app controls`);
+        return { ...a, room: r.room };
+      }
+      if (!getScene(a.sceneId)) throw new Error(`unknown scene "${a.sceneId}" — use ids from list_scenes`);
+      return a;
+    });
+  const proposal: Extract<LlmProposal, { kind: "automation" }> = {
+    kind: "automation",
+    message: "",
+    name,
+    steps: steps.map((s) => {
+      if ((s.time == null) === (s.sun == null)) {
+        throw new Error("each step needs exactly one trigger: a clock time (HH:MM) or a sun event");
+      }
+      if (s.sunOffsetMinutes != null && s.sun == null) throw new Error("sunOffsetMinutes needs a sun event");
+      return {
+        time: s.time ?? null,
+        sun: s.sun ?? null,
+        sunOffsetMinutes: s.sunOffsetMinutes ?? null,
+        days: s.days ?? null,
+        date: s.date ?? null,
+        actions: actions(s.actions),
+      };
+    }),
+  };
+  const parsed = AutomationSpecSchema.safeParse(toAutomationSpec(proposal));
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    throw new Error(`${first?.path.join(".") || "automation"}: ${first?.message ?? "invalid"}`);
+  }
+  return parsed.data;
+}
+
+/** An automation as the agent sees it: the stored shape plus whose it is. */
+function automationView(a: ReturnType<typeof listAutomations>[number], caller: McpCaller) {
+  return {
+    id: a.id,
+    name: a.name,
+    enabled: a.enabled,
+    activeWhen: a.activeWhen ?? "always",
+    createdBy: a.createdBy,
+    editable: canDeleteRecord(caller.role, caller.user, a.createdBy),
+    steps: a.steps.map((s) => ({
+      ...(s.time ? { time: s.time } : {}),
+      ...(s.sun ? { sun: s.sun } : {}),
+      ...(s.sunOffsetMinutes != null ? { sunOffsetMinutes: s.sunOffsetMinutes } : {}),
+      ...(s.days ? { days: s.days } : {}),
+      ...(s.date ? { date: s.date } : {}),
+      ...(s.holdUntil ? { holdUntil: s.holdUntil } : {}),
+      actions: s.actions,
+    })),
+  };
+}
+
+function programmingLine(caller: McpCaller, entityId: string, command: string, args: Record<string, unknown>, error?: string) {
+  audit({
+    ts: new Date().toISOString(), user: caller.user, deviceId: "mcp", entityId, command,
+    args: { ...args, via: "mcp" }, ok: !error, durationMs: 0, ...(error ? { error } : {}),
+  });
+}
+
+const STEP_DESCRIPTION =
+  "Each step fires on exactly one trigger: `time` (HH:MM, 24h house time) OR `sun` (\"sunrise\"/\"sunset\", with optional `sunOffsetMinutes`, negative = before, ±120). `days` (0=Sunday…6) limits a recurring step; omit for every day. `date` (YYYY-MM-DD) makes it one-shot. `actions`: {type:\"device\", deviceId, command, value} (control_device's vocabulary, value null when unused), {type:\"room\", room, command:\"lights_on\"|\"lights_off\"}, or {type:\"scene\", sceneId}.";
 
 /**
  * Build a server for one caller. One per request in the stateless HTTP
@@ -403,6 +507,192 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
         });
         return fail(`${scene.name}: ${message}`);
       }
+    },
+  );
+
+  // ---- Scheduling: automations and auto-off timers ----
+
+  server.registerTool(
+    "list_automations",
+    {
+      title: "List automations",
+      description:
+        "Every scheduled rule in the house with its steps, whether it is enabled, when it is active (always / home-only / away-only), who created it, and whether this connection may edit or delete it. Includes the house time for resolving relative dates.",
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async () => {
+      const now = nowParts();
+      return ok({
+        houseTime: `${now.date} ${now.hhmm}`,
+        automations: listAutomations().map((a) => automationView(a, caller)),
+      });
+    },
+  );
+
+  server.registerTool(
+    "create_automation",
+    {
+      title: "Create an automation",
+      description:
+        "Schedule one or more steps under a name; the house runs them on its own clock from now on. " + STEP_DESCRIPTION +
+        " Only devices from get_home_state, rooms from list_rooms, and scenes from list_scenes are valid; the sauna cannot be scheduled. Say back to the person exactly what will run and when.",
+      inputSchema: {
+        name: z4.string().min(1).max(80).describe("A short name, e.g. \"Kitchen lights weekday morning\"."),
+        steps: z4.array(McpStepSchema).min(1).max(12).describe("The scheduled steps."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ name, steps }) => {
+      try {
+        const auto = createAutomation(buildAutomationSpec(name, steps), caller.user);
+        programmingLine(caller, `automation.${auto.id}`, "create_automation", { name: auto.name, steps: auto.steps.length });
+        return ok({ ok: true, automation: automationView(auto, caller) });
+      } catch (err) {
+        programmingLine(caller, "automation.new", "create_automation", { name }, errorText(err));
+        return fail(`couldn't create "${name}": ${errorText(err)}`);
+      }
+    },
+  );
+
+  server.registerTool(
+    "update_automation",
+    {
+      title: "Update an automation",
+      description:
+        "Replace the name and steps of an automation this connection created (id from list_automations); it keeps its id and enabled state. " + STEP_DESCRIPTION,
+      inputSchema: {
+        id: z4.string().min(1).max(120).describe("The automation id from list_automations."),
+        name: z4.string().min(1).max(80),
+        steps: z4.array(McpStepSchema).min(1).max(12),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id, name, steps }) => {
+      const target = listAutomations().find((a) => a.id === id);
+      if (!target) return fail(`unknown automation "${id}" — use the ids returned by list_automations`);
+      if (!canDeleteRecord(caller.role, caller.user, target.createdBy)) {
+        return fail(`"${target.name}" was created by ${target.createdBy}; this connection may only change automations it created`);
+      }
+      try {
+        const auto = updateAutomation(id, buildAutomationSpec(name, steps));
+        programmingLine(caller, `automation.${auto.id}`, "update_automation", { name: auto.name, steps: auto.steps.length });
+        return ok({ ok: true, automation: automationView(auto, caller) });
+      } catch (err) {
+        programmingLine(caller, `automation.${id}`, "update_automation", { name }, errorText(err));
+        return fail(`couldn't update "${target.name}": ${errorText(err)}`);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_automation_enabled",
+    {
+      title: "Enable or disable an automation",
+      description: "Pause or resume any automation by id (from list_automations) without deleting it.",
+      inputSchema: {
+        id: z.string().min(1).max(120).describe("The automation id."),
+        enabled: z.boolean().describe("true to resume, false to pause."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id, enabled }) => {
+      const target = listAutomations().find((a) => a.id === id);
+      if (!target) return fail(`unknown automation "${id}" — use the ids returned by list_automations`);
+      setEnabled(id, enabled);
+      programmingLine(caller, `automation.${id}`, "toggle_automation", { enabled });
+      return ok({ ok: true, id, name: target.name, enabled });
+    },
+  );
+
+  server.registerTool(
+    "delete_automation",
+    {
+      title: "Delete an automation",
+      description: "Remove an automation this connection created (id from list_automations). To stop someone else's, use set_automation_enabled instead.",
+      inputSchema: { id: z.string().min(1).max(120).describe("The automation id.") },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id }) => {
+      const target = listAutomations().find((a) => a.id === id);
+      if (!target) return fail(`unknown automation "${id}" — use the ids returned by list_automations`);
+      if (!canDeleteRecord(caller.role, caller.user, target.createdBy)) {
+        return fail(`"${target.name}" was created by ${target.createdBy}; this connection may only delete automations it created`);
+      }
+      deleteAutomation(id);
+      programmingLine(caller, `automation.${id}`, "delete_automation", { name: target.name });
+      return ok({ ok: true, id, name: target.name });
+    },
+  );
+
+  server.registerTool(
+    "list_timers",
+    {
+      title: "List auto-off timers",
+      description: "The auto-off rules: each says a device turns off N minutes after it turns on, however it was turned on. One per device.",
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async () =>
+      ok({
+        timers: listTimers()
+          .filter((t) => agentDevice({ id: t.deviceId }))
+          .map((t) => ({
+            id: t.id,
+            deviceId: t.deviceId,
+            device: getDevice(t.deviceId)?.label,
+            room: getDevice(t.deviceId)?.room,
+            afterMinutes: t.afterMinutes,
+            enabled: t.enabled,
+            createdBy: t.createdBy,
+            editable: canDeleteRecord(caller.role, caller.user, t.createdBy),
+          })),
+      }),
+  );
+
+  server.registerTool(
+    "create_timer",
+    {
+      title: "Create an auto-off timer",
+      description:
+        "Make a device switch itself off N minutes (1-720) after it turns on, every time, starting now if it is on. Lights, media, underfloor heating; not the sauna or the bed. A device has at most one timer.",
+      inputSchema: {
+        deviceId: z.string().min(1).max(120).describe("The device id from get_home_state."),
+        afterMinutes: z.number().int().min(1).max(720).describe("Minutes after turn-on."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ deviceId, afterMinutes }) => {
+      const device = agentDevice({ id: deviceId });
+      if (!device) return fail(`unknown device "${deviceId}" — use the ids returned by get_home_state`);
+      try {
+        const rule = createTimer(deviceId, afterMinutes, caller.user);
+        audit({
+          ts: new Date().toISOString(), user: caller.user, deviceId, entityId: `timer.${rule.id}`,
+          command: "create_timer", args: { afterMinutes: rule.afterMinutes, via: "mcp" }, ok: true, durationMs: 0,
+        });
+        return ok({ ok: true, timer: { id: rule.id, deviceId, device: device.label, room: device.room, afterMinutes: rule.afterMinutes } });
+      } catch (err) {
+        return fail(`${device.label}: ${errorText(err)}`);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_timer",
+    {
+      title: "Delete an auto-off timer",
+      description: "Remove a timer this connection created (id from list_timers).",
+      inputSchema: { id: z.string().min(1).max(64).describe("The timer id.") },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id }) => {
+      const target = listTimers().find((t) => t.id === id);
+      if (!target) return fail(`unknown timer "${id}" — use the ids returned by list_timers`);
+      if (!canDeleteRecord(caller.role, caller.user, target.createdBy)) {
+        return fail(`that timer was created by ${target.createdBy}; this connection may only delete timers it created`);
+      }
+      deleteTimer(id);
+      programmingLine(caller, `timer.${id}`, "delete_timer", { deviceId: target.deviceId });
+      return ok({ ok: true, id });
     },
   );
 

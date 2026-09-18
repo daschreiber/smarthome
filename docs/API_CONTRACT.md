@@ -298,11 +298,15 @@ own: the body is JSON-RPC and the `Accept` header must list both
 `Authorization: Bearer <MCP_TOKEN>` → the guest principal `mcp`; a bearer
 that doesn't match is refused (401, never falls through); no bearer → the
 ordinary session cookie / `x-app-key`, acting as that caller. Tools:
-`list_rooms`, `get_home_state`, `list_scenes` (reads) and
-`control_device`, `set_room_lights`, `activate_scene` (the assistant's
-device vocabulary, through `lib/execute`). Door locks are absent from it
-entirely; the sauna needs `confirm: true`; every action is audited with
-`via: "mcp"`. `GET` and `DELETE` answer 405.
+`list_rooms`, `get_home_state`, `list_scenes`, `list_automations`,
+`list_timers` (reads); `control_device`, `set_room_lights`,
+`activate_scene` (the assistant's device vocabulary, through
+`lib/execute`); `create_automation`, `update_automation`,
+`set_automation_enabled`, `delete_automation`, `create_timer`,
+`delete_timer` (the same stores as `/api/automations` and `/api/timers`;
+edit/delete under the ownership rule, as a guest). Door locks are absent
+from it entirely; the sauna needs `confirm: true` and is never schedulable;
+every action is audited with `via: "mcp"`. `GET` and `DELETE` answer 405.
 
 ## Auth & users
 

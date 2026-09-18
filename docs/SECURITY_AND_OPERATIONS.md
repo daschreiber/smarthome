@@ -25,8 +25,9 @@ Server-side only:
   `secrets.yaml` are read by every add-on and backup, and a key found there
   must buy one narrow, harmless action — not admin.
 - `MCP_TOKEN` — what an outside agent presents to `POST /api/mcp`
-  (`docs/MCP_SERVER.md`). Same principle: its own secret, guest tier only
-  (state, devices, scenes; no programming, no locks, no activity log),
+  (`docs/MCP_SERVER.md`). Same principle: its own secret, guest tier plus
+  scheduling (state, devices, scenes, its own automations and timers; no
+  scene capture, no locks, no activity log),
   every action audited as user `mcp`. Rotate on Railway to revoke every
   connected agent at once.
 

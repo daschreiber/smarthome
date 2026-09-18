@@ -93,8 +93,9 @@ Deployed on Railway (branch `main` auto-deploys), installed as a PWA:
   which only proposes typed actions the command layer validates.
 - **MCP server** — the same command layer offered to outside agents
   (Claude Code, Claude Desktop) over the Model Context Protocol at
-  `POST /api/mcp`: read state, command devices, run scenes, as a guest of
-  the house, every action audited. [How to connect](docs/MCP_SERVER.md).
+  `POST /api/mcp`: read state, command devices, run scenes, and schedule
+  automations and auto-off timers, as a guest of the house, every action
+  audited. [How to connect](docs/MCP_SERVER.md).
 - **Accounts & audit** — password + Google sign-in, `admin/member/guest`
   roles, append-only audit log, password reset by email or admin link.
 - **Voice/ecosystem** — the same HA entities are exposed to Apple Home

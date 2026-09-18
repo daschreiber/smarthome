@@ -26,6 +26,12 @@ Code: `web/src/lib/mcp.ts` (the server and its tools), `web/src/app/api/mcp/rout
 | `control_device` | one typed command to one device: `turn_on`, `turn_off`, `set_brightness`, `open`, `close`, `stop`, `set_position`, `set_temperature`, `set_volume`, `start_cleaning`, `pause_cleaning`, `return_to_dock`, `set_bed_level`, with `value` for the set_* commands | the assistant's exact vocabulary (`lib/assistant` `DEVICE_COMMANDS` → `toCommand`), validated by `lib/commands`, executed by `lib/execute` |
 | `set_room_lights` | a room's real lights on or off | group Lighting only, as everywhere else |
 | `activate_scene` | apply a scene by id | the sauna never replays from here |
+| `list_automations` | every scheduled rule with its steps, enabled/active state, creator, and whether this connection may edit it; plus the house time | read-only |
+| `create_automation` | schedule steps under a name: clock time or sunrise/sunset (± offset), weekdays or a one-shot date, actions on devices / rooms / scenes | the assistant's step shape (`LlmStepSchema`, trigger fields optional) → `toAutomationSpec` → `AutomationSpecSchema`; the sauna is never schedulable |
+| `update_automation` | replace name and steps of one this connection created | ownership: `canDeleteRecord` as a guest |
+| `set_automation_enabled` | pause / resume any automation | as the app: anyone who may program can toggle |
+| `delete_automation` | remove one this connection created | ownership |
+| `list_timers` / `create_timer` / `delete_timer` | auto-off rules: a device turns off N minutes (1–720) after it turns on | `lib/timers` rules (no sauna, no bed, one per device); delete needs ownership |
 
 Device ids are the app's ids (`lounge__lounge_cove`), never Home Assistant
 entity ids — the API contract's founding rule holds. Commands answer
@@ -40,18 +46,26 @@ not here, that everything is audited.
 ## Trust model
 
 An agent holding the MCP token is a **guest of the house**
-(`lib/permissions`: `guest`). Concretely:
+(`lib/permissions`: `guest`) **plus scheduling** (owner decision,
+2026-09-18). Concretely:
 
 - It can read state, command devices, and run scenes.
-- It cannot create or delete scenes, automations, or timers, flip Away, or
-  read the activity log — nothing programmable.
+- It can create automations and auto-off timers, and pause or resume any
+  automation. It may edit or delete only what it created (the app's
+  ownership rule, `canDeleteRecord`, applied as a guest): to stop someone
+  else's rule it pauses it. Records it creates carry `createdBy: "mcp"`,
+  so the Automations screen shows which ones the agent made.
+- It cannot capture or delete scenes, flip Away, follow holidays, or read
+  the activity log.
 - Door locks do not exist for it: not in `get_home_state`, not accepted by
   `control_device`. Alarm, gates and garage stay excluded by policy as they
   are everywhere.
 - The sauna heater is refused until the call carries `confirm: true`. The
   tool's description and the server instructions tell the agent to pass it
   only after the person explicitly agreed — the same "human says go" rule
-  as the app's press-and-confirm, relayed through the agent.
+  as the app's press-and-confirm, relayed through the agent. It can never
+  be put in an automation from here: a heater that starts unattended on a
+  schedule an agent wrote is not a guest's call.
 - A device Home Assistant reports `unavailable` is refused loudly
   (`lib/reachability`), not reported "sent" — the outage lesson.
 - Every action lands in the audit log as user `mcp` with `via: "mcp"` in
@@ -66,7 +80,7 @@ Auth, in `authenticateMcp`:
    cookie or `x-app-key`. Such a caller acts as itself, with its own role.
 
 `MCP_TOKEN` is its own secret, like `HA_HOOK_KEY`: it buys guest-level
-control through MCP and nothing else. Rotate it by changing the variable on
+control plus scheduling through MCP and nothing else. Rotate it by changing the variable on
 Railway; every connected client then needs the new value.
 
 ## Transport
@@ -90,7 +104,9 @@ claude mcp add --transport http house https://<your-app>.up.railway.app/api/mcp 
 ```
 
 Then in a session: "what's on in the lounge?", "close the study blinds",
-"set the den to 23". The `instructions` do the rest.
+"set the den to 23", "kitchen lights on at 7 tomorrow and off at 9",
+"switch the terrace lights off 20 minutes after they come on". The
+`instructions` do the rest.
 
 **Claude Desktop / claude.ai custom connectors** take a URL and expect
 OAuth for authentication; they have no field for a static header. Until
@@ -140,9 +156,9 @@ otherwise.
   who connected the agent, and a member's agent could program while a
   guest's could not. Until then, one shared token, one principal, guest
   tier.
-- **Programming.** No scene capture, no automations, no timers through MCP.
-  The in-app assistant does these behind a proposal card the person
-  confirms; an agent has no such card. Revisit with per-user identity.
+- **Scene capture.** Automations and timers are in (2026-09-18); scenes
+  are still captured from the app, where the person sees the room they
+  are snapshotting. `activate_scene` runs them.
 - **The rest of the command vocabulary.** `select_source`, `play`/`pause`,
   `set_fan_speed`, `set_fan_mode`, and the sauna's start options
   (`temperature`, `runForMinutes`) are in `lib/commands` but not offered,

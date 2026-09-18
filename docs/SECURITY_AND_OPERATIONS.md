@@ -30,6 +30,9 @@ Server-side only:
   who connected what. Access tokens live an hour, refresh tokens 90 days;
   a person disconnects an agent from More, an admin disconnects anyone's,
   and removing a user ends their agents at the next request.
+- `OAUTH_CLIENTS` (optional) — the client secrets of hosts configured by
+  hand for the MCP server (Alexa+). A secret proves only that the caller
+  is that host; the person still signs in on the consent page.
 - `MCP_TOKEN` (optional, legacy) — a shared bearer for `POST /api/mcp`,
   guest tier, audited as user `mcp`. Prefer OAuth; if set, rotate on
   Railway to revoke every holder at once.

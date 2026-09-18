@@ -89,6 +89,7 @@ network-scoped, only the login restriction was.
    | `VACUUM_ROOMS_PATH` | `/data/vacuum_rooms.json` — user-assigned Roborock segment names |
    | `ENTITY_MAP_PATH` | optional — explicit path to `entity_map.json`; unset, the app falls back to `../data/` then `./data/` (the repo copies) |
    | `OAUTH_PATH` | `/data/oauth.json` — the MCP server's OAuth store (registered agent clients, hashed codes and tokens, `docs/MCP_SERVER.md`); defaults there whenever the volume is mounted. Agents connect as a signed-in person; no token to configure. Needs `APP_BASE_URL` for the discovery documents |
+   | `OAUTH_CLIENTS` | optional — JSON array of confidential OAuth clients the owner configures for hosts whose console wants a client id and secret rather than registering themselves (Alexa+, `docs/MCP_SERVER.md` → Alexa+): `[{"client_id","client_secret" (16+ chars),"client_name","redirect_uris":[…]}]`. Each is a secret: rotate by editing the entry |
    | `MCP_TOKEN` | optional, legacy — `openssl rand -hex 32`; a shared bearer that opens `POST /api/mcp` as the guest principal `mcp` (audited as such). Superseded by the OAuth sign-in above; leave unset unless a client can't do OAuth |
 
    This table is the deployment source of truth — when code starts reading

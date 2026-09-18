@@ -115,10 +115,10 @@ the next request, exactly as it ends their cookie.
 | --- | --- | --- |
 | `GET /.well-known/oauth-protected-resource` (and `…/api/mcp`) | RFC 9728 | names the resource (`/api/mcp`) and its authorization server (this app) |
 | `GET /.well-known/oauth-authorization-server` | RFC 8414 | the endpoints below, `code` + PKCE `S256`, public clients only |
-| `POST /api/oauth/register` | RFC 7591 | dynamic client registration: a name and redirect URIs (https, loopback http, or a native scheme); no client secrets — PKCE is the proof |
+| `POST /api/oauth/register` | RFC 7591 | dynamic client registration: a name and redirect URIs (https, loopback http, or a native scheme); no client secrets — PKCE is the proof. Hosts that want a client id and secret instead are configured by the owner (`OAUTH_CLIENTS`, below) |
 | `GET /oauth/authorize` | RFC 6749 §4.1 | the consent page; validation first (`GET /api/oauth/authorize`), then sign-in if needed, then Allow / Deny (`POST /api/oauth/authorize`) |
-| `POST /api/oauth/token` | RFC 6749 §3.2, RFC 7636, RFC 8707 | `authorization_code` (single-use, 10 min, verifier checked) and `refresh_token` (rotated, 2-min grace for a lost response); `resource` must be `/api/mcp` |
-| `POST /api/oauth/revoke` | RFC 7009 | either token ends the grant |
+| `POST /api/oauth/token` | RFC 6749 §3.2, RFC 7636, RFC 8707 | `authorization_code` (single-use, 10 min, verifier checked) and `refresh_token` (rotated, 2-min grace for a lost response); `resource` must be `/api/mcp`; a configured client presents its secret (`client_secret_basic` or `_post`) |
+| `POST /api/oauth/revoke` | RFC 7009 | either token ends the grant; a configured client's grant also needs its secret |
 | `GET` / `DELETE /api/oauth/grants` | app | the person's connected agents (an admin sees everyone's); the More screen's **Connected agents** |
 
 Lifetimes: access token 1 hour, refresh token 90 days (the session cookie's
@@ -191,6 +191,60 @@ curl -s -X POST $BASE/api/oauth/register -H 'Content-Type: application/json' \
 curl -s -X POST $BASE/api/oauth/token -d grant_type=authorization_code -d code=… \
   -d client_id=… -d redirect_uri=http://localhost:9/cb -d code_verifier=<verifier>   # → tokens
 ```
+
+## Alexa+
+
+Amazon's Alexa+ MCP Toolkit makes Alexa+ an MCP client: you register the
+house as an "MCP add-on" in the Alexa+ Developer Hub and Alexa+ talks to
+`/api/mcp` like Claude does. Two gates before any of it, as of September
+2026: the Toolkit is **US-only**, and Amazon lists it as **available to
+select partners** — apply for access first, and check that your Echos
+show Alexa+ at all. Amazon's docs pages could not be fetched from the
+build sandbox; the steps below follow their published summaries, so
+expect the Hub's wording to differ in places.
+
+What Alexa needs from the house is already there, except the client
+credentials:
+
+- **Discovery.** Alexa reads `/.well-known/oauth-protected-resource` and
+  `/.well-known/oauth-authorization-server` itself, finds the endpoints,
+  and refuses to deploy unless PKCE S256 is advertised. It is.
+- **Transport.** Streamable HTTP, spec 2025-11-25. Yes.
+- **Client credentials.** Alexa's console takes a client id and secret
+  rather than registering itself, and it will send the secret at the
+  token endpoint. That is what `OAUTH_CLIENTS` is for.
+- **Redirect URIs.** Alexa uses *several*, depending on where the Echo was
+  registered; the Hub lists them for your add-on. Register every one —
+  the house honours only an exact match, and sends the code back to the
+  one Alexa asked for.
+
+Steps:
+
+1. In the Alexa+ Developer Hub, create an MCP add-on pointing at
+   `https://<your-app>.up.railway.app/api/mcp`. Note the redirect URIs it
+   lists for account linking.
+2. Choose a client id (any token, e.g. `alexa-house`) and a secret
+   (`openssl rand -hex 32`). Enter both in the Hub's account-linking
+   section, with the authorization and token endpoints it discovered.
+3. On Railway, set `OAUTH_CLIENTS` to a JSON array with that client:
+
+   ```json
+   [{"client_id":"alexa-house","client_secret":"<the secret>","client_name":"Alexa+",
+     "redirect_uris":["https://layla.amazon.com/api/skill/link/…","https://pitangui.amazon.com/api/skill/link/…"]}]
+   ```
+
+   Redeploy. An entry with a short secret, or with any redirect URI that is
+   not allowed, is skipped whole with a warning in the logs — never
+   installed minus one region's callback, never a crash.
+4. Deploy the add-on to Amazon's development stage and link the account
+   from the Alexa app: it opens the house's consent page, you sign in
+   (password — Google sign-in inside Alexa's web view may be refused by
+   Google), press Allow, and Alexa+ is connected as you. It appears under
+   More → Connected agents as "Alexa+", like any other agent.
+
+A configured client is *confidential*: its secret is its proof, so it may
+skip PKCE (Alexa sends it anyway, and what it sends is verified); the
+self-registering road stays public-only.
 
 ## What it deliberately does not do yet
 

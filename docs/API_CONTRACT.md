@@ -323,8 +323,9 @@ validates and describes (`{ ok, client, user|null, methods }`, or
 `{ ok:false, error, redirect|null }`), and `POST` `{ …params, decision:
 "allow"|"deny" }` (session cookie of a real account) answers
 `{ redirect }` with the code or `access_denied`. `POST /api/oauth/token`
-(form or JSON): `authorization_code` + PKCE, or `refresh_token`; errors in
-RFC 6749 §5.2 form. `POST /api/oauth/revoke` `{ token }` → 200 always.
+(form or JSON): `authorization_code` + PKCE, or `refresh_token`; a client
+configured in `OAUTH_CLIENTS` also presents its secret (body or Basic
+header) and may omit PKCE; errors in RFC 6749 §5.2 form. `POST /api/oauth/revoke` `{ token }` → 200 always.
 `GET | DELETE /api/oauth/grants` (signed in): `{ grants[] }` of the caller
 (admin: all); DELETE `{ id }` disconnects one. Every consent and disconnect
 is audited (`agent_consent`, `agent_disconnect`).

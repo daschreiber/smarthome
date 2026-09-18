@@ -5,9 +5,10 @@ import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ACCESS_TTL_MS, CODE_TTL_MS, REFRESH_TTL_MS,
-  authenticateAccessToken, authorizationServerMetadata, clientInformation, exchangeCode, issueCode,
-  listGrants, protectedResourceMetadata, redirectUriAllowed, redirectWith, refreshTokens, registerClient,
-  revokeGrant, revokeToken, validateAuthorizeRequest, wwwAuthenticate, type ValidAuthorize,
+  authenticateAccessToken, authorizationServerMetadata, clientInformation, clientSecretOk, configuredClients,
+  exchangeCode, getClient, issueCode, listGrants, protectedResourceMetadata, redirectUriAllowed, redirectWith,
+  refreshTokens, registerClient, revokeGrant, revokeToken, validateAuthorizeRequest, wwwAuthenticate,
+  type ValidAuthorize,
 } from "../oauth";
 import { addUser, removeUser } from "../users";
 
@@ -26,6 +27,7 @@ beforeEach(() => {
   process.env.OAUTH_PATH = path.join(dir, "oauth.json");
   process.env.USERS_PATH = path.join(dir, "users.json");
   process.env.APP_BASE_URL = BASE;
+  delete process.env.OAUTH_CLIENTS;
   addUser("daniel@example.com", "password1", "admin");
   addUser("guest@example.com", "password1", "guest");
 });
@@ -70,7 +72,7 @@ describe("discovery", () => {
       token_endpoint: `${BASE}/api/oauth/token`,
       registration_endpoint: `${BASE}/api/oauth/register`,
       code_challenge_methods_supported: ["S256"],
-      token_endpoint_auth_methods_supported: ["none"],
+      token_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
     });
   });
 });
@@ -155,7 +157,11 @@ describe("codes and tokens", () => {
     expect(again).toMatchObject({ ok: false, error: "invalid_grant" });
 
     const { client: c2, verifier: v2, code: code2 } = grant();
-    const otherClient = exchangeCode({ code: code2, client_id: "someone-else", redirect_uri: c2.redirect_uris[0], code_verifier: v2 }, undefined, T0);
+    const unknownClient = exchangeCode({ code: code2, client_id: "someone-else", redirect_uri: c2.redirect_uris[0], code_verifier: v2 }, undefined, T0);
+    expect(unknownClient).toMatchObject({ ok: false, error: "invalid_client" });
+    // A real, different client presenting another client's code.
+    const other = register(["https://other.test/cb"]);
+    const otherClient = exchangeCode({ code: code2, client_id: other.client_id, redirect_uri: c2.redirect_uris[0], code_verifier: v2 }, undefined, T0);
     expect(otherClient).toMatchObject({ ok: false, error: "invalid_grant" });
 
     const { client: c3, verifier: v3, code: code3 } = grant();
@@ -225,8 +231,8 @@ describe("codes and tokens", () => {
     ]);
     expect(listGrants("guest@example.com", "guest", T0)).toEqual([]);
     expect(revokeGrant(listGrants("daniel@example.com", "admin", T0)[0].id, "guest@example.com", "guest", T0)).toBe(false);
-    expect(revokeToken(r.tokens.refresh_token, T0)).toBe(true);
-    expect(revokeToken(r.tokens.refresh_token, T0)).toBe(false);
+    expect(revokeToken(r.tokens.refresh_token, {}, T0)).toEqual({ revoked: true, unauthorized: false });
+    expect(revokeToken(r.tokens.refresh_token, {}, T0)).toEqual({ revoked: false, unauthorized: false });
     expect(authenticateAccessToken(r.tokens.access_token, T0)).toBeNull();
     expect(listGrants("daniel@example.com", "admin", T0)).toEqual([]);
 
@@ -236,5 +242,86 @@ describe("codes and tokens", () => {
     const id = listGrants("daniel@example.com", "admin", T0)[0].id;
     expect(revokeGrant(id, "daniel@example.com", "admin", T0)).toBe(true);
     expect(authenticateAccessToken(r2.tokens.access_token, T0)).toBeNull();
+  });
+});
+
+describe("configured confidential clients (OAUTH_CLIENTS — Alexa+)", () => {
+  const ALEXA = {
+    client_id: "alexa-house",
+    client_secret: "s3cret-s3cret-s3cret",
+    client_name: "Alexa+",
+    redirect_uris: ["https://layla.amazon.com/api/skill/link/M1", "https://pitangui.amazon.com/api/skill/link/M1"],
+  };
+
+  it("reads the env, skips broken entries, never exposes the secret through getClient", () => {
+    process.env.OAUTH_CLIENTS = JSON.stringify([
+      ALEXA,
+      { client_id: "short", client_secret: "tiny", redirect_uris: ["https://x.test/cb"] },
+      { client_id: "nowhere", client_secret: "s3cret-s3cret-s3cret", redirect_uris: ["http://evil.example/cb"] },
+      // One bad URI among good ones skips the whole entry (Codex review, PR #137).
+      { client_id: "mixed", client_secret: "s3cret-s3cret-s3cret", redirect_uris: ["https://x.test/cb", "http://evil.example/cb"] },
+    ]);
+    expect(configuredClients().map((c) => c.client_id)).toEqual(["alexa-house"]);
+    const client = getClient("alexa-house");
+    expect(client).toMatchObject({ client_id: "alexa-house", client_name: "Alexa+", confidential: true, redirect_uris: ALEXA.redirect_uris });
+    expect(client).not.toHaveProperty("secret");
+    expect(clientSecretOk("alexa-house", ALEXA.client_secret)).toBe(true);
+    expect(clientSecretOk("alexa-house", "wrong")).toBe(false);
+    process.env.OAUTH_CLIENTS = "not json";
+    expect(configuredClients()).toEqual([]);
+    expect(authorizationServerMetadata().token_endpoint_auth_methods_supported).toEqual(["none", "client_secret_basic", "client_secret_post"]);
+  });
+
+  it("may skip PKCE (the secret is its proof), must send the right secret, exactly one of its redirect URIs", () => {
+    process.env.OAUTH_CLIENTS = JSON.stringify([ALEXA]);
+    const noPkce = validateAuthorizeRequest({
+      client_id: "alexa-house", redirect_uri: ALEXA.redirect_uris[1], response_type: "code", state: "s",
+    });
+    expect(noPkce.ok).toBe(true);
+    if (!noPkce.ok) return;
+    expect(noPkce.code_challenge).toBeNull();
+    const badPkce = validateAuthorizeRequest({
+      client_id: "alexa-house", redirect_uri: ALEXA.redirect_uris[1], response_type: "code", code_challenge: "x", code_challenge_method: "S256",
+    });
+    expect(badPkce).toMatchObject({ ok: false, error: "invalid_request" });
+    const elsewhere = validateAuthorizeRequest({ client_id: "alexa-house", redirect_uri: "https://layla.amazon.com/api/skill/link/OTHER", response_type: "code" });
+    expect(elsewhere).toMatchObject({ ok: false, redirect_uri: null });
+
+    const code = issueCode(noPkce, "daniel@example.com", T0);
+    const noSecret = exchangeCode({ code, client_id: "alexa-house", redirect_uri: ALEXA.redirect_uris[1] }, undefined, T0);
+    expect(noSecret).toMatchObject({ ok: false, error: "invalid_client" });
+    // The client check comes before the code is spent, so a retry with the secret works.
+    const wrong = exchangeCode({ code, client_id: "alexa-house", client_secret: "wrong", redirect_uri: ALEXA.redirect_uris[1] }, undefined, T0);
+    expect(wrong).toMatchObject({ ok: false, error: "invalid_client" });
+    const r = exchangeCode({ code, client_id: "alexa-house", client_secret: ALEXA.client_secret, redirect_uri: ALEXA.redirect_uris[1] }, undefined, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(authenticateAccessToken(r.tokens.access_token, T0)).toMatchObject({ user: "daniel@example.com", clientName: "Alexa+" });
+    expect(refreshTokens({ refresh_token: r.tokens.refresh_token, client_id: "alexa-house" }, T0 + 1000)).toMatchObject({ ok: false, error: "invalid_client" });
+    expect(refreshTokens({ refresh_token: r.tokens.refresh_token, client_id: "alexa-house", client_secret: ALEXA.client_secret }, T0 + 1000).ok).toBe(true);
+    expect(listGrants("daniel@example.com", "admin", T0)).toEqual([expect.objectContaining({ clientName: "Alexa+" })]);
+    // Revocation needs the secret too: an exposed access token alone can't end the grant.
+    const fresh = refreshTokens({ refresh_token: r.tokens.refresh_token, client_id: "alexa-house", client_secret: ALEXA.client_secret }, T0 + 2000);
+    if (!fresh.ok) throw new Error(fresh.description);
+    expect(revokeToken(fresh.tokens.access_token, {}, T0 + 3000)).toEqual({ revoked: false, unauthorized: true });
+    expect(revokeToken(fresh.tokens.access_token, { client_id: "alexa-house", client_secret: "wrong" }, T0 + 3000)).toEqual({ revoked: false, unauthorized: true });
+    expect(authenticateAccessToken(fresh.tokens.access_token, T0 + 3000)).not.toBeNull();
+    expect(revokeToken(fresh.tokens.access_token, { client_id: "alexa-house", client_secret: ALEXA.client_secret }, T0 + 3000)).toEqual({ revoked: true, unauthorized: false });
+    expect(authenticateAccessToken(fresh.tokens.access_token, T0 + 3000)).toBeNull();
+  });
+
+  it("when it does send PKCE, the verifier is still checked; public clients still cannot skip it", () => {
+    process.env.OAUTH_CLIENTS = JSON.stringify([ALEXA]);
+    const { verifier, challenge } = pkce();
+    const v = validateAuthorizeRequest({
+      client_id: "alexa-house", redirect_uri: ALEXA.redirect_uris[0], response_type: "code", code_challenge: challenge, code_challenge_method: "S256",
+    }) as ValidAuthorize;
+    const code = issueCode(v, "daniel@example.com", T0);
+    const wrongVerifier = exchangeCode({ code, client_id: "alexa-house", client_secret: ALEXA.client_secret, redirect_uri: ALEXA.redirect_uris[0], code_verifier: "x".repeat(43) }, undefined, T0);
+    expect(wrongVerifier).toMatchObject({ ok: false, error: "invalid_grant" });
+    const code2 = issueCode(v, "daniel@example.com", T0);
+    expect(exchangeCode({ code: code2, client_id: "alexa-house", client_secret: ALEXA.client_secret, redirect_uri: ALEXA.redirect_uris[0], code_verifier: verifier }, undefined, T0).ok).toBe(true);
+    const publicNoPkce = authorize({ code_challenge: null }).v;
+    expect(publicNoPkce).toMatchObject({ ok: false, error: "invalid_request" });
   });
 });

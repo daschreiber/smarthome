@@ -17,9 +17,11 @@ import { publicBaseUrl } from "./urls";
  * The shape follows the MCP authorization spec's requirements and nothing
  * more: Protected Resource Metadata (RFC 9728) → Authorization Server
  * Metadata (RFC 8414) → Dynamic Client Registration (RFC 7591) → the
- * authorization-code grant with PKCE S256 (RFC 7636), public clients only
- * (no client secrets), resource indicators (RFC 8707), refresh-token
- * rotation, and revocation (RFC 7009).
+ * authorization-code grant with PKCE S256 (RFC 7636), resource indicators
+ * (RFC 8707), refresh-token rotation, and revocation (RFC 7009).
+ * Self-registered clients are public (no secret; PKCE is their proof).
+ * Hosts whose console wants a client id and secret instead — Alexa+ — are
+ * configured by the owner in OAUTH_CLIENTS as confidential clients.
  *
  * Storage is one JSON file on the volume (`OAUTH_PATH`). Tokens and codes
  * are stored as SHA-256 hashes: the file never holds anything a reader
@@ -45,13 +47,20 @@ export interface OAuthClient {
   client_name: string;
   redirect_uris: string[];
   created_at: string;
+  /** Configured by the owner (OAUTH_CLIENTS) with a secret it must present
+   *  at the token endpoint — Alexa+ and other hosts that expect a client id
+   *  and secret pasted into their console instead of registering
+   *  themselves. Self-registered clients are public (PKCE is their proof). */
+  confidential?: boolean;
 }
 
 interface OAuthCode {
   hash: string;
   client_id: string;
   redirect_uri: string;
-  code_challenge: string;
+  /** null only for a confidential client that sent no PKCE; the secret is
+   *  its proof then. Public clients always carry one. */
+  code_challenge: string | null;
   user: string;
   scope: string;
   resource: string | null;
@@ -158,8 +167,8 @@ export function authorizationServerMetadata(origin?: string) {
     response_types_supported: ["code"],
     response_modes_supported: ["query"],
     grant_types_supported: ["authorization_code", "refresh_token"],
-    token_endpoint_auth_methods_supported: ["none"],
-    revocation_endpoint_auth_methods_supported: ["none"],
+    token_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
+    revocation_endpoint_auth_methods_supported: ["none", "client_secret_basic", "client_secret_post"],
     code_challenge_methods_supported: ["S256"],
   };
 }
@@ -248,8 +257,73 @@ export function clientInformation(client: OAuthClient) {
   };
 }
 
+interface ConfiguredClient extends OAuthClient {
+  secret: string;
+  confidential: true;
+}
+
+/**
+ * Clients the owner configures rather than lets register: `OAUTH_CLIENTS`,
+ * a JSON array of `{ client_id, client_secret, client_name, redirect_uris }`.
+ * These are confidential clients — the secret is presented at the token
+ * endpoint (client_secret_basic or _post) — for hosts like Alexa+ whose
+ * console takes a client id and secret and lists the redirect URIs it will
+ * use. A malformed entry is skipped with a warning, never a crash: the
+ * self-registering road must keep working whatever the env holds.
+ */
+export function configuredClients(): ConfiguredClient[] {
+  const raw = process.env.OAUTH_CLIENTS;
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.warn("[oauth] OAUTH_CLIENTS is not valid JSON — ignoring it");
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out: ConfiguredClient[] = [];
+  for (const e of parsed as Array<Record<string, unknown>>) {
+    const id = typeof e?.client_id === "string" ? e.client_id.trim() : "";
+    const secret = typeof e?.client_secret === "string" ? e.client_secret : "";
+    const listed = Array.isArray(e?.redirect_uris) ? e.redirect_uris : [];
+    const uris = listed.filter((u): u is string => typeof u === "string" && redirectUriAllowed(u));
+    // One bad URI skips the whole entry: Alexa's callbacks are per region,
+    // and a client installed minus one of them fails for that region
+    // while looking deployed (Codex review, PR #137).
+    if (!id || secret.length < 16 || uris.length === 0 || uris.length !== listed.length) {
+      console.warn(`[oauth] OAUTH_CLIENTS entry "${id || "?"}" skipped: needs client_id, a client_secret of 16+ chars, and redirect_uris that are all allowed`);
+      continue;
+    }
+    out.push({
+      client_id: id,
+      client_name: typeof e.client_name === "string" && e.client_name.trim() ? e.client_name.trim().slice(0, 100) : id,
+      redirect_uris: uris,
+      created_at: "1970-01-01T00:00:00.000Z",
+      confidential: true,
+      secret,
+    });
+  }
+  return out;
+}
+
 export function getClient(clientId: string): OAuthClient | undefined {
+  const configured = configuredClients().find((c) => c.client_id === clientId);
+  if (configured) {
+    const { secret: _secret, ...client } = configured;
+    return client;
+  }
   return load().clients.find((c) => c.client_id === clientId);
+}
+
+/** A confidential client's proof: its configured secret, compared in
+ *  constant time. Public clients have none and always fail this. */
+export function clientSecretOk(clientId: string, presented: string | null | undefined): boolean {
+  const c = configuredClients().find((x) => x.client_id === clientId);
+  if (!c || !presented) return false;
+  const a = Buffer.from(presented);
+  const b = Buffer.from(c.secret);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 // ---- Authorization ----
@@ -268,7 +342,7 @@ export interface AuthorizeParams {
 export interface ValidAuthorize {
   client: OAuthClient;
   redirect_uri: string;
-  code_challenge: string;
+  code_challenge: string | null;
   scope: string;
   state: string | null;
   resource: string | null;
@@ -301,11 +375,18 @@ export function validateAuthorizeRequest(
   }
   const redirect = p.redirect_uri;
   if (p.response_type !== "code") return fail("unsupported_response_type", "response_type must be \"code\"", redirect);
-  if (!p.code_challenge || !/^[A-Za-z0-9._~-]{43,128}$/.test(p.code_challenge)) {
-    return fail("invalid_request", "code_challenge (PKCE) is required", redirect);
-  }
-  if (p.code_challenge_method !== "S256") {
-    return fail("invalid_request", "code_challenge_method must be S256", redirect);
+  // PKCE: the only proof a public client has, so required of it; a
+  // confidential client proves itself with its secret and may skip PKCE,
+  // but what it does send must be right.
+  let code_challenge: string | null = null;
+  if (p.code_challenge || !client.confidential) {
+    if (!p.code_challenge || !/^[A-Za-z0-9._~-]{43,128}$/.test(p.code_challenge)) {
+      return fail("invalid_request", "code_challenge (PKCE) is required", redirect);
+    }
+    if (p.code_challenge_method !== "S256") {
+      return fail("invalid_request", "code_challenge_method must be S256", redirect);
+    }
+    code_challenge = p.code_challenge;
   }
   let resource: string | null = null;
   if (p.resource) {
@@ -318,7 +399,7 @@ export function validateAuthorizeRequest(
     ok: true,
     client,
     redirect_uri: redirect,
-    code_challenge: p.code_challenge,
+    code_challenge,
     scope: (p.scope ?? "").trim() || SCOPE,
     state: p.state ?? null,
     resource,
@@ -369,14 +450,26 @@ function mint(grant: OAuthGrant, nowMs: number): Tokens {
   };
 }
 
+/** Who is at the token endpoint: a configured client must present its
+ *  secret; a self-registered one must not have one to present. */
+function clientAuthenticated(clientId: string, secret: string | null | undefined): OAuthError | null {
+  const client = getClient(clientId);
+  if (!client) return err("invalid_client", "unknown client_id");
+  if (client.confidential && !clientSecretOk(clientId, secret)) return err("invalid_client", "client secret is missing or wrong");
+  return null;
+}
+
 export function exchangeCode(
-  p: { code?: string | null; client_id?: string | null; redirect_uri?: string | null; code_verifier?: string | null; resource?: string | null },
+  p: {
+    code?: string | null; client_id?: string | null; client_secret?: string | null;
+    redirect_uri?: string | null; code_verifier?: string | null; resource?: string | null;
+  },
   origin?: string,
   nowMs = Date.now(),
 ): Ok<{ tokens: Tokens }> | OAuthError {
-  if (!p.code || !p.client_id || !p.code_verifier) {
-    return err("invalid_request", "code, client_id and code_verifier are required");
-  }
+  if (!p.code || !p.client_id) return err("invalid_request", "code and client_id are required");
+  const denied = clientAuthenticated(p.client_id, p.client_secret);
+  if (denied) return denied;
   const store = load();
   const idx = store.codes.findIndex((c) => c.hash === hash(p.code!));
   const code = idx >= 0 ? store.codes[idx] : null;
@@ -394,10 +487,12 @@ export function exchangeCode(
     save(store, nowMs);
     return err("invalid_grant", "redirect_uri does not match the authorization request");
   }
-  const challenge = crypto.createHash("sha256").update(p.code_verifier).digest("base64url");
-  if (challenge !== code.code_challenge) {
-    save(store, nowMs);
-    return err("invalid_grant", "PKCE verification failed");
+  if (code.code_challenge) {
+    const challenge = p.code_verifier ? crypto.createHash("sha256").update(p.code_verifier).digest("base64url") : "";
+    if (challenge !== code.code_challenge) {
+      save(store, nowMs);
+      return err("invalid_grant", "PKCE verification failed");
+    }
   }
   if (p.resource && normaliseResource(p.resource) !== mcpResourceUrl(origin)) {
     save(store, nowMs);
@@ -408,7 +503,7 @@ export function exchangeCode(
     save(store, nowMs);
     return err("invalid_grant", "the account is no longer on the user list");
   }
-  const client = store.clients.find((c) => c.client_id === code.client_id);
+  const client = getClient(code.client_id);
   const grant: OAuthGrant = {
     id: crypto.randomBytes(6).toString("hex"),
     client_id: code.client_id,
@@ -430,10 +525,12 @@ export function exchangeCode(
 }
 
 export function refreshTokens(
-  p: { refresh_token?: string | null; client_id?: string | null; scope?: string | null },
+  p: { refresh_token?: string | null; client_id?: string | null; client_secret?: string | null; scope?: string | null },
   nowMs = Date.now(),
 ): Ok<{ tokens: Tokens }> | OAuthError {
   if (!p.refresh_token || !p.client_id) return err("invalid_request", "refresh_token and client_id are required");
+  const denied = clientAuthenticated(p.client_id, p.client_secret);
+  if (denied) return denied;
   const h = hash(p.refresh_token);
   const store = load();
   const grant = store.grants.find(
@@ -477,17 +574,30 @@ export function authenticateAccessToken(
   return { user: user.email, role: user.role, grantId: grant.id, clientName: grant.client_name };
 }
 
-/** RFC 7009: revoking either token of a grant ends the whole grant. */
-export function revokeToken(presented: string, nowMs = Date.now()): boolean {
+/**
+ * RFC 7009: revoking either token of a grant ends the whole grant. A
+ * public client's proof is the token itself; a grant that belongs to a
+ * configured confidential client also needs that client's secret, as the
+ * metadata advertises — an exposed access token must not be enough to end
+ * a 90-day refresh token (Codex review, PR #137). `revoked` says whether
+ * anything changed; `unauthorized` says the secret was missing or wrong.
+ */
+export function revokeToken(
+  presented: string,
+  auth: { client_id?: string | null; client_secret?: string | null } = {},
+  nowMs = Date.now(),
+): { revoked: boolean; unauthorized: boolean } {
   const h = hash(presented);
   const store = load();
-  const before = store.grants.length;
-  store.grants = store.grants.filter(
-    (g) => g.access_hash !== h && g.refresh_hash !== h && g.previous_refresh_hash !== h,
-  );
-  if (store.grants.length === before) return false;
+  const grant = store.grants.find((g) => g.access_hash === h || g.refresh_hash === h || g.previous_refresh_hash === h);
+  if (!grant) return { revoked: false, unauthorized: false };
+  if (auth.client_id && auth.client_id !== grant.client_id) return { revoked: false, unauthorized: false };
+  if (getClient(grant.client_id)?.confidential && !clientSecretOk(grant.client_id, auth.client_secret)) {
+    return { revoked: false, unauthorized: true };
+  }
+  store.grants = store.grants.filter((g) => g.id !== grant.id);
   save(store, nowMs);
-  return true;
+  return { revoked: true, unauthorized: false };
 }
 
 // ---- The person's view (the More screen) ----

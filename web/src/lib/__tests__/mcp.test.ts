@@ -397,6 +397,24 @@ describe("automations", () => {
     });
   });
 
+  it("shows a room-targeted vacuum clean as unsupported instead of flattening it into a whole-floor clean (Codex review, PR #134)", async () => {
+    const vac = deviceIdFor("vacuum.floor_6");
+    const stored = createAutomation({ name: "Kitchen clean", steps: [{ time: "10:00", actions: [
+      { type: "device", deviceId: vac, command: { command: "start_cleaning", segments: [16], repeat: 2 } },
+      { type: "device", deviceId: vac, command: { command: "return_to_dock" } },
+    ] }] }, "mcp");
+    const client = await connect();
+    const listed = json(await call(client, "list_automations")).automations[0];
+    expect(listed.steps[0].actions).toEqual([
+      { type: "device", deviceId: vac, unsupported: { command: "start_cleaning", segments: [16], repeat: 2 } },
+      { type: "device", deviceId: vac, command: "return_to_dock", value: null },
+    ]);
+    // Sending the listing back is refused by the schema, and nothing changes.
+    const r = await call(client, "update_automation", { id: stored.id, name: "Kitchen clean", steps: listed.steps });
+    expect(r.isError).toBe(true);
+    expect(listAutomations()[0].steps[0].actions[0]).toEqual({ type: "device", deviceId: vac, command: { command: "start_cleaning", segments: [16], repeat: 2 } });
+  });
+
   it("refuses what the app refuses: no trigger, two triggers, bad times, unknown rooms, the lock, the sauna, unknown scenes", async () => {
     const client = await connect();
     const cove = deviceIdFor(LOUNGE_COVE);

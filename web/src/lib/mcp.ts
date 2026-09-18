@@ -262,6 +262,11 @@ export function fromCommand(cmd: Record<string, unknown>): { command: string; va
   if (typeof name !== "string" || !(DEVICE_COMMANDS as readonly string[]).includes(name)) return { unsupported: cmd };
   const num = (k: string) => (typeof cmd[k] === "number" ? (cmd[k] as number) : null);
   switch (name) {
+    // A room-targeted clean carries segments/repeat the flattened shape has
+    // no words for; flattening it would turn a room clean into a whole-floor
+    // clean on the next update (Codex review, PR #134). Shown, not editable.
+    case "start_cleaning":
+      return cmd.segments != null || cmd.repeat != null ? { unsupported: cmd } : { command: name, value: null };
     case "set_brightness": return { command: name, value: num("brightnessPct") };
     case "set_position": return { command: name, value: num("positionPct") };
     case "set_temperature": return { command: name, value: num("temperature") };
@@ -588,7 +593,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
     {
       title: "Update an automation",
       description:
-        "Replace the name and steps of an automation this connection created (id from list_automations); it keeps its id and enabled state. " + STEP_DESCRIPTION,
+        "Replace the name and steps of an automation this connection created (id from list_automations); it keeps its id and enabled state. A listed action shown as `unsupported` (made in the app, e.g. a room-targeted vacuum clean) cannot be expressed here: leave that automation to the app rather than re-sending it. " + STEP_DESCRIPTION,
       inputSchema: {
         id: z4.string().min(1).max(120).describe("The automation id from list_automations."),
         name: z4.string().min(1).max(80),

@@ -57,7 +57,7 @@ import { callService } from "../ha";
 import { audit } from "../audit";
 import { saunaStart } from "../sauna";
 import { authenticateMcp, compactDevice, createHouseMcpServer, resolveRoom, type McpCaller } from "../mcp";
-import { registry } from "../registry";
+import { getDevice, registry } from "../registry";
 import { createScene } from "../scenes";
 
 const calls = vi.mocked(callService);
@@ -170,6 +170,18 @@ describe("get_home_state", () => {
     expect(home.devices.some((d: { kind: string }) => d.kind === "lock")).toBe(false);
     expect(home.devices.some((d: { id: string }) => d.id === deviceIdFor(FRONT_DOOR))).toBe(false);
     expect(home.houseTime).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  });
+
+  it("advertises only ids control_device accepts — never the display-only placeholders", async () => {
+    // The bed and white noise are unconfigured here, so the snapshot carries
+    // their placeholder cards; they are not registry devices.
+    const client = await connect();
+    const home = json(await call(client, "get_home_state"));
+    const ids: string[] = home.devices.map((d: { id: string }) => d.id);
+    expect(ids).not.toContain("master_bedroom__bed");
+    expect(ids).not.toContain("master_bedroom__white_noise");
+    for (const id of ids) expect(getDevice(id), id).toBeDefined();
+    for (const id of ids) expect(getDevice(id)!.visible, id).toBe(true);
   });
 
   it("filters by room, through a synonym", async () => {

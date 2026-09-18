@@ -71,8 +71,20 @@ export function authenticateMcp(req: NextRequest): McpCaller | null {
 }
 
 /** Devices an agent may know about: visible, and never the security tier. */
-function agentVisible(d: { visible?: boolean; kind: string }): boolean {
-  return d.visible !== false && d.kind !== "lock";
+function agentVisible(d: Device): boolean {
+  return d.visible && d.kind !== "lock";
+}
+
+/**
+ * The snapshot also carries display-only placeholder cards for features not
+ * yet configured (bed, noise, vacuums, lock) that are NOT registry devices —
+ * ids control_device would reject. The agent only ever sees ids it can
+ * act on, so a snapshot row counts only when the registry has it (Codex
+ * review, PR #131).
+ */
+function agentDevice(row: { id: string }): Device | undefined {
+  const d = getDevice(row.id);
+  return d && agentVisible(d) ? d : undefined;
 }
 
 /** Canonical room names, in entity-map order, from agent-visible devices. */
@@ -213,7 +225,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
       try {
         const snap = await homeSnapshot(caller.role);
         const devices = snap.devices
-          .filter((d) => agentVisible(d) && (!wanted || d.room === wanted))
+          .filter((d) => agentDevice(d) && (!wanted || d.room === wanted))
           .map(compactDevice);
         const now = nowParts();
         return ok({

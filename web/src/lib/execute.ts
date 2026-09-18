@@ -1,7 +1,17 @@
 import { CommandSchema, assertCommandAllowed, buildServiceCall, type Command } from "./commands";
 import { bedSetLevel, bedSideForDeviceId, bedSideOff, bedSideOn } from "./eightsleep";
 import { SLOW_SERVICE_TIMEOUT_MS, callService, getStates } from "./ha";
-import { DUPLICATE_WINDOW_MS, artFrameFollow, artFrames, pressOf, recordPress, spareWatched, sparesWatched, type PressScope } from "./artframes";
+import {
+  DUPLICATE_WINDOW_MS,
+  artFrameFollow,
+  artFrames,
+  pressOf,
+  recordPress,
+  spareWatched,
+  sparesWatched,
+  type PressScope,
+  type SensorRead,
+} from "./artframes";
 import { audit } from "./audit";
 import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
@@ -109,12 +119,19 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
     return;
   }
   // A Night press spares a set that is showing television (lib/artframes).
-  // One bulk read; a failed read spares nothing — only positive evidence.
-  // The door buttons ask for no sparing at all (`scope.spare === false`),
-  // and Exit never spares: the house is being left.
+  // One bulk read; a failed read spares nothing — only positive evidence,
+  // and only fresh evidence: the reading's `last_changed` travels with it,
+  // because the sensor sticks for days. The door buttons ask for no
+  // sparing at all (`scope.spare === false`), and Exit never spares: the
+  // house is being left.
   const states = follow.command === "turn_off" && scope.spare !== false && sparesWatched(device)
-    ? new Map((await getStates().catch(() => [])).map((s) => [s.entity_id, s.state]))
-    : new Map<string, string>();
+    ? new Map(
+        (await getStates().catch(() => [])).map((s) => [
+          s.entity_id,
+          { state: s.state, lastChanged: s.last_changed } satisfies SensorRead,
+        ]),
+      )
+    : new Map<string, SensorRead>();
   const { targets, spared } = spareWatched(frames, follow, (id) => states.get(id));
   const result = targets.length ? await executeOnDevices(targets, follow) : { total: 0, failed: [] };
   audit({

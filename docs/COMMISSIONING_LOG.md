@@ -2035,3 +2035,54 @@ says so. Optional: the smarthome-app user's id in the yaml's
 - [ ] Once a press from the wall and one from Alexa have each been seen
   end to end (`frames_turn_off` with user `ha:1.1.x` and `ha:voice-or-ui`
   in Activity), this entry is closed.
+
+## 2026-09-18 — The Lounge TV survives Night: a stuck sensor was sparing it
+
+Owner: "the big TV in the lounge is still not going off." Asked for a
+one-time off to test the set — not possible from the cloud session (no HA
+token, no LAN); the owner can send it from the Lounge TV card in the app
+or from HA (`media_player.turn_off` on `media_player.lounge_tv_qe85ls03dauxsq`),
+and Activity distinguishes the two ways this fails.
+
+### Why
+
+The 09-10 "spare a set that is being watched" rule reads SmartThings'
+`tvChannelName` for the Den and Lounge TVs and spares any set whose
+reading is not `art`. That sensor is known to stick — on 09-17 the Lounge
+TV's read a video app for four days while the set showed art — and the
+rule took the stale reading as evidence every night. The door buttons
+were already told to ignore it (`spare: false`, 09-17); Night, Alexa and
+the app's own button were not. Expected in Activity: every
+`frames_turn_off` from those roads carrying `spared: ["lounge__lounge_tv"]`.
+
+### What changed
+
+- **Evidence must be fresh.** `beingWatched` now takes the reading *and*
+  its `last_changed` (HA sends both in the bulk state read), and a non-art
+  reading spares a set only if it changed within
+  `WATCHED_EVIDENCE_MAX_AGE_MS` — four hours, enough for a film or a match
+  started that evening. A stale reading, a missing or unparseable
+  timestamp, an unavailable sensor: all read as art, as before. Night with
+  a genuinely watched set (sensor changed this evening) is unchanged.
+- Tests: the four-day-old `YouTube` reading no longer spares; the edge of
+  the window; readings without a timestamp.
+
+### Reading the Activity log after the next Night
+
+- `frames_turn_off` with `targets` including `lounge__lounge_tv` and no
+  `failed` → the set was commanded and should be dark; if it stayed lit,
+  the set ignored the held power key (not seen on the Dining sets; a
+  first for the 85").
+- `failed` naming the Lounge TV → HA refused or timed out: the Samsung TV
+  entity is unreachable (compare the Den TV, 09-10) — swap the row's
+  `entity_id` for the SmartThings `media_player.living_room_lounge_tv`
+  and keep the Samsung one as `wake_entity`.
+- `spared` still naming it → the sensor changed within four hours; check
+  its history in HA and, if it flapped without anyone watching, shorten
+  the window or drop `art_mode_entity` from the Lounge row.
+
+### Follow-ups
+
+- [ ] The real fix for "is it in art?" is still the local Art API sensor
+  (09-10 follow-up); the window is a stopgap that makes the stuck sensor
+  harmless.

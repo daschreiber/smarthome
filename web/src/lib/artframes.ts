@@ -31,8 +31,10 @@ import { registry, type Device } from "./registry";
  * is not in art mode is left alone** — it is being watched, or was left on
  * a programme, and either way the house should not cut it off. "In art"
  * is SmartThings' tvChannelName (`art_mode_entity` on the row), and only
- * POSITIVE evidence spares a set: an unavailable or unknown sensor reads as
- * art, so a missing signal never leaves a Frame lit all night.
+ * POSITIVE, FRESH evidence spares a set: an unavailable or unknown sensor
+ * reads as art, so a missing signal never leaves a Frame lit all night,
+ * and a reading that has not changed in hours is not evidence either
+ * (`WATCHED_EVIDENCE_MAX_AGE_MS` — the sensor sticks, 2026-09-18).
  */
 
 /** What the art-mode sensor reads while the set shows pictures. */
@@ -110,11 +112,40 @@ export function resetPressMemory(): void {
   lastPress.clear();
 }
 
-/** Is this Frame showing television right now, as far as its sensor knows? */
-export function beingWatched(frame: Device, state: string | undefined): boolean {
-  if (!frame.artModeEntityId) return false;
+/**
+ * How long a "television" reading counts as evidence that a set is being
+ * watched. The sensor is SmartThings' tvChannelName, and it sticks: the
+ * Lounge TV's read a video app for four days while the set showed art
+ * (2026-09-17), so every Night press spared the biggest screen in the
+ * house on the strength of a reading nobody had refreshed. A reading is a
+ * fact about the moment it changed, not about tonight; after this long it
+ * is no longer evidence, and the set is darkened like the others. Four
+ * hours outlasts a film or a match started that evening.
+ */
+export const WATCHED_EVIDENCE_MAX_AGE_MS = 4 * 60 * 60 * 1000;
+
+/** What the follower knows about an art-mode sensor: its reading and when
+ *  that reading last changed (HA's `last_changed`). */
+export interface SensorRead {
+  state?: string;
+  lastChanged?: string;
+}
+
+/**
+ * Is this Frame showing television right now, as far as its sensor knows?
+ * Only positive, FRESH evidence says yes: a non-art reading that changed
+ * within `WATCHED_EVIDENCE_MAX_AGE_MS`. No sensor, no reading, an
+ * unavailable / unknown state, a missing or unparseable timestamp, or a
+ * reading older than the window all read as art.
+ */
+export function beingWatched(frame: Device, read: SensorRead | undefined, now = Date.now()): boolean {
+  if (!frame.artModeEntityId || !read) return false;
+  const { state, lastChanged } = read;
   if (state == null || state === "" || state === "unavailable" || state === "unknown") return false;
-  return state !== ART_MODE;
+  if (state === ART_MODE) return false;
+  const changedAt = lastChanged ? Date.parse(lastChanged) : NaN;
+  if (!Number.isFinite(changedAt)) return false;
+  return now - changedAt <= WATCHED_EVIDENCE_MAX_AGE_MS;
 }
 
 /**
@@ -125,10 +156,11 @@ export function beingWatched(frame: Device, state: string | undefined): boolean 
 export function spareWatched(
   frames: Device[],
   follow: Command,
-  stateOf: (entityId: string) => string | undefined,
+  readOf: (entityId: string) => SensorRead | undefined,
+  now = Date.now(),
 ): { targets: Device[]; spared: Device[] } {
   if (follow.command !== "turn_off") return { targets: frames, spared: [] };
-  const spared = frames.filter((f) => f.artModeEntityId && beingWatched(f, stateOf(f.artModeEntityId)));
+  const spared = frames.filter((f) => f.artModeEntityId && beingWatched(f, readOf(f.artModeEntityId), now));
   return { targets: frames.filter((f) => !spared.includes(f)), spared };
 }
 

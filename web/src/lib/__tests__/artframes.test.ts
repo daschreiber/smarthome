@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { MORNING_SCENE_SWITCH, NIGHT_SCENE_SWITCH, artFrameFollow, artFrames, beingWatched, spareWatched } from "../artframes";
+import {
+  MORNING_SCENE_SWITCH,
+  NIGHT_SCENE_SWITCH,
+  WATCHED_EVIDENCE_MAX_AGE_MS,
+  artFrameFollow,
+  artFrames,
+  beingWatched,
+  spareWatched,
+  type SensorRead,
+} from "../artframes";
 import type { Device } from "../registry";
 
 /**
@@ -88,40 +97,67 @@ const diningLeft: Device = {
   artModeEntityId: undefined,
 };
 
+// "Now" for the freshness tests, and readings that changed some time before.
+const NOW = Date.parse("2026-09-18T20:00:00Z");
+const ago = (ms: number) => new Date(NOW - ms).toISOString();
+const HOUR = 60 * 60 * 1000;
+const fresh = (state: string) => ({ state, lastChanged: ago(HOUR) });
+
 describe("beingWatched", () => {
-  it("television is anything the sensor reports that is not art", () => {
-    expect(beingWatched(lounge, "art")).toBe(false);
-    expect(beingWatched(lounge, "HDMI 1")).toBe(true);
-    expect(beingWatched(lounge, "BBC One")).toBe(true);
+  it("television is anything the sensor reports that is not art — while the reading is fresh", () => {
+    expect(beingWatched(lounge, fresh("art"), NOW)).toBe(false);
+    expect(beingWatched(lounge, fresh("HDMI 1"), NOW)).toBe(true);
+    expect(beingWatched(lounge, fresh("BBC One"), NOW)).toBe(true);
   });
 
   it("only positive evidence spares a set — no sensor, no reading, unavailable all read as art", () => {
-    expect(beingWatched(lounge, undefined)).toBe(false);
-    expect(beingWatched(lounge, "")).toBe(false);
-    expect(beingWatched(lounge, "unavailable")).toBe(false);
-    expect(beingWatched(lounge, "unknown")).toBe(false);
-    expect(beingWatched(diningLeft, "HDMI 1")).toBe(false); // no art_mode_entity on the row
+    expect(beingWatched(lounge, undefined, NOW)).toBe(false);
+    expect(beingWatched(lounge, fresh(""), NOW)).toBe(false);
+    expect(beingWatched(lounge, fresh("unavailable"), NOW)).toBe(false);
+    expect(beingWatched(lounge, fresh("unknown"), NOW)).toBe(false);
+    expect(beingWatched(diningLeft, fresh("HDMI 1"), NOW)).toBe(false); // no art_mode_entity on the row
+  });
+
+  it("a stale reading is not evidence: the sensor that stuck on a video app for four days", () => {
+    expect(WATCHED_EVIDENCE_MAX_AGE_MS).toBe(4 * HOUR);
+    expect(beingWatched(lounge, { state: "YouTube", lastChanged: ago(4 * 24 * HOUR) }, NOW)).toBe(false);
+    expect(beingWatched(lounge, { state: "YouTube", lastChanged: ago(4 * HOUR + 1) }, NOW)).toBe(false);
+    expect(beingWatched(lounge, { state: "YouTube", lastChanged: ago(4 * HOUR) }, NOW)).toBe(true);
+    expect(beingWatched(lounge, { state: "YouTube", lastChanged: ago(5 * 60 * 1000) }, NOW)).toBe(true);
+  });
+
+  it("a reading with no usable timestamp is not evidence either", () => {
+    expect(beingWatched(lounge, { state: "HDMI 1" }, NOW)).toBe(false);
+    expect(beingWatched(lounge, { state: "HDMI 1", lastChanged: "" }, NOW)).toBe(false);
+    expect(beingWatched(lounge, { state: "HDMI 1", lastChanged: "not a date" }, NOW)).toBe(false);
   });
 });
 
 describe("spareWatched", () => {
-  const states: Record<string, string> = { "sensor.living_room_lounge_tv_tv_channel_name": "HDMI 1" };
-  const stateOf = (id: string) => states[id];
+  const reads: Record<string, SensorRead> = { "sensor.living_room_lounge_tv_tv_channel_name": fresh("HDMI 1") };
+  const readOf = (id: string) => reads[id];
 
   it("Night spares the set that is showing television and darkens the rest", () => {
-    const { targets, spared } = spareWatched([lounge, diningLeft], { command: "turn_off" }, stateOf);
+    const { targets, spared } = spareWatched([lounge, diningLeft], { command: "turn_off" }, readOf, NOW);
     expect(spared.map((d) => d.id)).toEqual(["lounge__lounge_tv"]);
     expect(targets.map((d) => d.id)).toEqual(["dining__dining_left"]);
   });
 
   it("Morning takes them all — turning on a set that is on changes nothing", () => {
-    const { targets, spared } = spareWatched([lounge, diningLeft], { command: "turn_on" }, stateOf);
+    const { targets, spared } = spareWatched([lounge, diningLeft], { command: "turn_on" }, readOf, NOW);
     expect(spared).toEqual([]);
     expect(targets).toHaveLength(2);
   });
 
   it("a set back in art is darkened like the others", () => {
-    const { spared } = spareWatched([lounge], { command: "turn_off" }, () => "art");
+    const { spared } = spareWatched([lounge], { command: "turn_off" }, () => fresh("art"), NOW);
     expect(spared).toEqual([]);
+  });
+
+  it("a set whose sensor stuck days ago is darkened like the others", () => {
+    const stuck = () => ({ state: "YouTube", lastChanged: ago(4 * 24 * HOUR) });
+    const { targets, spared } = spareWatched([lounge, diningLeft], { command: "turn_off" }, stuck, NOW);
+    expect(spared).toEqual([]);
+    expect(targets).toHaveLength(2);
   });
 });

@@ -118,7 +118,10 @@ command route and automation steps), with one exception: **a Night press
 leaves a Den or Lounge set that is not in art mode alone** — it is being
 watched. "In art" is SmartThings' `tvChannelName` sensor (`art_mode_entity`
 on the row); only positive evidence spares a set, an unavailable sensor
-reads as art. A Frame that is on sits in art mode, so "on" is "on as art".
+reads as art — and since 2026-09-18 only *fresh* evidence: the sensor
+sticks (the Lounge TV's read a video app for four days of art), so a
+reading that last changed more than four hours ago no longer spares a
+set. A Frame that is on sits in art mode, so "on" is "on as art".
 The owner presses Night and Morning **on the wall**, or says it to Alexa
 or Siri, none of which the app can see by itself; since 2026-09-16 Home
 Assistant relays both the keypad's KNX telegram and the service call to

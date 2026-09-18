@@ -70,6 +70,8 @@ const audits = vi.mocked(audit);
 
 const deviceIdFor = (entityId: string) => registry().devices.find((d) => d.entityId === entityId)!.id;
 
+const ADMIN: McpCaller = { user: "daniel@example.com", role: "admin" };
+
 async function connect(caller: McpCaller = { user: "mcp", role: "guest" }): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await createHouseMcpServer(caller).connect(serverSide);
@@ -350,7 +352,7 @@ describe("scenes", () => {
 
 describe("automations", () => {
   it("creates a clock-and-sun schedule from the agent's shape, resolving rooms through synonyms", async () => {
-    const client = await connect();
+    const client = await connect(ADMIN);
     const cove = deviceIdFor(LOUNGE_COVE);
     const r = json(await call(client, "create_automation", {
       name: "Evening lounge",
@@ -361,21 +363,21 @@ describe("automations", () => {
       ],
     }));
     expect(r.ok).toBe(true);
-    expect(r.automation).toMatchObject({ id: "evening_lounge", enabled: true, createdBy: "mcp", editable: true, activeWhen: "always" });
+    expect(r.automation).toMatchObject({ id: "evening_lounge", enabled: true, createdBy: "daniel@example.com", editable: true, activeWhen: "always" });
     const stored = listAutomations()[0];
     expect(stored.steps).toEqual([
       { time: "16:00", days: [1, 2, 3, 4, 5], actions: [{ type: "room", room: "Lounge", command: "lights_on" }] },
       { sun: "sunset", sunOffsetMinutes: -15, actions: [{ type: "device", deviceId: cove, command: { command: "set_brightness", brightnessPct: 30 } }] },
       { time: "23:00", date: "2026-12-24", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] },
     ]);
-    expect(audits.mock.calls[0][0]).toMatchObject({ user: "mcp", command: "create_automation", entityId: "automation.evening_lounge", ok: true });
+    expect(audits.mock.calls[0][0]).toMatchObject({ user: "daniel@example.com", command: "create_automation", entityId: "automation.evening_lounge", ok: true });
     const listed = json(await call(client, "list_automations"));
     expect(listed.automations).toHaveLength(1);
     expect(listed.houseTime).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
   });
 
   it("lists steps in its own vocabulary, so list → update round-trips (Codex review, PR #132)", async () => {
-    const client = await connect();
+    const client = await connect(ADMIN);
     const cove = deviceIdFor(LOUNGE_COVE);
     const made = json(await call(client, "create_automation", {
       name: "Dim", steps: [{ time: "21:00", actions: [{ type: "device", deviceId: cove, command: "set_brightness", value: 30 }, { type: "device", deviceId: cove, command: "turn_off", value: null }] }],
@@ -403,7 +405,7 @@ describe("automations", () => {
       { type: "device", deviceId: vac, command: { command: "start_cleaning", segments: [16], repeat: 2 } },
       { type: "device", deviceId: vac, command: { command: "return_to_dock" } },
     ] }] }, "mcp");
-    const client = await connect();
+    const client = await connect(ADMIN);
     const listed = json(await call(client, "list_automations")).automations[0];
     expect(listed.steps[0].actions).toEqual([
       { type: "device", deviceId: vac, unsupported: { command: "start_cleaning", segments: [16], repeat: 2 } },
@@ -416,7 +418,7 @@ describe("automations", () => {
   });
 
   it("refuses what the app refuses: no trigger, two triggers, bad times, unknown rooms, the lock, the sauna, unknown scenes", async () => {
-    const client = await connect();
+    const client = await connect(ADMIN);
     const cove = deviceIdFor(LOUNGE_COVE);
     const cases: Array<[Record<string, unknown>, RegExp]> = [
       [{ actions: [{ type: "device", deviceId: cove, command: "turn_on", value: null }] }, /exactly one trigger/],
@@ -436,27 +438,28 @@ describe("automations", () => {
     expect(listAutomations()).toHaveLength(0);
   });
 
-  it("edits and deletes only its own; pauses anyone's", async () => {
-    const theirs = createAutomation({ name: "Theirs", steps: [{ time: "08:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] }, "daniel");
-    const client = await connect();
+  it("edits and deletes under the ownership rule; pauses anyone's", async () => {
+    // As a MEMBER: own records only. (An admin may delete anyone's.)
+    const theirs = createAutomation({ name: "Theirs", steps: [{ time: "08:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] }, "ruth");
+    const client = await connect({ user: "mcp", role: "member" });
     const mine = json(await call(client, "create_automation", {
-      name: "Mine", steps: [{ time: "09:00", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] }],
+      name: "Mine", steps: [{ time: "09:00", date: "2026-12-24", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] }],
     })).automation;
     const listed = json(await call(client, "list_automations")).automations;
     expect(listed.map((a: { id: string; editable: boolean }) => [a.id, a.editable])).toEqual([[theirs.id, false], [mine.id, true]]);
 
     const denied = await call(client, "delete_automation", { id: theirs.id });
     expect(denied.isError).toBe(true);
-    expect(text(denied)).toMatch(/created by daniel/);
-    const deniedEdit = await call(client, "update_automation", { id: theirs.id, name: "X", steps: [{ time: "10:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] });
+    expect(text(denied)).toMatch(/created by ruth/);
+    const deniedEdit = await call(client, "update_automation", { id: theirs.id, name: "X", steps: [{ time: "10:00", date: "2026-12-24", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] });
     expect(deniedEdit.isError).toBe(true);
 
     const paused = json(await call(client, "set_automation_enabled", { id: theirs.id, enabled: false }));
     expect(paused).toMatchObject({ ok: true, enabled: false });
     expect(listAutomations().find((a) => a.id === theirs.id)!.enabled).toBe(false);
 
-    const edited = json(await call(client, "update_automation", { id: mine.id, name: "Mine v2", steps: [{ sun: "sunrise", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] }] }));
-    expect(edited.automation).toMatchObject({ id: mine.id, name: "Mine v2", steps: [{ sun: "sunrise", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] }] });
+    const edited = json(await call(client, "update_automation", { id: mine.id, name: "Mine v2", steps: [{ sun: "sunrise", date: "2026-12-25", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] }] }));
+    expect(edited.automation).toMatchObject({ id: mine.id, name: "Mine v2", steps: [{ sun: "sunrise", date: "2026-12-25", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] }] });
 
     const gone = json(await call(client, "delete_automation", { id: mine.id }));
     expect(gone.ok).toBe(true);
@@ -464,13 +467,39 @@ describe("automations", () => {
   });
 });
 
+describe("standing rules are the admin's", () => {
+  it("a non-admin may schedule one-offs only, and no timers", async () => {
+    const guest = await connect({ user: "guest@example.com", role: "guest" });
+    const recurring = await call(guest, "create_automation", { name: "Every day", steps: [{ time: "07:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] });
+    expect(recurring.isError).toBe(true);
+    expect(text(recurring)).toMatch(/only the house admin can create a recurring automation/);
+    const mixed = await call(guest, "create_automation", { name: "Mixed", steps: [
+      { time: "07:00", date: "2026-12-24", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] },
+      { sun: "sunset", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] },
+    ] });
+    expect(mixed.isError).toBe(true);
+    const oneOff = json(await call(guest, "create_automation", { name: "Tomorrow", steps: [{ time: "07:00", date: "2026-12-24", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] }));
+    expect(oneOff.ok).toBe(true);
+    const escalate = await call(guest, "update_automation", { id: oneOff.automation.id, name: "Tomorrow", steps: [{ time: "07:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] });
+    expect(escalate.isError).toBe(true);
+    expect(listAutomations()[0].steps[0].date).toBe("2026-12-24");
+    const timer = await call(guest, "create_timer", { deviceId: deviceIdFor(LOUNGE_COVE), afterMinutes: 10 });
+    expect(timer.isError).toBe(true);
+    expect(text(timer)).toMatch(/only the house admin/);
+    expect(listTimers()).toEqual([]);
+    // The admin's agent is unrestricted.
+    const admin = await connect(ADMIN);
+    expect(json(await call(admin, "create_automation", { name: "Every day", steps: [{ time: "07:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] })).ok).toBe(true);
+  });
+});
+
 describe("timers", () => {
   it("creates, lists, and deletes an auto-off timer; refuses the bed, the lock, and other people's", async () => {
-    const client = await connect();
+    const client = await connect(ADMIN);
     const cove = deviceIdFor(LOUNGE_COVE);
     const made = json(await call(client, "create_timer", { deviceId: cove, afterMinutes: 30 }));
     expect(made.timer).toMatchObject({ deviceId: cove, device: "Lounge Cove", room: "Lounge", afterMinutes: 30 });
-    expect(audits.mock.calls[0][0]).toMatchObject({ user: "mcp", command: "create_timer", deviceId: cove, args: { afterMinutes: 30, via: "mcp" } });
+    expect(audits.mock.calls[0][0]).toMatchObject({ user: "daniel@example.com", command: "create_timer", deviceId: cove, args: { afterMinutes: 30, via: "mcp" } });
 
     const again = await call(client, "create_timer", { deviceId: cove, afterMinutes: 10 });
     expect(again.isError).toBe(true);
@@ -480,11 +509,12 @@ describe("timers", () => {
     const sauna = await call(client, "create_timer", { deviceId: "sauna__klafs_sauna", afterMinutes: 10 });
     expect(text(sauna)).toMatch(/manages its own runtime/);
 
-    const theirs = createTimer(deviceIdFor(LOUNGE_SPOTS), 5, "daniel");
+    const theirs = createTimer(deviceIdFor(LOUNGE_SPOTS), 5, "ruth");
     const listed = json(await call(client, "list_timers")).timers;
-    expect(listed.map((t: { id: string; editable: boolean }) => [t.id, t.editable])).toEqual([[made.timer.id, true], [theirs.id, false]]);
+    expect(listed.map((t: { id: string; editable: boolean }) => [t.id, t.editable])).toEqual([[made.timer.id, true], [theirs.id, true]]); // admin: all editable
 
-    const denied = await call(client, "delete_timer", { id: theirs.id });
+    const member = await connect({ user: "mcp", role: "member" });
+    const denied = await call(member, "delete_timer", { id: theirs.id });
     expect(denied.isError).toBe(true);
     const gone = json(await call(client, "delete_timer", { id: made.timer.id }));
     expect(gone.ok).toBe(true);

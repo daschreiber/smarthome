@@ -38,15 +38,17 @@ import type { Role } from "./users";
  * typed commands, per-kind bounds, the shared executor (lib/execute), and
  * an audit line per action. Nothing here talks to Home Assistant directly.
  *
- * Trust: an agent holding the MCP token is a GUEST of the house, plus
- * scheduling (owner decision, 2026-09-18). It can read state, command
- * devices, run scenes, and create automations and auto-off timers; it may
- * edit or delete only what it created (lib/permissions canDeleteRecord,
- * as a guest). It cannot capture scenes, flip Away, operate the door locks
- * (not even see them), or read the activity log. The sauna heater still
- * needs a human's explicit go-ahead relayed as `confirm: true`, and is
- * never schedulable from here. Locks stay out of the vocabulary entirely,
- * as they do for the assistant (lib/assistant buildSystemPrompt).
+ * Trust: an agent is the person who signed in (lib/oauth), or — with the
+ * legacy shared token — a GUEST named "mcp". It can read state, command
+ * devices, run scenes, and schedule; it may edit or delete only what its
+ * person may (lib/permissions canDeleteRecord). Standing rules — recurring
+ * automations and auto-off timers — are the house admin's alone (owner
+ * decision, 2026-09-18); everyone else schedules one-offs. It cannot
+ * capture scenes, flip Away, operate the door locks (not even see them),
+ * or read the activity log. The sauna heater still needs a human's
+ * explicit go-ahead relayed as `confirm: true`, and is never schedulable
+ * from here. Locks stay out of the vocabulary entirely, as they do for the
+ * assistant (lib/assistant buildSystemPrompt).
  */
 
 export interface McpCaller {
@@ -188,7 +190,7 @@ function commandHint(d: Device): string {
   return hints.join("; ");
 }
 
-const INSTRUCTIONS = `You are connected to a private smart home (Control4 + KNX behind Home Assistant, with a few extra devices) through its own app. Read state with get_home_state and act with control_device, set_room_lights and activate_scene. Schedule with create_automation (clock or sunrise/sunset steps, recurring by weekday or one-shot by date) and create_timer (auto-off N minutes after a device turns on). Only ids returned by these tools are valid: never invent a deviceId, sceneId, automation id or room. Values: brightness, shade position and volume are percent 0-100; temperatures are °C (rooms 10-32, sauna 40-100); bed warmth is Eight Sleep's -100…+100 scale, not degrees. "The lights in X" means set_room_lights (or a room action in an automation), which sweeps real lights only (never fans, vents, towel rails or floor heating). Relative dates ("tomorrow", "Saturday") resolve against the houseTime that get_home_state and list_automations report; a one-shot must carry its resolved date. Jewish holidays already follow Shabbat (a Yom Tov runs the Saturday automations, its eve the Friday ones), so never schedule one-shot copies of Shabbat automations for a holiday. The sauna heater is safety-sensitive: command it only when the person explicitly asked, tell them it will start or stop the heater, and pass confirm: true only after they agreed; it cannot be scheduled from here. Door locks, gates and alarms are not available here by policy. Commands answer "sent" the moment Home Assistant accepts them; read get_home_state a few seconds later to see the result. You may edit or delete only the automations and timers you created. Every action is written to the house's audit log under this connection's name.`;
+const INSTRUCTIONS = `You are connected to a private smart home (Control4 + KNX behind Home Assistant, with a few extra devices) through its own app. Read state with get_home_state and act with control_device, set_room_lights and activate_scene. Schedule with create_automation (clock or sunrise/sunset steps, recurring by weekday or one-shot by date) and create_timer (auto-off N minutes after a device turns on). Only ids returned by these tools are valid: never invent a deviceId, sceneId, automation id or room. Values: brightness, shade position and volume are percent 0-100; temperatures are °C (rooms 10-32, sauna 40-100); bed warmth is Eight Sleep's -100…+100 scale, not degrees. "The lights in X" means set_room_lights (or a room action in an automation), which sweeps real lights only (never fans, vents, towel rails or floor heating). Relative dates ("tomorrow", "Saturday") resolve against the houseTime that get_home_state and list_automations report; a one-shot must carry its resolved date. Jewish holidays already follow Shabbat (a Yom Tov runs the Saturday automations, its eve the Friday ones), so never schedule one-shot copies of Shabbat automations for a holiday. The sauna heater is safety-sensitive: command it only when the person explicitly asked, tell them it will start or stop the heater, and pass confirm: true only after they agreed; it cannot be scheduled from here. Door locks, gates and alarms are not available here by policy. Commands answer "sent" the moment Home Assistant accepts them; read get_home_state a few seconds later to see the result. Standing rules are the house admin's: a recurring automation or an auto-off timer can be created only when the connected person is an admin; anyone else may schedule one-offs (every step dated). You may edit or delete only the automations and timers you created. Every action is written to the house's audit log under this connection's name.`;
 
 /** The MCP step shape: the assistant's step with every trigger field
  *  optional (an agent should not have to spell out nulls), actions kept
@@ -203,7 +205,7 @@ type McpStep = z4.infer<typeof McpStepSchema>;
  * unattended, rooms resolve through synonyms to their canonical name, and
  * scene ids must exist. Throws with a plain sentence.
  */
-export function buildAutomationSpec(name: string, steps: McpStep[]): AutomationSpec {
+export function buildAutomationSpec(name: string, steps: McpStep[], caller: McpCaller): AutomationSpec {
   const actions = (list: LlmAction[]): LlmAction[] =>
     list.map((a) => {
       if (a.type === "device") {
@@ -245,6 +247,11 @@ export function buildAutomationSpec(name: string, steps: McpStep[]): AutomationS
   if (!parsed.success) {
     const first = parsed.error.issues[0];
     throw new Error(`${first?.path.join(".") || "automation"}: ${first?.message ?? "invalid"}`);
+  }
+  // Standing rules are the owner's (owner decision, 2026-09-18): anyone
+  // else's agent may schedule one-offs only — every step dated.
+  if (caller.role !== "admin" && parsed.data.steps.some((st) => !st.date)) {
+    throw new Error("only the house admin can create a recurring automation; give every step a date to make it one-off");
   }
   return parsed.data;
 }
@@ -569,7 +576,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
       title: "Create an automation",
       description:
         "Schedule one or more steps under a name; the house runs them on its own clock from now on. " + STEP_DESCRIPTION +
-        " Only devices from get_home_state, rooms from list_rooms, and scenes from list_scenes are valid; the sauna cannot be scheduled. Say back to the person exactly what will run and when.",
+        " Only devices from get_home_state, rooms from list_rooms, and scenes from list_scenes are valid; the sauna cannot be scheduled. Recurring schedules are the house admin's alone: for anyone else every step must carry a `date` (a one-off). Say back to the person exactly what will run and when.",
       inputSchema: {
         name: z4.string().min(1).max(80).describe("A short name, e.g. \"Kitchen lights weekday morning\"."),
         steps: z4.array(McpStepSchema).min(1).max(12).describe("The scheduled steps."),
@@ -578,7 +585,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
     },
     async ({ name, steps }) => {
       try {
-        const auto = createAutomation(buildAutomationSpec(name, steps), caller.user);
+        const auto = createAutomation(buildAutomationSpec(name, steps, caller), caller.user);
         programmingLine(caller, `automation.${auto.id}`, "create_automation", { name: auto.name, steps: auto.steps.length });
         return ok({ ok: true, automation: automationView(auto, caller) });
       } catch (err) {
@@ -608,7 +615,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
         return fail(`"${target.name}" was created by ${target.createdBy}; this connection may only change automations it created`);
       }
       try {
-        const auto = updateAutomation(id, buildAutomationSpec(name, steps));
+        const auto = updateAutomation(id, buildAutomationSpec(name, steps, caller));
         programmingLine(caller, `automation.${auto.id}`, "update_automation", { name: auto.name, steps: auto.steps.length });
         return ok({ ok: true, automation: automationView(auto, caller) });
       } catch (err) {
@@ -687,7 +694,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
     {
       title: "Create an auto-off timer",
       description:
-        "Make a device switch itself off N minutes (1-720) after it turns on, every time, starting now if it is on. Lights, media, underfloor heating; not the sauna or the bed. A device has at most one timer.",
+        "Make a device switch itself off N minutes (1-720) after it turns on, every time, starting now if it is on. Lights, media, underfloor heating; not the sauna or the bed. A device has at most one timer. House admin only — a timer is a standing rule.",
       inputSchema: {
         deviceId: z.string().min(1).max(120).describe("The device id from get_home_state."),
         afterMinutes: z.number().int().min(1).max(720).describe("Minutes after turn-on."),
@@ -695,6 +702,8 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ deviceId, afterMinutes }) => {
+      // A timer is a standing rule: the owner's to make, like recurring automations.
+      if (caller.role !== "admin") return fail("only the house admin can create auto-off timers");
       const device = agentDevice({ id: deviceId });
       if (!device) return fail(`unknown device "${deviceId}" — use the ids returned by get_home_state`);
       try {

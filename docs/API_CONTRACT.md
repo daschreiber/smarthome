@@ -306,7 +306,8 @@ the ordinary session cookie / `x-app-key`, acting as that caller. Tools:
 `lib/execute`); `create_automation`, `update_automation`,
 `set_automation_enabled`, `delete_automation`, `create_timer`,
 `delete_timer` (the same stores as `/api/automations` and `/api/timers`;
-edit/delete under the ownership rule, as a guest). Door locks are absent
+recurring automations and timers are admin-only, everyone else schedules
+one-offs; edit/delete under the ownership rule). Door locks are absent
 from it entirely; the sauna needs `confirm: true` and is never schedulable;
 every action is audited with `via: "mcp"`. `GET` and `DELETE` answer 405.
 

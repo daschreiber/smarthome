@@ -41,9 +41,9 @@ import type { Role } from "./users";
  * Trust: an agent is the person who signed in (lib/oauth), or — with the
  * legacy shared token — a GUEST named "mcp". It can read state, command
  * devices, run scenes, and schedule; it may edit or delete only what its
- * person may (lib/permissions canDeleteRecord). Standing rules — recurring
- * automations and auto-off timers — are the house admin's alone (owner
- * decision, 2026-09-18); everyone else schedules one-offs. It cannot
+ * person may (lib/permissions canDeleteRecord). Recurring automations are
+ * the house admin's alone (owner decision, 2026-09-18); everyone else
+ * schedules one-offs, and auto-off timers are open to all. It cannot
  * capture scenes, flip Away, operate the door locks (not even see them),
  * or read the activity log. The sauna heater still needs a human's
  * explicit go-ahead relayed as `confirm: true`, and is never schedulable
@@ -190,7 +190,7 @@ function commandHint(d: Device): string {
   return hints.join("; ");
 }
 
-const INSTRUCTIONS = `You are connected to a private smart home (Control4 + KNX behind Home Assistant, with a few extra devices) through its own app. Read state with get_home_state and act with control_device, set_room_lights and activate_scene. Schedule with create_automation (clock or sunrise/sunset steps, recurring by weekday or one-shot by date) and create_timer (auto-off N minutes after a device turns on). Only ids returned by these tools are valid: never invent a deviceId, sceneId, automation id or room. Values: brightness, shade position and volume are percent 0-100; temperatures are °C (rooms 10-32, sauna 40-100); bed warmth is Eight Sleep's -100…+100 scale, not degrees. "The lights in X" means set_room_lights (or a room action in an automation), which sweeps real lights only (never fans, vents, towel rails or floor heating). Relative dates ("tomorrow", "Saturday") resolve against the houseTime that get_home_state and list_automations report; a one-shot must carry its resolved date. Jewish holidays already follow Shabbat (a Yom Tov runs the Saturday automations, its eve the Friday ones), so never schedule one-shot copies of Shabbat automations for a holiday. The sauna heater is safety-sensitive: command it only when the person explicitly asked, tell them it will start or stop the heater, and pass confirm: true only after they agreed; it cannot be scheduled from here. Door locks, gates and alarms are not available here by policy. Commands answer "sent" the moment Home Assistant accepts them; read get_home_state a few seconds later to see the result. Standing rules are the house admin's: a recurring automation or an auto-off timer can be created only when the connected person is an admin; anyone else may schedule one-offs (every step dated). You may edit or delete only the automations and timers you created. Every action is written to the house's audit log under this connection's name.`;
+const INSTRUCTIONS = `You are connected to a private smart home (Control4 + KNX behind Home Assistant, with a few extra devices) through its own app. Read state with get_home_state and act with control_device, set_room_lights and activate_scene. Schedule with create_automation (clock or sunrise/sunset steps, recurring by weekday or one-shot by date) and create_timer (auto-off N minutes after a device turns on). Only ids returned by these tools are valid: never invent a deviceId, sceneId, automation id or room. Values: brightness, shade position and volume are percent 0-100; temperatures are °C (rooms 10-32, sauna 40-100); bed warmth is Eight Sleep's -100…+100 scale, not degrees. "The lights in X" means set_room_lights (or a room action in an automation), which sweeps real lights only (never fans, vents, towel rails or floor heating). Relative dates ("tomorrow", "Saturday") resolve against the houseTime that get_home_state and list_automations report; a one-shot must carry its resolved date. Jewish holidays already follow Shabbat (a Yom Tov runs the Saturday automations, its eve the Friday ones), so never schedule one-shot copies of Shabbat automations for a holiday. The sauna heater is safety-sensitive: command it only when the person explicitly asked, tell them it will start or stop the heater, and pass confirm: true only after they agreed; it cannot be scheduled from here. Door locks, gates and alarms are not available here by policy. Commands answer "sent" the moment Home Assistant accepts them; read get_home_state a few seconds later to see the result. Recurring automations are the house admin's: they can be created only when the connected person is an admin; anyone else may schedule one-offs (every step dated). Auto-off timers are open to everyone. You may edit or delete only the automations and timers you created. Every action is written to the house's audit log under this connection's name.`;
 
 /** The MCP step shape: the assistant's step with every trigger field
  *  optional (an agent should not have to spell out nulls), actions kept
@@ -694,7 +694,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
     {
       title: "Create an auto-off timer",
       description:
-        "Make a device switch itself off N minutes (1-720) after it turns on, every time, starting now if it is on. Lights, media, underfloor heating; not the sauna or the bed. A device has at most one timer. House admin only — a timer is a standing rule.",
+        "Make a device switch itself off N minutes (1-720) after it turns on, every time, starting now if it is on. Lights, media, underfloor heating; not the sauna or the bed. A device has at most one timer.",
       inputSchema: {
         deviceId: z.string().min(1).max(120).describe("The device id from get_home_state."),
         afterMinutes: z.number().int().min(1).max(720).describe("Minutes after turn-on."),
@@ -702,8 +702,6 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ deviceId, afterMinutes }) => {
-      // A timer is a standing rule: the owner's to make, like recurring automations.
-      if (caller.role !== "admin") return fail("only the house admin can create auto-off timers");
       const device = agentDevice({ id: deviceId });
       if (!device) return fail(`unknown device "${deviceId}" — use the ids returned by get_home_state`);
       try {

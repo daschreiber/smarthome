@@ -32,7 +32,7 @@ Code: `web/src/lib/mcp.ts` (the server and its tools), `web/src/app/api/mcp/rout
 | `update_automation` | replace name and steps of one this connection created | ownership: `canDeleteRecord` as a guest |
 | `set_automation_enabled` | pause / resume any automation | as the app: anyone who may program can toggle |
 | `delete_automation` | remove one this connection created | ownership |
-| `list_timers` / `create_timer` / `delete_timer` | auto-off rules: a device turns off N minutes (1–720) after it turns on | `lib/timers` rules (no sauna, no bed, no sleep sound, one per device); create is admin-only, delete needs ownership |
+| `list_timers` / `create_timer` / `delete_timer` | auto-off rules: a device turns off N minutes (1–720) after it turns on | `lib/timers` rules (no sauna, no bed, no sleep sound, one per device); delete needs ownership |
 
 Device ids are the app's ids (`lounge__lounge_cove`), never Home Assistant
 entity ids — the API contract's founding rule holds. Commands answer
@@ -53,10 +53,11 @@ the tool surface is the same, and it is narrower than the app:
 
 - It can read state, command devices, and run scenes.
 - It can schedule, with a line the app's own screens don't draw yet:
-  **standing rules are the admin's alone** (owner decision, 2026-09-18).
-  An admin's agent creates recurring automations and auto-off timers;
-  anyone else's agent creates one-offs only — every step must carry a
-  `date` — and no timers. Anyone may pause or resume any automation. Edit
+  **recurring automations are the admin's alone** (owner decision,
+  2026-09-18). An admin's agent creates recurring automations; anyone
+  else's agent creates one-offs only — every step must carry a `date`.
+  Auto-off timers are open to everyone. Anyone may pause or resume any
+  automation. Edit
   and delete follow the app's ownership rule (`canDeleteRecord`: your own,
   or anything as an admin), and an edit cannot turn a one-off into a
   recurring rule. Records carry `createdBy: <your email>`, so the

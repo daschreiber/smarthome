@@ -467,8 +467,8 @@ describe("automations", () => {
   });
 });
 
-describe("standing rules are the admin's", () => {
-  it("a non-admin may schedule one-offs only, and no timers", async () => {
+describe("recurring automations are the admin's", () => {
+  it("a non-admin may schedule one-offs only; timers are open to all", async () => {
     const guest = await connect({ user: "guest@example.com", role: "guest" });
     const recurring = await call(guest, "create_automation", { name: "Every day", steps: [{ time: "07:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] });
     expect(recurring.isError).toBe(true);
@@ -483,10 +483,9 @@ describe("standing rules are the admin's", () => {
     const escalate = await call(guest, "update_automation", { id: oneOff.automation.id, name: "Tomorrow", steps: [{ time: "07:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] });
     expect(escalate.isError).toBe(true);
     expect(listAutomations()[0].steps[0].date).toBe("2026-12-24");
-    const timer = await call(guest, "create_timer", { deviceId: deviceIdFor(LOUNGE_COVE), afterMinutes: 10 });
-    expect(timer.isError).toBe(true);
-    expect(text(timer)).toMatch(/only the house admin/);
-    expect(listTimers()).toEqual([]);
+    const timer = json(await call(guest, "create_timer", { deviceId: deviceIdFor(LOUNGE_COVE), afterMinutes: 10 }));
+    expect(timer.ok).toBe(true);
+    expect(listTimers()).toHaveLength(1);
     // The admin's agent is unrestricted.
     const admin = await connect(ADMIN);
     expect(json(await call(admin, "create_automation", { name: "Every day", steps: [{ time: "07:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] })).ok).toBe(true);

@@ -92,9 +92,11 @@ Deployed on Railway (branch `main` auto-deploys), installed as a PWA:
 - **Assistant** — "Ask the house" conversational control (Anthropic API),
   which only proposes typed actions the command layer validates.
 - **MCP server** — the same command layer offered to outside agents
-  (Claude Code, Claude Desktop) over the Model Context Protocol at
-  `POST /api/mcp`: read state, command devices, run scenes, as a guest of
-  the house, every action audited. [How to connect](docs/MCP_SERVER.md).
+  (Claude, ChatGPT, Claude Code) over the Model Context Protocol at
+  `POST /api/mcp`, with the app as its own OAuth sign-in so an agent
+  connects as *you*: read state, command devices, run scenes, schedule
+  automations and auto-off timers, every action audited under your name.
+  [How to connect](docs/MCP_SERVER.md).
 - **Accounts & audit** — password + Google sign-in, `admin/member/guest`
   roles, append-only audit log, password reset by email or admin link.
 - **Voice/ecosystem** — the same HA entities are exposed to Apple Home

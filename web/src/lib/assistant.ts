@@ -48,7 +48,9 @@ const LlmActionSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-const LlmStepSchema = z.object({
+/** One scheduled step in the assistant's (and the MCP server's) shape:
+ *  exactly one trigger — a clock time or a sun event — plus actions. */
+export const LlmStepSchema = z.object({
   // Exactly one trigger: a clock time OR a sun event. Null out the one you
   // aren't using (structured outputs disallow optionals).
   time: z.string().nullable(), // HH:MM 24h, or null when sun is set

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { audit } from "@/lib/audit";
-import { appBaseUrl, exchangeCodeForEmail, googleConfigured, verifyStateToken } from "@/lib/google";
+import { appBaseUrl, exchangeCodeForEmail, googleConfigured, safeNext, verifyStateToken } from "@/lib/google";
 import { createSessionToken } from "@/lib/session";
 import { getUser } from "@/lib/users";
 
@@ -11,11 +11,19 @@ import { getUser } from "@/lib/users";
  */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
+  // A sign-in started from the agent consent page goes back there — with
+  // its own error vocabulary, since that page's query string is the OAuth
+  // request and `error` already means something else on it.
+  const next = safeNext(req.cookies.get("oauth_next")?.value ?? null);
   const back = (q: string) => {
     // Redirects go to the browser: they must use the public base URL, not
     // the request origin (behind Railway's proxy that is 0.0.0.0:8080).
-    const res = NextResponse.redirect(new URL(`/?${q}`, appBaseUrl(url.origin)));
+    const target = next
+      ? `${next}${q ? `&signin=${q.replace(/^error=google-signin-/, "").replace(/^error=/, "")}` : ""}`
+      : `/?${q}`;
+    const res = NextResponse.redirect(new URL(target, appBaseUrl(url.origin)));
     res.cookies.delete("oauth_state");
+    res.cookies.delete("oauth_next");
     return res;
   };
 

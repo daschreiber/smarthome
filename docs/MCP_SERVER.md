@@ -2,9 +2,10 @@
 
 Landed 2026-09-18. The app exposes its own command layer to outside AI
 agents through the Model Context Protocol (MCP): `POST /api/mcp`, Streamable
-HTTP, stateless. Claude Code, Claude Desktop, and anything else that speaks
-MCP can read the house's state and command it — through the app, never
-around it.
+HTTP, stateless, with the app as its own OAuth authorization server so an
+agent connects *as a person*. Claude Code, Claude Desktop, claude.ai,
+ChatGPT, and anything else that speaks MCP can read the house's state and
+command it — through the app, never around it.
 
 Why this and not Google's Home MCP (announced 2026-09-16): that one reaches
 only devices in a Google Home graph, needs a Premium subscription and a US
@@ -26,6 +27,12 @@ Code: `web/src/lib/mcp.ts` (the server and its tools), `web/src/app/api/mcp/rout
 | `control_device` | one typed command to one device: `turn_on`, `turn_off`, `set_brightness`, `open`, `close`, `stop`, `set_position`, `set_temperature`, `set_volume`, `start_cleaning`, `pause_cleaning`, `return_to_dock`, `set_bed_level`, with `value` for the set_* commands | the assistant's exact vocabulary (`lib/assistant` `DEVICE_COMMANDS` → `toCommand`), validated by `lib/commands`, executed by `lib/execute` |
 | `set_room_lights` | a room's real lights on or off | group Lighting only, as everywhere else |
 | `activate_scene` | apply a scene by id | the sauna never replays from here |
+| `list_automations` | every scheduled rule with its steps, enabled/active state, creator, and whether this connection may edit it; plus the house time | read-only |
+| `create_automation` | schedule steps under a name: clock time or sunrise/sunset (± offset), weekdays or a one-shot date, actions on devices / rooms / scenes | the assistant's step shape (`LlmStepSchema`, trigger fields optional) → `toAutomationSpec` → `AutomationSpecSchema`; the sauna is never schedulable |
+| `update_automation` | replace name and steps of one this connection created | ownership: `canDeleteRecord` as a guest |
+| `set_automation_enabled` | pause / resume any automation | as the app: anyone who may program can toggle |
+| `delete_automation` | remove one this connection created | ownership |
+| `list_timers` / `create_timer` / `delete_timer` | auto-off rules: a device turns off N minutes (1–720) after it turns on | `lib/timers` rules (no sauna, no bed, one per device); delete needs ownership |
 
 Device ids are the app's ids (`lounge__lounge_cove`), never Home Assistant
 entity ids — the API contract's founding rule holds. Commands answer
@@ -39,35 +46,79 @@ not here, that everything is audited.
 
 ## Trust model
 
-An agent holding the MCP token is a **guest of the house**
-(`lib/permissions`: `guest`). Concretely:
+An agent connected through OAuth **is the person who consented**, with
+that person's role (`lib/permissions`); an agent holding the legacy shared
+`MCP_TOKEN` is a **guest of the house** (`guest`) named `mcp`. Either way
+the tool surface is the same, and it is narrower than the app:
 
 - It can read state, command devices, and run scenes.
-- It cannot create or delete scenes, automations, or timers, flip Away, or
-  read the activity log — nothing programmable.
+- It can create automations and auto-off timers, and pause or resume any
+  automation. It may edit or delete only what its person may (the app's
+  ownership rule, `canDeleteRecord`: your own, or anything as an admin).
+  Records carry `createdBy: <your email>`, so the Automations screen shows
+  which ones came through an agent as yours.
+- It cannot capture or delete scenes, flip Away, follow holidays, or read
+  the activity log — those stay in the app, whatever the role.
 - Door locks do not exist for it: not in `get_home_state`, not accepted by
   `control_device`. Alarm, gates and garage stay excluded by policy as they
   are everywhere.
 - The sauna heater is refused until the call carries `confirm: true`. The
   tool's description and the server instructions tell the agent to pass it
   only after the person explicitly agreed — the same "human says go" rule
-  as the app's press-and-confirm, relayed through the agent.
+  as the app's press-and-confirm, relayed through the agent. It can never
+  be put in an automation from here: a heater that starts unattended on a
+  schedule an agent wrote is not a guest's call.
 - A device Home Assistant reports `unavailable` is refused loudly
   (`lib/reachability`), not reported "sent" — the outage lesson.
-- Every action lands in the audit log as user `mcp` with `via: "mcp"` in
-  its args, so the Activity screen shows what the agent did.
+- Every action lands in the audit log under the person (or `mcp` for the
+  shared token) with `via: "mcp"` in its args, so the Activity screen
+  shows what the agent did and for whom.
 
-Auth, in `authenticateMcp`:
+### Who the agent is
 
-1. `Authorization: Bearer <MCP_TOKEN>` — the agent road. A bearer that
-   doesn't match, or a bearer with no `MCP_TOKEN` configured, is refused and
-   never falls through to the cookie. Constant-time compare.
-2. No bearer: the app's ordinary auth (`lib/auth`) — a signed-in session
-   cookie or `x-app-key`. Such a caller acts as itself, with its own role.
+Since 2026-09-18 the normal road is **OAuth: the agent connects as a
+person.** The app is its own OAuth 2.1 authorization server (`lib/oauth`):
+the client discovers it from the endpoint's 401, registers itself, sends
+you to the consent page (`/oauth/authorize` — sign in there if you aren't,
+password or Google), and exchanges the code for tokens bound to *your*
+account. From then on every MCP action audits under your email, with your
+role at the time of the call: a member's agent may program (automations,
+timers) and delete its own records; a guest's agent gets the guest tier.
+The user list stays the allow-list — removing someone ends their agents at
+the next request, exactly as it ends their cookie.
 
-`MCP_TOKEN` is its own secret, like `HA_HOOK_KEY`: it buys guest-level
-control through MCP and nothing else. Rotate it by changing the variable on
-Railway; every connected client then needs the new value.
+`authenticateMcp`, in order:
+
+1. `Authorization: Bearer <access token>` — an OAuth access token issued by
+   the app. Answers as the person who consented.
+2. `Authorization: Bearer <MCP_TOKEN>` — the optional shared token from the
+   first version, still honoured when the variable is set: answers as the
+   guest principal `mcp`. Leave it unset once every agent has moved to
+   OAuth.
+3. A bearer that is neither is refused and never falls through to the
+   cookie (constant-time compare on the shared token; hashed lookup for
+   access tokens). The 401 carries
+   `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource"`,
+   which is what starts a client's discovery.
+4. No bearer: the app's ordinary auth (`lib/auth`) — a signed-in session
+   cookie or `x-app-key`. Such a caller acts as itself.
+
+### The OAuth server, in one table
+
+| Endpoint | Standard | What it does |
+| --- | --- | --- |
+| `GET /.well-known/oauth-protected-resource` (and `…/api/mcp`) | RFC 9728 | names the resource (`/api/mcp`) and its authorization server (this app) |
+| `GET /.well-known/oauth-authorization-server` | RFC 8414 | the endpoints below, `code` + PKCE `S256`, public clients only |
+| `POST /api/oauth/register` | RFC 7591 | dynamic client registration: a name and redirect URIs (https, loopback http, or a native scheme); no client secrets — PKCE is the proof |
+| `GET /oauth/authorize` | RFC 6749 §4.1 | the consent page; validation first (`GET /api/oauth/authorize`), then sign-in if needed, then Allow / Deny (`POST /api/oauth/authorize`) |
+| `POST /api/oauth/token` | RFC 6749 §3.2, RFC 7636, RFC 8707 | `authorization_code` (single-use, 10 min, verifier checked) and `refresh_token` (rotated, 2-min grace for a lost response); `resource` must be `/api/mcp` |
+| `POST /api/oauth/revoke` | RFC 7009 | either token ends the grant |
+| `GET` / `DELETE /api/oauth/grants` | app | the person's connected agents (an admin sees everyone's); the More screen's **Connected agents** |
+
+Lifetimes: access token 1 hour, refresh token 90 days (the session cookie's
+length) — after that the agent asks you to sign in again. The store is one
+JSON file on the volume (`OAUTH_PATH`, default `/data/oauth.json`); it
+holds SHA-256 hashes of codes and tokens, never the tokens.
 
 ## Transport
 
@@ -80,41 +131,35 @@ Railway redeploy under a connected client costs it nothing. `GET` and
 
 ## Connecting
 
-Set `MCP_TOKEN` on Railway (`openssl rand -hex 32`) and redeploy. Then:
+Nothing to configure on the server beyond what is already there:
+`APP_BASE_URL` (the public URL, which the discovery documents are built
+from) and the user list. Give any client the one URL
+`https://<your-app>.up.railway.app/api/mcp`; it discovers the rest, opens
+the consent page in your browser, and you sign in as yourself.
 
-**Claude Code** (direct, HTTP transport with a header):
+- **claude.ai / Claude Desktop** — Settings → Connectors → Add custom
+  connector → paste the URL. Sign in on the consent page, Allow.
+- **ChatGPT** — the same MCP authorization flow (Connectors / developer
+  mode, wherever your plan surfaces custom MCP servers): paste the URL,
+  sign in, Allow.
+- **Claude Code**:
 
-```bash
-claude mcp add --transport http house https://<your-app>.up.railway.app/api/mcp \
-  --header "Authorization: Bearer <MCP_TOKEN>"
-```
+  ```bash
+  claude mcp add --transport http house https://<your-app>.up.railway.app/api/mcp
+  ```
 
-Then in a session: "what's on in the lounge?", "close the study blinds",
-"set the den to 23". The `instructions` do the rest.
+  then `/mcp` in a session to sign in (a browser opens on the consent
+  page). Then: "what's on in the lounge?", "close the study blinds", "set
+  the den to 23", "kitchen lights on at 7 tomorrow and off at 9", "switch
+  the terrace lights off 20 minutes after they come on". The
+  `instructions` do the rest.
 
-**Claude Desktop / claude.ai custom connectors** take a URL and expect
-OAuth for authentication; they have no field for a static header. Until
-the OAuth follow-up below lands, bridge through `mcp-remote` (a stdio
-adapter that forwards to a remote server with a header), in
-`claude_desktop_config.json`:
+Each connection shows up under **More → Connected agents** with its name,
+when it connected, and when it was last used; **Disconnect** revokes it on
+the spot. An admin sees everyone's.
 
-```json
-{
-  "mcpServers": {
-    "house": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://<your-app>.up.railway.app/api/mcp",
-               "--header", "Authorization:${HOUSE_AUTH}"],
-      "env": { "HOUSE_AUTH": "Bearer <MCP_TOKEN>" }
-    }
-  }
-}
-```
-
-(The env-var indirection is mcp-remote's recommended form: Claude Desktop
-splits an argument on spaces, so `"Authorization: Bearer x"` inline breaks.)
-
-**Smoke test with curl** — the three calls any client makes:
+**Smoke test with curl** — an access token in hand (or the legacy
+`MCP_TOKEN`), the three calls any client makes:
 
 ```bash
 URL=https://<your-app>.up.railway.app/api/mcp
@@ -124,25 +169,32 @@ curl -s -X POST $URL "${H[@]}" -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"
 curl -s -X POST $URL "${H[@]}" -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_home_state","arguments":{"room":"lounge"}}}'
 ```
 
-Without the token: `401` with `WWW-Authenticate: Bearer`. The `Accept`
-header must list both types — the SDK enforces the spec and answers `406`
-otherwise.
+Without a token: `401` with the `WWW-Authenticate` pointer above. The
+`Accept` header must list both types — the SDK enforces the spec and
+answers `406` otherwise.
+
+The whole OAuth dance by hand, for the curious (a registered client, a
+browser session for the consent step):
+
+```bash
+curl -s -X POST $BASE/api/oauth/register -H 'Content-Type: application/json' \
+  -d '{"client_name":"curl","redirect_uris":["http://localhost:9/cb"]}'   # → client_id
+# open $BASE/oauth/authorize?client_id=…&redirect_uri=http://localhost:9/cb&response_type=code
+#   &code_challenge=<base64url(sha256(verifier))>&code_challenge_method=S256&state=s
+#   in a browser, sign in, Allow → the browser is sent to localhost:9/cb?code=…&state=s
+curl -s -X POST $BASE/api/oauth/token -d grant_type=authorization_code -d code=… \
+  -d client_id=… -d redirect_uri=http://localhost:9/cb -d code_verifier=<verifier>   # → tokens
+```
 
 ## What it deliberately does not do yet
 
-- **OAuth.** Native claude.ai / Claude Desktop connectors want an OAuth 2.1
-  authorization server (dynamic client registration, PKCE, a token
-  endpoint) advertised from `/.well-known/oauth-protected-resource`. The
-  app already has the login screen and the user store an authorization
-  endpoint would sit on; the SDK ships the server-side pieces
-  (`@modelcontextprotocol/sdk/server/auth`). That is the natural next
-  step, and it would give **per-user identity**: the audit line would say
-  who connected the agent, and a member's agent could program while a
-  guest's could not. Until then, one shared token, one principal, guest
-  tier.
-- **Programming.** No scene capture, no automations, no timers through MCP.
-  The in-app assistant does these behind a proposal card the person
-  confirms; an agent has no such card. Revisit with per-user identity.
+- **Scopes.** One scope (`house`), one meaning: act as the person. Finer
+  grants ("read-only", "no scheduling") would be a consent-page choice
+  stored on the grant and checked per tool; the plumbing is there, the
+  need isn't yet.
+- **Scene capture.** Automations and timers are in (2026-09-18); scenes
+  are still captured from the app, where the person sees the room they
+  are snapshotting. `activate_scene` runs them.
 - **The rest of the command vocabulary.** `select_source`, `play`/`pause`,
   `set_fan_speed`, `set_fan_mode`, and the sauna's start options
   (`temperature`, `runForMinutes`) are in `lib/commands` but not offered,

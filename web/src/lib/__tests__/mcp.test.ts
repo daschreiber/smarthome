@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -59,6 +60,10 @@ import { saunaStart } from "../sauna";
 import { authenticateMcp, compactDevice, createHouseMcpServer, resolveRoom, type McpCaller } from "../mcp";
 import { getDevice, registry } from "../registry";
 import { createScene } from "../scenes";
+import { createAutomation, listAutomations } from "../automations";
+import { createTimer, listTimers } from "../timers";
+import { exchangeCode, issueCode, registerClient, validateAuthorizeRequest, type ValidAuthorize } from "../oauth";
+import { addUser } from "../users";
 
 const calls = vi.mocked(callService);
 const audits = vi.mocked(audit);
@@ -86,6 +91,11 @@ beforeEach(() => {
   vi.mocked(saunaStart).mockClear();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-test-"));
   process.env.SCENES_PATH = path.join(dir, "scenes.json");
+  process.env.AUTOMATIONS_PATH = path.join(dir, "automations.json");
+  process.env.TIMERS_PATH = path.join(dir, "timers.json");
+  process.env.OAUTH_PATH = path.join(dir, "oauth.json");
+  process.env.USERS_PATH = path.join(dir, "users.json");
+  process.env.APP_BASE_URL = "https://house.test";
   delete process.env.MCP_TOKEN;
   delete process.env.APP_KEY;
 });
@@ -119,6 +129,32 @@ describe("authenticateMcp", () => {
     expect(authenticateMcp(req({ bearer: "secret-token", appKey: "k" }))).toBeNull();
   });
 
+  it("an OAuth access token answers as the person who consented, with their role", async () => {
+    addUser("ruth@example.com", "password1", "member");
+    const reg = registerClient({ client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] });
+    if (!reg.ok) throw new Error(reg.description);
+    const verifier = "v".repeat(43);
+    const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+    const v = validateAuthorizeRequest({
+      client_id: reg.client.client_id, redirect_uri: reg.client.redirect_uris[0], response_type: "code",
+      code_challenge: challenge, code_challenge_method: "S256",
+    }) as ValidAuthorize;
+    const code = issueCode(v, "ruth@example.com");
+    const ex = exchangeCode({ code, client_id: reg.client.client_id, redirect_uri: v.redirect_uri, code_verifier: verifier });
+    if (!ex.ok) throw new Error(ex.description);
+    expect(authenticateMcp(req({ bearer: ex.tokens.access_token }))).toEqual({ user: "ruth@example.com", role: "member" });
+    expect(authenticateMcp(req({ bearer: ex.tokens.refresh_token }))).toBeNull();
+    // The shared token, when set, still answers as the guest — and neither road leaks into the other.
+    process.env.MCP_TOKEN = "shared";
+    expect(authenticateMcp(req({ bearer: "shared" }))).toEqual({ user: "mcp", role: "guest" });
+    expect(authenticateMcp(req({ bearer: ex.tokens.access_token }))).toEqual({ user: "ruth@example.com", role: "member" });
+
+    // And the audit line carries the person, not "mcp".
+    const client = await connect({ user: "ruth@example.com", role: "member" });
+    await call(client, "control_device", { deviceId: deviceIdFor(LOUNGE_COVE), command: "turn_off" });
+    expect(audits.mock.calls[0][0]).toMatchObject({ user: "ruth@example.com", command: "turn_off" });
+  });
+
   it("without a bearer, the app's own auth applies", () => {
     process.env.APP_KEY = "k";
     expect(authenticateMcp(req({ appKey: "k" }))).toEqual({ user: "app-key", role: "admin" });
@@ -143,7 +179,11 @@ describe("the tool surface", () => {
   it("offers reads and controls — nothing programmable, nothing security-tier", async () => {
     const client = await connect();
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    expect(names).toEqual(["activate_scene", "control_device", "get_home_state", "list_rooms", "list_scenes", "set_room_lights"]);
+    expect(names).toEqual([
+      "activate_scene", "control_device", "create_automation", "create_timer", "delete_automation", "delete_timer",
+      "get_home_state", "list_automations", "list_rooms", "list_scenes", "list_timers", "set_automation_enabled",
+      "set_room_lights", "update_automation",
+    ]);
   });
 
   it("list_rooms knows the house and its synonyms", async () => {
@@ -305,6 +345,109 @@ describe("scenes", () => {
     const r = await call(client, "activate_scene", { sceneId: "nope" });
     expect(r.isError).toBe(true);
     expect(calls).not.toHaveBeenCalled();
+  });
+});
+
+describe("automations", () => {
+  it("creates a clock-and-sun schedule from the agent's shape, resolving rooms through synonyms", async () => {
+    const client = await connect();
+    const cove = deviceIdFor(LOUNGE_COVE);
+    const r = json(await call(client, "create_automation", {
+      name: "Evening lounge",
+      steps: [
+        { time: "16:00", days: [1, 2, 3, 4, 5], actions: [{ type: "room", room: "living room", command: "lights_on" }] },
+        { sun: "sunset", sunOffsetMinutes: -15, actions: [{ type: "device", deviceId: cove, command: "set_brightness", value: 30 }] },
+        { time: "23:00", date: "2026-12-24", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] },
+      ],
+    }));
+    expect(r.ok).toBe(true);
+    expect(r.automation).toMatchObject({ id: "evening_lounge", enabled: true, createdBy: "mcp", editable: true, activeWhen: "always" });
+    const stored = listAutomations()[0];
+    expect(stored.steps).toEqual([
+      { time: "16:00", days: [1, 2, 3, 4, 5], actions: [{ type: "room", room: "Lounge", command: "lights_on" }] },
+      { sun: "sunset", sunOffsetMinutes: -15, actions: [{ type: "device", deviceId: cove, command: { command: "set_brightness", brightnessPct: 30 } }] },
+      { time: "23:00", date: "2026-12-24", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] },
+    ]);
+    expect(audits.mock.calls[0][0]).toMatchObject({ user: "mcp", command: "create_automation", entityId: "automation.evening_lounge", ok: true });
+    const listed = json(await call(client, "list_automations"));
+    expect(listed.automations).toHaveLength(1);
+    expect(listed.houseTime).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  });
+
+  it("refuses what the app refuses: no trigger, two triggers, bad times, unknown rooms, the lock, the sauna, unknown scenes", async () => {
+    const client = await connect();
+    const cove = deviceIdFor(LOUNGE_COVE);
+    const cases: Array<[Record<string, unknown>, RegExp]> = [
+      [{ actions: [{ type: "device", deviceId: cove, command: "turn_on", value: null }] }, /exactly one trigger/],
+      [{ time: "07:00", sun: "sunrise", actions: [{ type: "device", deviceId: cove, command: "turn_on", value: null }] }, /exactly one trigger/],
+      [{ time: "25:00", actions: [{ type: "device", deviceId: cove, command: "turn_on", value: null }] }, /HH:MM/],
+      [{ time: "07:00", actions: [{ type: "room", room: "attic", command: "lights_on" }] }, /unknown room/],
+      [{ time: "07:00", actions: [{ type: "device", deviceId: deviceIdFor(FRONT_DOOR), command: "turn_on", value: null }] }, /unknown device/],
+      [{ time: "07:00", actions: [{ type: "device", deviceId: "sauna__klafs_sauna", command: "turn_on", value: null }] }, /safety-sensitive/],
+      [{ time: "07:00", actions: [{ type: "device", deviceId: cove, command: "open", value: null }] }, /does not support open/],
+      [{ time: "07:00", actions: [{ type: "scene", sceneId: "nope" }] }, /unknown scene/],
+    ];
+    for (const [step, want] of cases) {
+      const r = await call(client, "create_automation", { name: "Bad", steps: [step] });
+      expect(r.isError, JSON.stringify(step)).toBe(true);
+      expect(text(r), JSON.stringify(step)).toMatch(want);
+    }
+    expect(listAutomations()).toHaveLength(0);
+  });
+
+  it("edits and deletes only its own; pauses anyone's", async () => {
+    const theirs = createAutomation({ name: "Theirs", steps: [{ time: "08:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] }, "daniel");
+    const client = await connect();
+    const mine = json(await call(client, "create_automation", {
+      name: "Mine", steps: [{ time: "09:00", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] }],
+    })).automation;
+    const listed = json(await call(client, "list_automations")).automations;
+    expect(listed.map((a: { id: string; editable: boolean }) => [a.id, a.editable])).toEqual([[theirs.id, false], [mine.id, true]]);
+
+    const denied = await call(client, "delete_automation", { id: theirs.id });
+    expect(denied.isError).toBe(true);
+    expect(text(denied)).toMatch(/created by daniel/);
+    const deniedEdit = await call(client, "update_automation", { id: theirs.id, name: "X", steps: [{ time: "10:00", actions: [{ type: "room", room: "Lounge", command: "lights_on" }] }] });
+    expect(deniedEdit.isError).toBe(true);
+
+    const paused = json(await call(client, "set_automation_enabled", { id: theirs.id, enabled: false }));
+    expect(paused).toMatchObject({ ok: true, enabled: false });
+    expect(listAutomations().find((a) => a.id === theirs.id)!.enabled).toBe(false);
+
+    const edited = json(await call(client, "update_automation", { id: mine.id, name: "Mine v2", steps: [{ sun: "sunrise", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] }] }));
+    expect(edited.automation).toMatchObject({ id: mine.id, name: "Mine v2", steps: [{ sun: "sunrise", actions: [{ type: "room", room: "Lounge", command: "lights_off" }] }] });
+
+    const gone = json(await call(client, "delete_automation", { id: mine.id }));
+    expect(gone.ok).toBe(true);
+    expect(listAutomations().map((a) => a.id)).toEqual([theirs.id]);
+  });
+});
+
+describe("timers", () => {
+  it("creates, lists, and deletes an auto-off timer; refuses the bed, the lock, and other people's", async () => {
+    const client = await connect();
+    const cove = deviceIdFor(LOUNGE_COVE);
+    const made = json(await call(client, "create_timer", { deviceId: cove, afterMinutes: 30 }));
+    expect(made.timer).toMatchObject({ deviceId: cove, device: "Lounge Cove", room: "Lounge", afterMinutes: 30 });
+    expect(audits.mock.calls[0][0]).toMatchObject({ user: "mcp", command: "create_timer", deviceId: cove, args: { afterMinutes: 30, via: "mcp" } });
+
+    const again = await call(client, "create_timer", { deviceId: cove, afterMinutes: 10 });
+    expect(again.isError).toBe(true);
+    expect(text(again)).toMatch(/already has a timer/);
+    const lock = await call(client, "create_timer", { deviceId: deviceIdFor(FRONT_DOOR), afterMinutes: 10 });
+    expect(text(lock)).toMatch(/unknown device/);
+    const sauna = await call(client, "create_timer", { deviceId: "sauna__klafs_sauna", afterMinutes: 10 });
+    expect(text(sauna)).toMatch(/manages its own runtime/);
+
+    const theirs = createTimer(deviceIdFor(LOUNGE_SPOTS), 5, "daniel");
+    const listed = json(await call(client, "list_timers")).timers;
+    expect(listed.map((t: { id: string; editable: boolean }) => [t.id, t.editable])).toEqual([[made.timer.id, true], [theirs.id, false]]);
+
+    const denied = await call(client, "delete_timer", { id: theirs.id });
+    expect(denied.isError).toBe(true);
+    const gone = json(await call(client, "delete_timer", { id: made.timer.id }));
+    expect(gone.ok).toBe(true);
+    expect(listTimers().map((t) => t.id)).toEqual([theirs.id]);
   });
 });
 

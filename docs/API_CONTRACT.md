@@ -288,6 +288,22 @@ Two shapes:
   proposal after the user confirms in the UI. Guests may execute only
   `actions` proposals (403 otherwise).
 
+## Agents
+
+### `POST /api/mcp`
+The house as an MCP server (Model Context Protocol, Streamable HTTP,
+stateless, JSON responses) — `docs/MCP_SERVER.md`. Not a JSON API of its
+own: the body is JSON-RPC and the `Accept` header must list both
+`application/json` and `text/event-stream` (406 otherwise). Auth:
+`Authorization: Bearer <MCP_TOKEN>` → the guest principal `mcp`; a bearer
+that doesn't match is refused (401, never falls through); no bearer → the
+ordinary session cookie / `x-app-key`, acting as that caller. Tools:
+`list_rooms`, `get_home_state`, `list_scenes` (reads) and
+`control_device`, `set_room_lights`, `activate_scene` (the assistant's
+device vocabulary, through `lib/execute`). Door locks are absent from it
+entirely; the sauna needs `confirm: true`; every action is audited with
+`via: "mcp"`. `GET` and `DELETE` answer 405.
+
 ## Auth & users
 
 ### `GET /api/auth/methods` → `{ password, google }` (pre-auth).

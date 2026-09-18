@@ -91,6 +91,10 @@ Deployed on Railway (branch `main` auto-deploys), installed as a PWA:
   with per-room cleaning, Spotify on the Yamaha receivers, Away mode.
 - **Assistant** — "Ask the house" conversational control (Anthropic API),
   which only proposes typed actions the command layer validates.
+- **MCP server** — the same command layer offered to outside agents
+  (Claude Code, Claude Desktop) over the Model Context Protocol at
+  `POST /api/mcp`: read state, command devices, run scenes, as a guest of
+  the house, every action audited. [How to connect](docs/MCP_SERVER.md).
 - **Accounts & audit** — password + Google sign-in, `admin/member/guest`
   roles, append-only audit log, password reset by email or admin link.
 - **Voice/ecosystem** — the same HA entities are exposed to Apple Home
@@ -127,6 +131,8 @@ Current references:
   [iPhone Shortcut "Sleep sound on"](docs/IOS_SHORTCUT_WHITE_NOISE.md)
 - [Eight Sleep bed — on-site setup](docs/EIGHT_SLEEP_SETUP.md)
 - [Conversational layer & expansion](docs/CONVERSATIONAL_LAYER_AND_EXPANSION.md)
+- [MCP server](docs/MCP_SERVER.md) — the house for outside agents: tools,
+  trust model, how to connect Claude Code and Claude Desktop
 
 Design-era records (kept as history; see their status banners):
 

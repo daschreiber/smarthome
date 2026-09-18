@@ -22,7 +22,10 @@ import type { Command } from "./commands";
  * we still re-validate against the internal schemas before executing.
  */
 
-const DEVICE_COMMANDS = [
+/** The device vocabulary shared by the in-app assistant and the MCP server
+ *  (lib/mcp): one flattened (command, value) shape, mapped to the typed
+ *  command layer by toCommand(). */
+export const DEVICE_COMMANDS = [
   "turn_on", "turn_off", "set_brightness", "open", "close", "stop",
   "set_position", "set_temperature", "set_volume",
   "start_cleaning", "pause_cleaning", "return_to_dock",
@@ -174,7 +177,9 @@ export function toAutomationSpec(p: Extract<LlmProposal, { kind: "automation" }>
   };
 }
 
-function loadAliases(): Record<string, string[]> {
+/** Owner-editable room synonyms (data/room_aliases.json), canonical room
+ *  -> aliases. Shared with the MCP server's room resolution. */
+export function loadAliases(): Record<string, string[]> {
   for (const p of [
     path.join(process.cwd(), "..", "data", "room_aliases.json"),
     path.join(process.cwd(), "data", "room_aliases.json"),

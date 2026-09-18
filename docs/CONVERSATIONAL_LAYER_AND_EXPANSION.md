@@ -43,6 +43,17 @@ order in `DESIGN_AND_DELIVERY_LOOP.md`.
   LLM-related runs in the browser. Every conversational creation is audit-
   logged with the original utterance.
 
+## The third caller: outside agents over MCP (2026-09-18)
+
+The command layer's "two callers" became three. `web/src/lib/mcp.ts` offers
+it to any MCP client (Claude Code, Claude Desktop via a bridge) at
+`POST /api/mcp`, with the assistant's device vocabulary (`DEVICE_COMMANDS`
+→ `toCommand`), its room synonyms, and its exclusions (no locks, sauna
+behind an explicit confirm). The agent is a guest: control and scenes, no
+programming — the proposal-card confirmation that gates scene capture and
+automations in the app has no equivalent on an agent's side yet. Details,
+trust model, and the OAuth / per-user follow-up: `docs/MCP_SERVER.md`.
+
 ## Consequences for the backend design (apply NOW)
 
 The command layer will have two callers: the UI and the LLM. Therefore

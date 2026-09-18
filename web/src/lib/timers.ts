@@ -45,6 +45,10 @@ export function createTimer(deviceId: string, afterMinutes: number, user: string
   // A bed side's entity is a temperature reading — it's never "on", so an
   // auto-off rule would silently do nothing. Refuse instead of pretending.
   if (device.kind === "bed") throw new Error("the bed manages its own schedule");
+  // The sleep sound's entity is virtual (lib/whitenoise): HA has no state
+  // for it, so a rule would persist and never fire. Its stop lives in the
+  // sleep watcher (lib/sleepwatch) — Codex review, PR #132.
+  if (device.kind === "noise") throw new Error("the sleep sound is stopped by Sleep sense, not a timer");
   if (!device.capabilities.includes("on_off")) throw new Error("device has no on/off to time out");
   if (!Number.isFinite(afterMinutes) || afterMinutes < 1 || afterMinutes > 720) {
     throw new Error("afterMinutes must be between 1 and 720");

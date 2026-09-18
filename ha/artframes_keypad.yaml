@@ -79,6 +79,7 @@ knx:
         - "0/0/0"   # ← door keypad: Lights 6
         - "0/0/0"   # ← door keypad: Lights 5
         - "0/0/0"   # ← door keypad: Exit
+        - "0/0/0"   # ← Exit floor 5
 
 rest_command:
   # The relay to the app. `payload` is rendered by HA and sent as JSON —
@@ -127,7 +128,8 @@ automation manual_artframes_keypad:
         - { ga: "0/0/0", value: 1, press: morning, floor: 6, spare: false }  # ← door: Lights 6 on
         - { ga: "0/0/0", value: 0, press: night, floor: 5, spare: false }    # ← door: Lights 5 off
         - { ga: "0/0/0", value: 1, press: morning, floor: 5, spare: false }  # ← door: Lights 5 on
-        - { ga: "0/0/0", value: 1, press: night, spare: false }              # ← door: Exit
+        - { ga: "0/0/0", value: 1, press: night, spare: false }              # ← door: Exit (whole house)
+        - { ga: "0/0/0", value: 1, press: night, floor: 5, spare: false }    # ← Exit floor 5 (not a toggle; Den TV off)
       # --- the service road (nothing to capture) ------------------------
       # Alexa, Siri / Apple Home, the dashboard — and the app's own press,
       # which the app then drops as a repeat.

@@ -61,6 +61,11 @@ not leave a set lit on the strength of a sensor that sticks. Capture them
 the same way, add each different address under `knx: event:`, reload KNX
 and Automations. The `light.knx_switch_all_house_exit` switch is in the
 `switches:` table too, so an Exit by voice or from the app does the same.
+**"Exit floor" on floor 5** (owner, 2026-09-18) is one more row of the same
+shape — not a toggle, one value, floor 5, no sparing — so it takes the Den
+TV with the floor's lights, as the whole-house Exit already does. Live test
+that day: the button switched the Den lights off and left the TV on, so
+it was not yet in the relay; its address goes in that row.
 
 One press is one sweep, whichever roads it takes. A press in the app is
 not seen on the KNX road — it goes through Control4, whose telegrams reach

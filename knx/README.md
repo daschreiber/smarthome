@@ -157,3 +157,4 @@ belong in that file's `variables:`; record them here once known:
 |---|---|---|---|
 | Night | _to capture_ | | |
 | Morning | _to capture_ | | |
+| Exit floor 5 (door, not a toggle) | _to capture_ | | |

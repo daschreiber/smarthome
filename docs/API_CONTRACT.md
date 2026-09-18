@@ -295,9 +295,11 @@ The house as an MCP server (Model Context Protocol, Streamable HTTP,
 stateless, JSON responses) — `docs/MCP_SERVER.md`. Not a JSON API of its
 own: the body is JSON-RPC and the `Accept` header must list both
 `application/json` and `text/event-stream` (406 otherwise). Auth:
-`Authorization: Bearer <MCP_TOKEN>` → the guest principal `mcp`; a bearer
-that doesn't match is refused (401, never falls through); no bearer → the
-ordinary session cookie / `x-app-key`, acting as that caller. Tools:
+`Authorization: Bearer <OAuth access token>` → the person who consented,
+with their role; `Bearer <MCP_TOKEN>` (optional legacy) → the guest
+principal `mcp`; any other bearer is refused (401 with the
+`WWW-Authenticate` discovery pointer, never falls through); no bearer →
+the ordinary session cookie / `x-app-key`, acting as that caller. Tools:
 `list_rooms`, `get_home_state`, `list_scenes`, `list_automations`,
 `list_timers` (reads); `control_device`, `set_room_lights`,
 `activate_scene` (the assistant's device vocabulary, through
@@ -307,6 +309,24 @@ ordinary session cookie / `x-app-key`, acting as that caller. Tools:
 edit/delete under the ownership rule, as a guest). Door locks are absent
 from it entirely; the sauna needs `confirm: true` and is never schedulable;
 every action is audited with `via: "mcp"`. `GET` and `DELETE` answer 405.
+
+### OAuth (the app as authorization server for `/api/mcp`)
+`docs/MCP_SERVER.md` has the table. `GET /.well-known/oauth-protected-resource`
+(+ `/api/mcp` suffix) and `GET /.well-known/oauth-authorization-server`
+are public discovery documents built from `APP_BASE_URL`.
+`POST /api/oauth/register` (pre-auth, RFC 7591) registers a public client:
+`{ client_name?, redirect_uris[] }` → 201 client information, 400 on a
+disallowed redirect URI or a request for a client secret. `/oauth/authorize`
+is the consent page; its backend `GET /api/oauth/authorize?<oauth params>`
+validates and describes (`{ ok, client, user|null, methods }`, or
+`{ ok:false, error, redirect|null }`), and `POST` `{ …params, decision:
+"allow"|"deny" }` (session cookie of a real account) answers
+`{ redirect }` with the code or `access_denied`. `POST /api/oauth/token`
+(form or JSON): `authorization_code` + PKCE, or `refresh_token`; errors in
+RFC 6749 §5.2 form. `POST /api/oauth/revoke` `{ token }` → 200 always.
+`GET | DELETE /api/oauth/grants` (signed in): `{ grants[] }` of the caller
+(admin: all); DELETE `{ id }` disconnects one. Every consent and disconnect
+is audited (`agent_consent`, `agent_disconnect`).
 
 ## Auth & users
 

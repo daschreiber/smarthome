@@ -24,12 +24,15 @@ Server-side only:
   Its own secret, never `APP_KEY`: the Green's `configuration.yaml` and
   `secrets.yaml` are read by every add-on and backup, and a key found there
   must buy one narrow, harmless action — not admin.
-- `MCP_TOKEN` — what an outside agent presents to `POST /api/mcp`
-  (`docs/MCP_SERVER.md`). Same principle: its own secret, guest tier plus
-  scheduling (state, devices, scenes, its own automations and timers; no
-  scene capture, no locks, no activity log),
-  every action audited as user `mcp`. Rotate on Railway to revoke every
-  connected agent at once.
+- The OAuth store (`OAUTH_PATH`, `/data/oauth.json`) — the agents
+  connected to `POST /api/mcp` (`docs/MCP_SERVER.md`). It holds SHA-256
+  hashes of codes and tokens, never a presentable token; still, it names
+  who connected what. Access tokens live an hour, refresh tokens 90 days;
+  a person disconnects an agent from More, an admin disconnects anyone's,
+  and removing a user ends their agents at the next request.
+- `MCP_TOKEN` (optional, legacy) — a shared bearer for `POST /api/mcp`,
+  guest tier, audited as user `mcp`. Prefer OAuth; if set, rotate on
+  Railway to revoke every holder at once.
 
 Never commit:
 

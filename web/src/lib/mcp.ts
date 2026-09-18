@@ -19,6 +19,7 @@ import { assertCommandAllowed, temperatureBounds, type Command } from "./command
 import { applySceneById, executeAction, executeOnDevice, followArtFrames, roomLights } from "./execute";
 import { getState } from "./ha";
 import { homeSnapshot, type HomeDevice } from "./homeSnapshot";
+import { authenticateAccessToken } from "./oauth";
 import { canDeleteRecord } from "./permissions";
 import { commandEntityIds, deviceUnreachable } from "./reachability";
 import { getDevice, registry, slug, type Device } from "./registry";
@@ -65,19 +66,23 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Who is calling the MCP endpoint. `Authorization: Bearer <MCP_TOKEN>` is
- * the agent road and answers as the guest principal "mcp"; a presented
- * bearer that doesn't match (or with no MCP_TOKEN configured) is refused
- * outright — it never falls through to the cookie. Without a bearer, the
- * app's ordinary auth applies (a signed-in session, or x-app-key), so a
- * browser-side or app-key client works too, as itself.
+ * Who is calling the MCP endpoint. A bearer is the agent road, two kinds:
+ * an OAuth access token (lib/oauth) answers as the person who consented,
+ * with their current role; the shared MCP_TOKEN (optional, the pre-OAuth
+ * fallback) answers as the guest principal "mcp". A presented bearer that
+ * is neither is refused outright — it never falls through to the cookie.
+ * Without a bearer, the app's ordinary auth applies (a signed-in session,
+ * or x-app-key), so a browser-side or app-key client works too, as itself.
  */
 export function authenticateMcp(req: NextRequest): McpCaller | null {
   const header = (req.headers.get("authorization") ?? "").trim();
   const bearer = /^Bearer\s+(.+)$/i.exec(header);
   if (bearer) {
-    const token = process.env.MCP_TOKEN;
-    if (token && safeEqual(bearer[1].trim(), token)) return { user: "mcp", role: "guest" };
+    const presented = bearer[1].trim();
+    const shared = process.env.MCP_TOKEN;
+    if (shared && safeEqual(presented, shared)) return { user: "mcp", role: "guest" };
+    const grant = authenticateAccessToken(presented);
+    if (grant) return { user: grant.user, role: grant.role };
     return null;
   }
   const auth = authenticate(req);

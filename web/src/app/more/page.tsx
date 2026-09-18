@@ -8,6 +8,15 @@ import { KeyIcon, PulseIcon, SignOutIcon, UsersIcon } from "../icons";
 
 /** Everything that isn't day-to-day control: audit trail, users, session. */
 
+interface GrantView {
+  id: string;
+  clientName: string;
+  user: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+}
+
 interface LinkStatus {
   configured: boolean;
   houseLinked: boolean;
@@ -23,6 +32,8 @@ export default function More() {
   const [showKey, setShowKey] = useState(false);
   const [spotifyNote, setSpotifyNote] = useState<string | null>(null);
   const [links, setLinks] = useState<LinkStatus | null>(null);
+  const [grants, setGrants] = useState<GrantView[] | null>(null);
+  const [grantNote, setGrantNote] = useState<string | null>(null);
 
   // The OAuth callback bounces back here with
   // ?spotify=linked|linked-free|denied|error.
@@ -53,7 +64,27 @@ export default function More() {
       const res = await fetch("/api/spotify/link", { headers: appKeyHeaders() });
       if (res.ok) setLinks((await res.json()) as LinkStatus);
     } catch { /* non-critical */ }
+    try {
+      const res = await fetch("/api/oauth/grants", { headers: appKeyHeaders() });
+      if (res.ok) setGrants(((await res.json()) as { grants: GrantView[] }).grants);
+    } catch { /* non-critical */ }
   }, []);
+
+  const disconnectAgent = async (id: string) => {
+    setGrantNote(null);
+    try {
+      const res = await fetch("/api/oauth/grants", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", ...appKeyHeaders() },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) { setGrantNote(await errorFrom(res, "couldn't disconnect")); return; }
+      setGrants(((await res.json()) as { grants: GrantView[] }).grants);
+      setGrantNote("Disconnected — that agent's tokens no longer work");
+    } catch (e) {
+      setGrantNote(networkError(e, "couldn't disconnect"));
+    }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -95,8 +126,9 @@ export default function More() {
     </a>
   );
 
-  const me = links?.me;
-  const slotsFull = !!links && !me?.linked && links.slots.used >= links.slots.max;
+  const spotifyMe = links?.me;
+  const slotsFull = !!links && !spotifyMe?.linked && links.slots.used >= links.slots.max;
+  const when = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
   return (
     <main className="shell">
@@ -138,8 +170,8 @@ export default function More() {
                 <div className="nm">My Spotify</div>
                 <div className="st">
                   {spotifyNote ??
-                    (me?.linked
-                      ? `${me.displayName ?? "Connected"}${me.premium === false ? " · not Premium" : ""} — room controls play your music`
+                    (spotifyMe?.linked
+                      ? `${spotifyMe.displayName ?? "Connected"}${spotifyMe.premium === false ? " · not Premium" : ""} — room controls play your music`
                       : slotsFull
                         ? `All ${links.slots.max} Spotify slots are in use — someone has to disconnect first`
                         : "Connect it so the room controls play your music, not the house account's")}
@@ -148,10 +180,10 @@ export default function More() {
               <div className="btn-row">
                 {links.canLinkOwn && !slotsFull && (
                   <a className="mini-btn" href="/api/spotify/login?target=me">
-                    {me?.linked ? "Reconnect" : "Connect"}
+                    {spotifyMe?.linked ? "Reconnect" : "Connect"}
                   </a>
                 )}
-                {me?.linked && (
+                {spotifyMe?.linked && (
                   <button className="mini-btn" onClick={disconnect}>Disconnect</button>
                 )}
               </div>
@@ -183,6 +215,38 @@ export default function More() {
             {links.others.length > 0 && ` · also ${links.others.map((o) => o.displayName).join(", ")}`}
             . Spotify allows five per app, and controlling speakers needs Premium.
           </p>
+        </>
+      )}
+      {/* Agents connected through the house's MCP server (docs/MCP_SERVER.md):
+          each row is one consent, one token pair, one thing to revoke. */}
+      {grants && (
+        <>
+          <h2 className="sec-title" style={{ marginTop: 18 }}>Connected agents</h2>
+          <div className="dev-list">
+            {grants.length === 0 && (
+              <div className="dev">
+                <div style={{ minWidth: 0 }}>
+                  <div className="nm">None yet</div>
+                  <div className="st">Add the house as an MCP server in Claude or ChatGPT and sign in here when it asks — it then acts as you.</div>
+                </div>
+              </div>
+            )}
+            {grants.map((g) => (
+              <div className="dev" key={g.id}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="nm">{g.clientName}</div>
+                  <div className="st">
+                    {role === "admin" ? `${g.user} · ` : ""}
+                    connected {when(g.createdAt)} · last used {when(g.lastUsedAt)} · expires {when(g.expiresAt)}
+                  </div>
+                </div>
+                <div className="btn-row">
+                  <button className="mini-btn" onClick={() => disconnectAgent(g.id)}>Disconnect</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {grantNote && <p className="h-sub" style={{ marginTop: 8 }}>{grantNote}</p>}
         </>
       )}
       <NavBar />

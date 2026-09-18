@@ -88,7 +88,8 @@ network-scoped, only the login restriction was.
    | `SPOTIFY_DEFAULT_CONTEXT` | optional — playlist/album URI Play falls back to when nothing is paused |
    | `VACUUM_ROOMS_PATH` | `/data/vacuum_rooms.json` — user-assigned Roborock segment names |
    | `ENTITY_MAP_PATH` | optional — explicit path to `entity_map.json`; unset, the app falls back to `../data/` then `./data/` (the repo copies) |
-   | `MCP_TOKEN` | optional — `openssl rand -hex 32`; opens `POST /api/mcp` (the house as an MCP server, `docs/MCP_SERVER.md`) to agents presenting it as `Authorization: Bearer …`. Its own secret, like `HA_HOOK_KEY`: it buys guest-level control plus scheduling (state, devices, scenes, automations and timers it created — no scene capture, no locks, no activity log), audited as user `mcp`. Unset, only a signed-in session or `x-app-key` can use the endpoint |
+   | `OAUTH_PATH` | `/data/oauth.json` — the MCP server's OAuth store (registered agent clients, hashed codes and tokens, `docs/MCP_SERVER.md`); defaults there whenever the volume is mounted. Agents connect as a signed-in person; no token to configure. Needs `APP_BASE_URL` for the discovery documents |
+   | `MCP_TOKEN` | optional, legacy — `openssl rand -hex 32`; a shared bearer that opens `POST /api/mcp` as the guest principal `mcp` (audited as such). Superseded by the OAuth sign-in above; leave unset unless a client can't do OAuth |
 
    This table is the deployment source of truth — when code starts reading
    a new `process.env.*` variable, add it here in the same commit.

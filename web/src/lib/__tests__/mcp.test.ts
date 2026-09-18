@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -61,6 +62,8 @@ import { getDevice, registry } from "../registry";
 import { createScene } from "../scenes";
 import { createAutomation, listAutomations } from "../automations";
 import { createTimer, listTimers } from "../timers";
+import { exchangeCode, issueCode, registerClient, validateAuthorizeRequest, type ValidAuthorize } from "../oauth";
+import { addUser } from "../users";
 
 const calls = vi.mocked(callService);
 const audits = vi.mocked(audit);
@@ -90,6 +93,9 @@ beforeEach(() => {
   process.env.SCENES_PATH = path.join(dir, "scenes.json");
   process.env.AUTOMATIONS_PATH = path.join(dir, "automations.json");
   process.env.TIMERS_PATH = path.join(dir, "timers.json");
+  process.env.OAUTH_PATH = path.join(dir, "oauth.json");
+  process.env.USERS_PATH = path.join(dir, "users.json");
+  process.env.APP_BASE_URL = "https://house.test";
   delete process.env.MCP_TOKEN;
   delete process.env.APP_KEY;
 });
@@ -121,6 +127,32 @@ describe("authenticateMcp", () => {
     expect(authenticateMcp(req({ bearer: "nope", appKey: "k" }))).toBeNull();
     delete process.env.MCP_TOKEN;
     expect(authenticateMcp(req({ bearer: "secret-token", appKey: "k" }))).toBeNull();
+  });
+
+  it("an OAuth access token answers as the person who consented, with their role", async () => {
+    addUser("ruth@example.com", "password1", "member");
+    const reg = registerClient({ client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] });
+    if (!reg.ok) throw new Error(reg.description);
+    const verifier = "v".repeat(43);
+    const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+    const v = validateAuthorizeRequest({
+      client_id: reg.client.client_id, redirect_uri: reg.client.redirect_uris[0], response_type: "code",
+      code_challenge: challenge, code_challenge_method: "S256",
+    }) as ValidAuthorize;
+    const code = issueCode(v, "ruth@example.com");
+    const ex = exchangeCode({ code, client_id: reg.client.client_id, redirect_uri: v.redirect_uri, code_verifier: verifier });
+    if (!ex.ok) throw new Error(ex.description);
+    expect(authenticateMcp(req({ bearer: ex.tokens.access_token }))).toEqual({ user: "ruth@example.com", role: "member" });
+    expect(authenticateMcp(req({ bearer: ex.tokens.refresh_token }))).toBeNull();
+    // The shared token, when set, still answers as the guest — and neither road leaks into the other.
+    process.env.MCP_TOKEN = "shared";
+    expect(authenticateMcp(req({ bearer: "shared" }))).toEqual({ user: "mcp", role: "guest" });
+    expect(authenticateMcp(req({ bearer: ex.tokens.access_token }))).toEqual({ user: "ruth@example.com", role: "member" });
+
+    // And the audit line carries the person, not "mcp".
+    const client = await connect({ user: "ruth@example.com", role: "member" });
+    await call(client, "control_device", { deviceId: deviceIdFor(LOUNGE_COVE), command: "turn_off" });
+    expect(audits.mock.calls[0][0]).toMatchObject({ user: "ruth@example.com", command: "turn_off" });
   });
 
   it("without a bearer, the app's own auth applies", () => {

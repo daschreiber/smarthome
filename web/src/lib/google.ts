@@ -13,6 +13,15 @@
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
+/**
+ * Where a successful sign-in may return to instead of the home screen:
+ * only the agent consent page (docs/MCP_SERVER.md), as a same-origin
+ * relative path — never an absolute URL, never a protocol-relative one.
+ */
+export function safeNext(next: string | null | undefined): string | null {
+  return next && /^\/oauth\/authorize\?[^\s]*$/.test(next) && !next.startsWith("//") ? next : null;
+}
+
 export function googleConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }

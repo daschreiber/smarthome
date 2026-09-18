@@ -48,6 +48,10 @@ npm run typecheck
     path on top of it.
   - `assistant.ts` — translates LLM proposals into the same typed actions;
     it never executes anything itself.
+  - `mcp.ts` — the house as an MCP server for outside agents (route
+    `api/mcp`): the assistant's vocabulary and exclusions, guest tier,
+    audited. `homeSnapshot.ts` is the bulk state read it shares with
+    `GET /api/home`.
   - `scheduler.ts` + `sleepwatch.ts` + `saunawatch.ts` — the minute-tick
     automation engine and the two standing watchers.
   - `audit.ts` — append-only JSONL audit log.

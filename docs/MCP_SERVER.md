@@ -118,7 +118,7 @@ the next request, exactly as it ends their cookie.
 | `POST /api/oauth/register` | RFC 7591 | dynamic client registration: a name and redirect URIs (https, loopback http, or a native scheme); no client secrets — PKCE is the proof. Hosts that want a client id and secret instead are configured by the owner (`OAUTH_CLIENTS`, below) |
 | `GET /oauth/authorize` | RFC 6749 §4.1 | the consent page; validation first (`GET /api/oauth/authorize`), then sign-in if needed, then Allow / Deny (`POST /api/oauth/authorize`) |
 | `POST /api/oauth/token` | RFC 6749 §3.2, RFC 7636, RFC 8707 | `authorization_code` (single-use, 10 min, verifier checked) and `refresh_token` (rotated, 2-min grace for a lost response); `resource` must be `/api/mcp`; a configured client presents its secret (`client_secret_basic` or `_post`) |
-| `POST /api/oauth/revoke` | RFC 7009 | either token ends the grant |
+| `POST /api/oauth/revoke` | RFC 7009 | either token ends the grant; a configured client's grant also needs its secret |
 | `GET` / `DELETE /api/oauth/grants` | app | the person's connected agents (an admin sees everyone's); the More screen's **Connected agents** |
 
 Lifetimes: access token 1 hour, refresh token 90 days (the session cookie's
@@ -233,8 +233,9 @@ Steps:
      "redirect_uris":["https://layla.amazon.com/api/skill/link/…","https://pitangui.amazon.com/api/skill/link/…"]}]
    ```
 
-   Redeploy. Entries with a short secret or a disallowed redirect URI are
-   skipped with a warning in the logs, never a crash.
+   Redeploy. An entry with a short secret, or with any redirect URI that is
+   not allowed, is skipped whole with a warning in the logs — never
+   installed minus one region's callback, never a crash.
 4. Deploy the add-on to Amazon's development stage and link the account
    from the Alexa app: it opens the house's consent page, you sign in
    (password — Google sign-in inside Alexa's web view may be refused by

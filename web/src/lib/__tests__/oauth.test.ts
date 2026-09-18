@@ -231,8 +231,8 @@ describe("codes and tokens", () => {
     ]);
     expect(listGrants("guest@example.com", "guest", T0)).toEqual([]);
     expect(revokeGrant(listGrants("daniel@example.com", "admin", T0)[0].id, "guest@example.com", "guest", T0)).toBe(false);
-    expect(revokeToken(r.tokens.refresh_token, T0)).toBe(true);
-    expect(revokeToken(r.tokens.refresh_token, T0)).toBe(false);
+    expect(revokeToken(r.tokens.refresh_token, {}, T0)).toEqual({ revoked: true, unauthorized: false });
+    expect(revokeToken(r.tokens.refresh_token, {}, T0)).toEqual({ revoked: false, unauthorized: false });
     expect(authenticateAccessToken(r.tokens.access_token, T0)).toBeNull();
     expect(listGrants("daniel@example.com", "admin", T0)).toEqual([]);
 
@@ -258,6 +258,8 @@ describe("configured confidential clients (OAUTH_CLIENTS — Alexa+)", () => {
       ALEXA,
       { client_id: "short", client_secret: "tiny", redirect_uris: ["https://x.test/cb"] },
       { client_id: "nowhere", client_secret: "s3cret-s3cret-s3cret", redirect_uris: ["http://evil.example/cb"] },
+      // One bad URI among good ones skips the whole entry (Codex review, PR #137).
+      { client_id: "mixed", client_secret: "s3cret-s3cret-s3cret", redirect_uris: ["https://x.test/cb", "http://evil.example/cb"] },
     ]);
     expect(configuredClients().map((c) => c.client_id)).toEqual(["alexa-house"]);
     const client = getClient("alexa-house");
@@ -298,6 +300,14 @@ describe("configured confidential clients (OAUTH_CLIENTS — Alexa+)", () => {
     expect(refreshTokens({ refresh_token: r.tokens.refresh_token, client_id: "alexa-house" }, T0 + 1000)).toMatchObject({ ok: false, error: "invalid_client" });
     expect(refreshTokens({ refresh_token: r.tokens.refresh_token, client_id: "alexa-house", client_secret: ALEXA.client_secret }, T0 + 1000).ok).toBe(true);
     expect(listGrants("daniel@example.com", "admin", T0)).toEqual([expect.objectContaining({ clientName: "Alexa+" })]);
+    // Revocation needs the secret too: an exposed access token alone can't end the grant.
+    const fresh = refreshTokens({ refresh_token: r.tokens.refresh_token, client_id: "alexa-house", client_secret: ALEXA.client_secret }, T0 + 2000);
+    if (!fresh.ok) throw new Error(fresh.description);
+    expect(revokeToken(fresh.tokens.access_token, {}, T0 + 3000)).toEqual({ revoked: false, unauthorized: true });
+    expect(revokeToken(fresh.tokens.access_token, { client_id: "alexa-house", client_secret: "wrong" }, T0 + 3000)).toEqual({ revoked: false, unauthorized: true });
+    expect(authenticateAccessToken(fresh.tokens.access_token, T0 + 3000)).not.toBeNull();
+    expect(revokeToken(fresh.tokens.access_token, { client_id: "alexa-house", client_secret: ALEXA.client_secret }, T0 + 3000)).toEqual({ revoked: true, unauthorized: false });
+    expect(authenticateAccessToken(fresh.tokens.access_token, T0 + 3000)).toBeNull();
   });
 
   it("when it does send PKCE, the verifier is still checked; public clients still cannot skip it", () => {

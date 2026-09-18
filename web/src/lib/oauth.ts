@@ -286,9 +286,13 @@ export function configuredClients(): ConfiguredClient[] {
   for (const e of parsed as Array<Record<string, unknown>>) {
     const id = typeof e?.client_id === "string" ? e.client_id.trim() : "";
     const secret = typeof e?.client_secret === "string" ? e.client_secret : "";
-    const uris = Array.isArray(e?.redirect_uris) ? e.redirect_uris.filter((u): u is string => typeof u === "string" && redirectUriAllowed(u)) : [];
-    if (!id || secret.length < 16 || uris.length === 0) {
-      console.warn(`[oauth] OAUTH_CLIENTS entry "${id || "?"}" skipped: needs client_id, a client_secret of 16+ chars, and allowed redirect_uris`);
+    const listed = Array.isArray(e?.redirect_uris) ? e.redirect_uris : [];
+    const uris = listed.filter((u): u is string => typeof u === "string" && redirectUriAllowed(u));
+    // One bad URI skips the whole entry: Alexa's callbacks are per region,
+    // and a client installed minus one of them fails for that region
+    // while looking deployed (Codex review, PR #137).
+    if (!id || secret.length < 16 || uris.length === 0 || uris.length !== listed.length) {
+      console.warn(`[oauth] OAUTH_CLIENTS entry "${id || "?"}" skipped: needs client_id, a client_secret of 16+ chars, and redirect_uris that are all allowed`);
       continue;
     }
     out.push({
@@ -570,17 +574,30 @@ export function authenticateAccessToken(
   return { user: user.email, role: user.role, grantId: grant.id, clientName: grant.client_name };
 }
 
-/** RFC 7009: revoking either token of a grant ends the whole grant. */
-export function revokeToken(presented: string, nowMs = Date.now()): boolean {
+/**
+ * RFC 7009: revoking either token of a grant ends the whole grant. A
+ * public client's proof is the token itself; a grant that belongs to a
+ * configured confidential client also needs that client's secret, as the
+ * metadata advertises — an exposed access token must not be enough to end
+ * a 90-day refresh token (Codex review, PR #137). `revoked` says whether
+ * anything changed; `unauthorized` says the secret was missing or wrong.
+ */
+export function revokeToken(
+  presented: string,
+  auth: { client_id?: string | null; client_secret?: string | null } = {},
+  nowMs = Date.now(),
+): { revoked: boolean; unauthorized: boolean } {
   const h = hash(presented);
   const store = load();
-  const before = store.grants.length;
-  store.grants = store.grants.filter(
-    (g) => g.access_hash !== h && g.refresh_hash !== h && g.previous_refresh_hash !== h,
-  );
-  if (store.grants.length === before) return false;
+  const grant = store.grants.find((g) => g.access_hash === h || g.refresh_hash === h || g.previous_refresh_hash === h);
+  if (!grant) return { revoked: false, unauthorized: false };
+  if (auth.client_id && auth.client_id !== grant.client_id) return { revoked: false, unauthorized: false };
+  if (getClient(grant.client_id)?.confidential && !clientSecretOk(grant.client_id, auth.client_secret)) {
+    return { revoked: false, unauthorized: true };
+  }
+  store.grants = store.grants.filter((g) => g.id !== grant.id);
   save(store, nowMs);
-  return true;
+  return { revoked: true, unauthorized: false };
 }
 
 // ---- The person's view (the More screen) ----

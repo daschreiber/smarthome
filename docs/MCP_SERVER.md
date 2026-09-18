@@ -87,8 +87,9 @@ the client discovers it from the endpoint's 401, registers itself, sends
 you to the consent page (`/oauth/authorize` — sign in there if you aren't,
 password or Google), and exchanges the code for tokens bound to *your*
 account. From then on every MCP action audits under your email, with your
-role at the time of the call: a member's agent may program (automations,
-timers) and delete its own records; a guest's agent gets the guest tier.
+role at the time of the call: an admin's agent may create recurring
+automations; a member's or guest's agent schedules one-offs (every step
+dated) and timers, and edits or deletes only its own records.
 The user list stays the allow-list — removing someone ends their agents at
 the next request, exactly as it ends their cookie.
 

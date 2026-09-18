@@ -28,11 +28,11 @@ Code: `web/src/lib/mcp.ts` (the server and its tools), `web/src/app/api/mcp/rout
 | `set_room_lights` | a room's real lights on or off | group Lighting only, as everywhere else |
 | `activate_scene` | apply a scene by id | the sauna never replays from here |
 | `list_automations` | every scheduled rule with its steps, enabled/active state, creator, and whether this connection may edit it; plus the house time | read-only |
-| `create_automation` | schedule steps under a name: clock time or sunrise/sunset (± offset), weekdays or a one-shot date, actions on devices / rooms / scenes | the assistant's step shape (`LlmStepSchema`, trigger fields optional) → `toAutomationSpec` → `AutomationSpecSchema`; the sauna is never schedulable |
+| `create_automation` | schedule steps under a name: clock time or sunrise/sunset (± offset), weekdays or a one-shot date, actions on devices / rooms / scenes | the assistant's step shape (`LlmStepSchema`, trigger fields optional) → `toAutomationSpec` → `AutomationSpecSchema`; the sauna is never schedulable; recurring (any undated step) is admin-only |
 | `update_automation` | replace name and steps of one this connection created | ownership: `canDeleteRecord` as a guest |
 | `set_automation_enabled` | pause / resume any automation | as the app: anyone who may program can toggle |
 | `delete_automation` | remove one this connection created | ownership |
-| `list_timers` / `create_timer` / `delete_timer` | auto-off rules: a device turns off N minutes (1–720) after it turns on | `lib/timers` rules (no sauna, no bed, one per device); delete needs ownership |
+| `list_timers` / `create_timer` / `delete_timer` | auto-off rules: a device turns off N minutes (1–720) after it turns on | `lib/timers` rules (no sauna, no bed, no sleep sound, one per device); delete needs ownership |
 
 Device ids are the app's ids (`lounge__lounge_cove`), never Home Assistant
 entity ids — the API contract's founding rule holds. Commands answer
@@ -52,11 +52,16 @@ that person's role (`lib/permissions`); an agent holding the legacy shared
 the tool surface is the same, and it is narrower than the app:
 
 - It can read state, command devices, and run scenes.
-- It can create automations and auto-off timers, and pause or resume any
-  automation. It may edit or delete only what its person may (the app's
-  ownership rule, `canDeleteRecord`: your own, or anything as an admin).
-  Records carry `createdBy: <your email>`, so the Automations screen shows
-  which ones came through an agent as yours.
+- It can schedule, with a line the app's own screens don't draw yet:
+  **recurring automations are the admin's alone** (owner decision,
+  2026-09-18). An admin's agent creates recurring automations; anyone
+  else's agent creates one-offs only — every step must carry a `date`.
+  Auto-off timers are open to everyone. Anyone may pause or resume any
+  automation. Edit
+  and delete follow the app's ownership rule (`canDeleteRecord`: your own,
+  or anything as an admin), and an edit cannot turn a one-off into a
+  recurring rule. Records carry `createdBy: <your email>`, so the
+  Automations screen shows which ones came through an agent as yours.
 - It cannot capture or delete scenes, flip Away, follow holidays, or read
   the activity log — those stay in the app, whatever the role.
 - Door locks do not exist for it: not in `get_home_state`, not accepted by
@@ -82,8 +87,9 @@ the client discovers it from the endpoint's 401, registers itself, sends
 you to the consent page (`/oauth/authorize` — sign in there if you aren't,
 password or Google), and exchanges the code for tokens bound to *your*
 account. From then on every MCP action audits under your email, with your
-role at the time of the call: a member's agent may program (automations,
-timers) and delete its own records; a guest's agent gets the guest tier.
+role at the time of the call: an admin's agent may create recurring
+automations; a member's or guest's agent schedules one-offs (every step
+dated) and timers, and edits or deletes only its own records.
 The user list stays the allow-list — removing someone ends their agents at
 the next request, exactly as it ends their cookie.
 

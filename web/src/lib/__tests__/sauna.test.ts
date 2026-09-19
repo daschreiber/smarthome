@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { saunaScheduleStatus, saunaSetTemperature, saunaStart, saunaStatus, saunaStopIn } from "../sauna";
+import { invalidateSaunaCache, saunaScheduleStatus, saunaSetTemperature, saunaStart, saunaStatus, saunaStop, saunaStopIn } from "../sauna";
 
 /**
  * Pins the wire contract with the KLAFS sauna app (daschreiber/Sauna,
@@ -15,13 +15,17 @@ beforeEach(() => {
   process.env.SAUNA_BASE_URL = "https://sauna.example";
   process.env.SAUNA_API_TOKEN = "tok123";
   calls.length = 0;
+  invalidateSaunaCache();
   vi.stubGlobal("fetch", async (url: string | URL) => {
     calls.push(String(url));
     return new Response(JSON.stringify(response), { status: 200 });
   });
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("sauna adapter wire contract", () => {
   it("status maps the quick/status fields", async () => {
@@ -88,5 +92,68 @@ describe("sauna adapter wire contract", () => {
   it("schedule-status degrades to null when the endpoint is missing (older sauna app)", async () => {
     vi.stubGlobal("fetch", async () => new Response("Not Found", { status: 404 }));
     expect(await saunaScheduleStatus()).toEqual({ stopAt: null });
+  });
+});
+
+/**
+ * The read cache exists because of a real outage: the dashboard's 3s poll
+ * turned into two sauna-app calls each, and the sauna app's Redis quota
+ * (500k requests/month) ran out — nobody could sign in there and KLAFS
+ * locked the account under the login storm. Reads must be served from
+ * memory for 30s; commands must drop the cache so the card is honest.
+ */
+describe("sauna read cache", () => {
+  it("serves status from memory within 30s and refetches after", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-19T12:00:00Z"));
+    response = { success: true, isPoweredOn: false, currentTemperature: 22 };
+    await saunaStatus();
+    await saunaStatus();
+    await saunaStatus();
+    expect(calls.filter((c) => c.includes("/api/quick/status")).length).toBe(1);
+
+    vi.setSystemTime(new Date("2026-09-19T12:00:31Z"));
+    response = { success: true, isPoweredOn: true, currentTemperature: 60 };
+    const s = await saunaStatus();
+    expect(s.poweredOn).toBe(true);
+    expect(calls.filter((c) => c.includes("/api/quick/status")).length).toBe(2);
+  });
+
+  it("coalesces concurrent status reads into one request", async () => {
+    response = { success: true, isPoweredOn: false, currentTemperature: 22 };
+    await Promise.all([saunaStatus(), saunaStatus(), saunaStatus()]);
+    expect(calls.length).toBe(1);
+  });
+
+  it("caches schedule-status for a minute", async () => {
+    response = { stop_at: "14:30" };
+    await saunaScheduleStatus();
+    await saunaScheduleStatus();
+    expect(calls.filter((c) => c.includes("/api/quick/schedule-status")).length).toBe(1);
+  });
+
+  it("remembers a failure briefly instead of re-polling a down sauna app every 3s", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-19T12:00:00Z"));
+    response = { error: "Storage unavailable" };
+    await expect(saunaStatus()).rejects.toThrow(/Storage unavailable/);
+    await expect(saunaStatus()).rejects.toThrow(/Storage unavailable/);
+    expect(calls.length).toBe(1);
+
+    vi.setSystemTime(new Date("2026-09-19T12:00:16Z"));
+    response = { success: true, isPoweredOn: false };
+    await saunaStatus();
+    expect(calls.length).toBe(2);
+  });
+
+  it("commands drop the cache so the next read is live", async () => {
+    response = { success: true, isPoweredOn: false, currentTemperature: 22 };
+    await saunaStatus();
+    response = { success: true, message: "stopped" };
+    await saunaStop();
+    response = { success: true, isPoweredOn: true, currentTemperature: 22 };
+    const s = await saunaStatus();
+    expect(s.poweredOn).toBe(true);
+    expect(calls.filter((c) => c.includes("/api/quick/status")).length).toBe(2);
   });
 });

@@ -146,6 +146,47 @@ describe("sauna read cache", () => {
     expect(calls.length).toBe(2);
   });
 
+  it("a read in flight during invalidation is handed to its caller but never stored", async () => {
+    let release!: (r: Response) => void;
+    vi.stubGlobal("fetch", (url: string | URL) => {
+      calls.push(String(url));
+      return new Promise<Response>((resolve) => { release = resolve; });
+    });
+    const pending = saunaStatus();           // started before the command
+    invalidateSaunaCache();                  // command lands
+    release(new Response(JSON.stringify({ success: true, isPoweredOn: false }), { status: 200 }));
+    expect((await pending).poweredOn).toBe(false);
+    // The stale pre-command answer must not have been written back.
+    vi.stubGlobal("fetch", async (url: string | URL) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ success: true, isPoweredOn: true }), { status: 200 });
+    });
+    expect((await saunaStatus()).poweredOn).toBe(true);
+    expect(calls.length).toBe(2);
+  });
+
+  it("a poll that refills the cache during a slow start is dropped once the start settles", async () => {
+    let releaseStart!: (r: Response) => void;
+    vi.stubGlobal("fetch", (url: string | URL) => {
+      const u = String(url);
+      calls.push(u);
+      if (u.includes("/api/quick/start")) {
+        return new Promise<Response>((resolve) => { releaseStart = resolve; });
+      }
+      return Promise.resolve(new Response(JSON.stringify({ success: true, isPoweredOn: false }), { status: 200 }));
+    });
+    const starting = saunaStart();
+    await Promise.resolve();
+    expect((await saunaStatus()).poweredOn).toBe(false);   // dashboard poll mid-command
+    releaseStart(new Response(JSON.stringify({ success: true, verified: true, message: "ok" }), { status: 200 }));
+    await starting;
+    vi.stubGlobal("fetch", async (url: string | URL) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ success: true, isPoweredOn: true }), { status: 200 });
+    });
+    expect((await saunaStatus()).poweredOn).toBe(true);    // live again, not the mid-command value
+  });
+
   it("commands drop the cache so the next read is live", async () => {
     response = { success: true, isPoweredOn: false, currentTemperature: 22 };
     await saunaStatus();

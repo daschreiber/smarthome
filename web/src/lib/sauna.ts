@@ -31,36 +31,61 @@ interface Memo<T> {
   value?: { result: T; at: number };
   error?: { err: unknown; at: number };
   inflight?: Promise<T>;
+  /** Bumped by invalidation: a read started under an older generation may
+   *  not write back — it would resurrect the pre-command state. */
+  gen: number;
 }
 
-const statusMemo: Memo<SaunaStatus> = {};
-const scheduleMemo: Memo<{ stopAt: string | null }> = {};
+const statusMemo: Memo<SaunaStatus> = { gen: 0 };
+const scheduleMemo: Memo<{ stopAt: string | null }> = { gen: 0 };
 
 async function memoized<T>(memo: Memo<T>, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
   const now = Date.now();
   if (memo.value && now - memo.value.at < ttlMs) return memo.value.result;
   if (memo.error && now - memo.error.at < ERROR_CACHE_MS) throw memo.error.err;
   if (memo.inflight) return memo.inflight;
+  const gen = memo.gen;
+  const current = () => memo.gen === gen;
   memo.inflight = fetcher()
     .then((result) => {
-      memo.value = { result, at: Date.now() };
-      memo.error = undefined;
+      if (current()) {
+        memo.value = { result, at: Date.now() };
+        memo.error = undefined;
+      }
       return result;
     })
     .catch((err: unknown) => {
-      memo.error = { err, at: Date.now() };
+      if (current()) memo.error = { err, at: Date.now() };
       throw err;
     })
     .finally(() => {
-      memo.inflight = undefined;
+      if (current()) memo.inflight = undefined;
     });
   return memo.inflight;
 }
 
-/** Drop cached reads — after a command, or in tests. */
+/** Drop cached reads — around a command, or in tests. Reads still in
+ *  flight are orphaned: their results are handed to their callers but
+ *  never stored. */
 export function invalidateSaunaCache(): void {
-  statusMemo.value = statusMemo.error = statusMemo.inflight = undefined;
-  scheduleMemo.value = scheduleMemo.error = scheduleMemo.inflight = undefined;
+  for (const memo of [statusMemo, scheduleMemo] as Memo<unknown>[]) {
+    memo.gen += 1;
+    memo.value = memo.error = memo.inflight = undefined;
+  }
+}
+
+/** Runs a heater command with the read cache dropped before AND after it.
+ *  The "before" keeps a stale card from surviving the command; the "after"
+ *  matters because a start can take 90s to verify and the dashboard keeps
+ *  polling meanwhile — whatever those polls stored describes the cabin
+ *  before the command landed. */
+async function command<T>(run: () => Promise<T>): Promise<T> {
+  invalidateSaunaCache();
+  try {
+    return await run();
+  } finally {
+    invalidateSaunaCache();
+  }
 }
 
 export interface SaunaStatus {
@@ -157,30 +182,32 @@ export async function saunaStart(opts: SaunaStartOptions = {}): Promise<SaunaCom
   const params: Record<string, string> = {};
   if (opts.temp != null) params.temp = String(Math.round(opts.temp));
   if (opts.stopAfterMinutes != null) params.stop_after = String(Math.round(opts.stopAfterMinutes));
-  invalidateSaunaCache();
-  try {
-    const b = await quick("/api/quick/start", params, COMMAND_TIMEOUT_MS);
-    if (b.success !== true) {
-      throw new Error(String(b.warning ?? "sauna start not confirmed"));
+  return command(async () => {
+    try {
+      const b = await quick("/api/quick/start", params, COMMAND_TIMEOUT_MS);
+      if (b.success !== true) {
+        throw new Error(String(b.warning ?? "sauna start not confirmed"));
+      }
+      return {
+        verified: b.verified !== false,
+        message: String(b.message ?? "sauna starting"),
+        stopAt: typeof b.stop_at === "string" ? b.stop_at : null,
+      };
+    } catch (err) {
+      return sentDespite(err, "start sent — the sauna app's watchdog is verifying ignition");
     }
-    return {
-      verified: b.verified !== false,
-      message: String(b.message ?? "sauna starting"),
-      stopAt: typeof b.stop_at === "string" ? b.stop_at : null,
-    };
-  } catch (err) {
-    return sentDespite(err, "start sent — the sauna app's watchdog is verifying ignition");
-  }
+  });
 }
 
 /** Schedule (or replace) the app-managed auto-stop for a running sauna. */
-export async function saunaStopIn(minutes: number): Promise<{ stopAt: string }> {
-  invalidateSaunaCache();
-  const b = await quick("/api/quick/stop-in", { minutes: String(Math.round(minutes)) }, STATUS_TIMEOUT_MS);
-  if (b.success !== true || typeof b.stop_at !== "string") {
-    throw new Error(String(b.error ?? "auto-stop not scheduled"));
-  }
-  return { stopAt: b.stop_at };
+export function saunaStopIn(minutes: number): Promise<{ stopAt: string }> {
+  return command(async () => {
+    const b = await quick("/api/quick/stop-in", { minutes: String(Math.round(minutes)) }, STATUS_TIMEOUT_MS);
+    if (b.success !== true || typeof b.stop_at !== "string") {
+      throw new Error(String(b.error ?? "auto-stop not scheduled"));
+    }
+    return { stopAt: b.stop_at };
+  });
 }
 
 /** Pending app-managed auto-stop, if any. Null when the endpoint is absent (older sauna app). */
@@ -195,17 +222,18 @@ export function saunaScheduleStatus(): Promise<{ stopAt: string | null }> {
   });
 }
 
-export async function saunaStop(): Promise<SaunaCommandResult> {
-  invalidateSaunaCache();
-  try {
-    const b = await quick("/api/quick/stop", {}, COMMAND_TIMEOUT_MS);
-    if (b.success !== true) {
-      throw new Error(String(b.warning ?? "sauna stop not confirmed"));
+export function saunaStop(): Promise<SaunaCommandResult> {
+  return command(async () => {
+    try {
+      const b = await quick("/api/quick/stop", {}, COMMAND_TIMEOUT_MS);
+      if (b.success !== true) {
+        throw new Error(String(b.warning ?? "sauna stop not confirmed"));
+      }
+      return { verified: true, message: String(b.message ?? "sauna stopped") };
+    } catch (err) {
+      return sentDespite(err, "stop sent — check the cabin status in a moment");
     }
-    return { verified: true, message: String(b.message ?? "sauna stopped") };
-  } catch (err) {
-    return sentDespite(err, "stop sent — check the cabin status in a moment");
-  }
+  });
 }
 
 export async function saunaSetTemperature(temp: number): Promise<void> {
@@ -215,11 +243,12 @@ export async function saunaSetTemperature(temp: number): Promise<void> {
   if (!Number.isFinite(temp) || temp < 40 || temp > 100) {
     throw new Error(`sauna temperature ${temp} out of safe range 40-100`);
   }
-  invalidateSaunaCache();
-  const b = await quick(
-    "/api/quick/temperature",
-    { temp: String(Math.round(temp)) },
-    COMMAND_TIMEOUT_MS,
-  );
-  if (b.success !== true) throw new Error("temperature change not confirmed");
+  await command(async () => {
+    const b = await quick(
+      "/api/quick/temperature",
+      { temp: String(Math.round(temp)) },
+      COMMAND_TIMEOUT_MS,
+    );
+    if (b.success !== true) throw new Error("temperature change not confirmed");
+  });
 }

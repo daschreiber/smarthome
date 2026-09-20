@@ -3,8 +3,13 @@ import { bedSetLevel, bedSideForDeviceId, bedSideOff, bedSideOn } from "./eights
 import { SLOW_SERVICE_TIMEOUT_MS, callService, getStates } from "./ha";
 import {
   DUPLICATE_WINDOW_MS,
+  FRAME_POLL_MS,
+  FRAME_REASSERT_AFTER_MS,
+  FRAME_VERIFY_MS,
   artFrameFollow,
   artFrames,
+  claimFrames,
+  ownsFrame,
   pressOf,
   recordPress,
   spareWatched,
@@ -13,6 +18,7 @@ import {
   type SensorRead,
 } from "./artframes";
 import { audit } from "./audit";
+import { TV_ATTEMPTS, mediaAgrees, reassertCall } from "./knxLights";
 import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
 import { noiseTurnOff, noiseTurnOn, setNoiseVolume } from "./whitenoise";
@@ -133,6 +139,7 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
       )
     : new Map<string, SensorRead>();
   const { targets, spared } = spareWatched(frames, follow, (id) => states.get(id));
+  const token = claimFrames(targets.map((f) => f.id));
   const result = targets.length ? await executeOnDevices(targets, follow) : { total: 0, failed: [] };
   audit({
     ts: new Date().toISOString(),
@@ -150,6 +157,79 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
     ok: result.failed.length === 0,
     durationMs: Date.now() - started,
     error: result.failed.length ? result.failed.map((f) => `${f.target}: ${f.error}`).join("; ") : undefined,
+  });
+  // The line above says what was sent. Whether the sets obeyed is read back
+  // in the background — the caller has long since answered.
+  void verifyFrameSweep(targets, follow, user, token, scope);
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Read a Frame sweep back and chase the sets that did not obey (lib/artframes
+ * FRAME_VERIFY_MS). Only a positive contradiction is re-sent: a set reading
+ * unavailable or unknown is waited out — nothing sent at it would land — and
+ * re-commanded the moment it comes back still wrong. A set that has once
+ * agreed is done, so someone switching the Den TV on a minute after Night is
+ * not fought. Writes a line only when there is something to say.
+ */
+export async function verifyFrameSweep(
+  targets: Device[],
+  cmd: Command,
+  user: string,
+  token: number,
+  scope: PressScope = {},
+): Promise<void> {
+  if (targets.length === 0) return;
+  const started = Date.now();
+  const deadline = started + FRAME_VERIFY_MS;
+  const attempts = new Map(targets.map((d) => [d.id, 1]));
+  const lastSent = new Map(targets.map((d) => [d.id, started]));
+  const lastSeen = new Map<string, string>();
+  let waiting = [...targets];
+
+  for (;;) {
+    await sleep(FRAME_POLL_MS);
+    const states = new Map((await getStates().catch(() => [])).map((s) => [s.entity_id, s.state]));
+    waiting = waiting.filter((d) => {
+      if (!ownsFrame(d.id, token)) return false;
+      const seen = states.get(d.entityId);
+      if (seen != null) lastSeen.set(d.id, seen);
+      return seen == null || !mediaAgrees(cmd, seen);
+    });
+    if (waiting.length === 0 || Date.now() >= deadline) break;
+    for (const d of waiting) {
+      const seen = states.get(d.entityId);
+      if (seen == null || seen === "unavailable" || seen === "unknown") continue;
+      const n = attempts.get(d.id)!;
+      if (n >= TV_ATTEMPTS || Date.now() - lastSent.get(d.id)! < FRAME_REASSERT_AFTER_MS) continue;
+      const call = reassertCall(d, cmd, n);
+      await callService(call.domain, call.service, call.data, { timeoutMs: SLOW_SERVICE_TIMEOUT_MS }).catch(() => {});
+      attempts.set(d.id, n + 1);
+      lastSent.set(d.id, Date.now());
+    }
+  }
+
+  const stuck = waiting.filter((d) => ownsFrame(d.id, token));
+  const retried = [...attempts.entries()].filter(([, n]) => n > 1);
+  if (stuck.length === 0 && retried.length === 0) return;
+  audit({
+    ts: new Date().toISOString(),
+    user,
+    deviceId: "system:artframes",
+    entityId: "system.artframes",
+    command: `frames_${cmd.command}_verify`,
+    args: {
+      ...(scope.floor ? { floor: scope.floor } : {}),
+      targets: targets.map((f) => f.id),
+      reasserted: Object.fromEntries(retried.map(([id, n]) => [id, n - 1])),
+      unverified: Object.fromEntries(stuck.map((f) => [f.id, lastSeen.get(f.id) ?? "unread"])),
+    },
+    ok: stuck.length === 0,
+    durationMs: Date.now() - started,
+    error: stuck.length
+      ? `never obeyed ${cmd.command}: ${stuck.map((f) => `${f.label} (${lastSeen.get(f.id) ?? "unread"})`).join(", ")}`
+      : undefined,
   });
 }
 

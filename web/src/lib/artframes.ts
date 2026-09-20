@@ -110,6 +110,40 @@ export function recordPress(press: Press, now = Date.now(), floor?: 5 | 6): bool
 /** Tests only. */
 export function resetPressMemory(): void {
   lastPress.clear();
+  sweepOwner.clear();
+}
+
+/**
+ * A sweep is chased, because "sent" is not "obeyed" (owner, 2026-09-19: Exit
+ * floor answered 202, the sweep logged `failed: []`, and the Den TV stayed
+ * on). SmartThings had marked every Frame unavailable a minute after a quick
+ * Night-then-Morning, and Home Assistant answers 200 to a service call
+ * against an unavailable entity while nothing happens (lib/reachability).
+ * So `followArtFrames` reads the sets back in the background and re-sends
+ * where one positively contradicts the press — which includes the moment it
+ * comes back from unavailable still lit.
+ *
+ * The window is minutes, not the interactive route's 30 s: a cloud
+ * integration that dropped its devices takes that long to find them again.
+ * Re-sends are spaced for a Frame's held power key and its boot.
+ */
+export const FRAME_VERIFY_MS = 180_000;
+export const FRAME_POLL_MS = 10_000;
+export const FRAME_REASSERT_AFTER_MS = 30_000;
+
+/** Which sweep owns a Frame's verdict. A newer press over the same set takes
+ *  it, and the older chase lets go rather than fight the newer intent. */
+const sweepOwner = new Map<string, number>();
+let sweepSeq = 0;
+
+export function claimFrames(frameIds: string[]): number {
+  const token = ++sweepSeq;
+  for (const id of frameIds) sweepOwner.set(id, token);
+  return token;
+}
+
+export function ownsFrame(frameId: string, token: number): boolean {
+  return sweepOwner.get(frameId) === token;
 }
 
 /**

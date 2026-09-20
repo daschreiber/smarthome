@@ -257,21 +257,24 @@ export async function applySceneById(
   sceneId: string,
   opts: { includeSauna?: boolean; user?: string } = {},
 ): Promise<BatchResult> {
-  // A house mode (lib/houseModes: Night, Morning, Exit, Welcome, Main) is a
-  // scene id too. Applying it is a press of its KNX scene switch — the one
-  // turn_on control_device would send — and the picture Frames follow the
-  // press as they do for a scheduled device step below.
-  const mode = houseModeById(sceneId);
-  if (mode) {
-    const device = getDevice(mode.deviceId);
+  const scene = getScene(sceneId);
+  if (!scene) {
+    // A house mode (lib/houseModes: Night, Morning, Exit, Welcome, Main) is
+    // a scene id too. Applying it is a press of its KNX scene switch — the
+    // one turn_on control_device would send — and the picture Frames follow
+    // the press as they do for a scheduled device step below. The saved
+    // store is asked first, as lib/mcp resolveSceneRef asks it first, so a
+    // stored scene is never shadowed by a mode of the same id (createScene
+    // reserves the mode ids; this keeps the precedence for any older
+    // record — Codex review, PR #142).
+    const mode = houseModeById(sceneId);
+    const device = mode ? getDevice(mode.deviceId) : undefined;
     if (!device) throw new Error(`no such scene: ${sceneId}`);
     const cmd: Command = { command: "turn_on" };
     const result = await runBatch([{ target: device.id, run: () => executeOnDevice(device, cmd) }]);
     if (result.failed.length === 0) void followArtFrames(device, cmd, opts.user ?? "automation");
     return result;
   }
-  const scene = getScene(sceneId);
-  if (!scene) throw new Error(`no such scene: ${sceneId}`);
   // The sauna heater replays ONLY behind an explicit per-apply confirmation
   // (the scenes route asks; automations and the assistant never pass it) —
   // the Phase F safety rule survives scenes.

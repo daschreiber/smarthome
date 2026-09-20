@@ -461,6 +461,31 @@ describe("scenes", () => {
     }
   });
 
+  it("a saved scene can never take a mode's id, and an older record under one still wins everywhere (Codex review, PR #142)", async () => {
+    // New captures skip the reserved ids.
+    const dodged = createScene("Mode Night", "Lounge", "daniel", [{ deviceId: deviceIdFor(LOUNGE_COVE), command: { command: "turn_off" } }]);
+    expect(dodged.id).toBe("mode_night_2");
+    // A record that already sits on a mode id (written before the modes
+    // existed) is the saved scene, for the MCP tool and the executor alike.
+    fs.writeFileSync(process.env.SCENES_PATH!, JSON.stringify([{
+      id: "mode_morning", name: "Old morning", room: "Lounge", createdBy: "daniel", createdAt: "2026-01-01T00:00:00Z",
+      states: [{ deviceId: deviceIdFor(LOUNGE_COVE), command: { command: "set_brightness", brightnessPct: 10 } }],
+    }]));
+    expect(resolveSceneRef("mode_morning")).toMatchObject({ kind: "saved", scene: { id: "mode_morning" } });
+    const client = await connect();
+    const r = json(await call(client, "activate_scene", { sceneId: "mode_morning" }));
+    expect(r.scene).toMatchObject({ id: "mode_morning", name: "Old morning", kind: "saved" });
+    expect(calls).toHaveBeenCalledTimes(1);
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: LOUNGE_COVE, brightness_pct: 10 }]);
+    calls.mockClear();
+    expect(await executeAction({ type: "scene", sceneId: "mode_morning" })).toEqual({ total: 1, failed: [] });
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: LOUNGE_COVE, brightness_pct: 10 }]);
+    // The alias still reaches the switch: "morning mode" is not a stored id.
+    calls.mockClear();
+    expect(json(await call(client, "activate_scene", { sceneId: "morning mode" })).scene.id).toBe("mode_morning");
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: MORNING_SWITCH }]);
+  });
+
   it("the executor's scene path presses a mode switch too, so a scheduled mode step fires", async () => {
     const r = await executeAction({ type: "scene", sceneId: "mode_morning" });
     expect(r).toEqual({ total: 1, failed: [] });

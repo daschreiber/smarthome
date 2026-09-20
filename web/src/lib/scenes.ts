@@ -1,6 +1,7 @@
 import path from "node:path";
 import { readJsonFile, writeJsonFile } from "./store";
 import { slug, type Device } from "./registry";
+import { HOUSE_MODES } from "./houseModes";
 import type { HaState } from "./ha";
 
 /**
@@ -164,9 +165,14 @@ export function createScene(
     return existing;
   }
 
+  // The whole-house modes are scenes by id too (lib/houseModes, offered by
+  // the MCP server): a capture named "Mode Night" must not land on
+  // `mode_night` and shadow the Night switch, so those ids are reserved.
+  const reserved = new Set(HOUSE_MODES.map((m) => m.id));
+  const taken = (candidate: string) => reserved.has(candidate) || scenes.some((s) => s.id === candidate);
   let id = slug(clean) || "scene";
   let n = 2;
-  while (scenes.some((s) => s.id === id)) id = `${slug(clean)}_${n++}`;
+  while (taken(id)) id = `${slug(clean) || "scene"}_${n++}`;
   const scene: Scene = {
     id, name: clean, room, createdBy,
     createdAt: new Date().toISOString(),

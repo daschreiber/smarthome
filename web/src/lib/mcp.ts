@@ -19,11 +19,12 @@ import { assertCommandAllowed, temperatureBounds, type Command } from "./command
 import { applySceneById, executeAction, executeOnDevice, followArtFrames, roomLights } from "./execute";
 import { getState } from "./ha";
 import { homeSnapshot, type HomeDevice } from "./homeSnapshot";
+import { houseModeVocabulary, listHouseModes, resolveHouseMode, type HouseMode } from "./houseModes";
 import { authenticateAccessToken } from "./oauth";
 import { canDeleteRecord } from "./permissions";
 import { commandEntityIds, deviceUnreachable } from "./reachability";
 import { getDevice, registry, slug, type Device } from "./registry";
-import { getScene, listScenes } from "./scenes";
+import { getScene, listScenes, type Scene } from "./scenes";
 import { createTimer, deleteTimer, listTimers } from "./timers";
 import type { Role } from "./users";
 
@@ -136,6 +137,30 @@ export function resolveRoom(input: string): { room: string } | { error: string }
   return { error: `unknown room "${input}"; rooms are: ${rooms.join(", ")}` };
 }
 
+/**
+ * What an agent may call a scene: a saved scene's id, or a house mode
+ * (lib/houseModes) by id, name or alias. A saved scene wins on an exact id;
+ * modes then resolve case-insensitively ("night mode", "Sleep Mode",
+ * "mode_night"). Anything else is an error that names the vocabulary.
+ */
+export type SceneRef =
+  | { kind: "saved"; scene: Scene }
+  | { kind: "mode"; mode: HouseMode; device: Device };
+
+export function resolveSceneRef(input: string): SceneRef | { error: string } {
+  const wanted = input.trim();
+  if (!wanted) return { error: "sceneId is required" };
+  const scene = getScene(wanted);
+  if (scene) return { kind: "saved", scene };
+  const mode = resolveHouseMode(wanted);
+  if (mode) {
+    const device = getDevice(mode.deviceId);
+    if (device && agentVisible(device)) return { kind: "mode", mode, device };
+  }
+  const ids = [...listScenes().map((s) => s.id), ...listHouseModes().map((m) => m.mode.id)];
+  return { error: `unknown scene "${input}" — use the ids returned by list_scenes${ids.length ? ` (${ids.join(", ")})` : ""}` };
+}
+
 /** The fields worth an agent's context, nulls dropped. */
 const DEVICE_FIELDS = [
   "id", "label", "room", "floor", "kind", "category", "capabilities",
@@ -190,7 +215,7 @@ function commandHint(d: Device): string {
   return hints.join("; ");
 }
 
-const INSTRUCTIONS = `You are connected to a private smart home (Control4 + KNX behind Home Assistant, with a few extra devices) through its own app. Read state with get_home_state and act with control_device, set_room_lights and activate_scene. Schedule with create_automation (clock or sunrise/sunset steps, recurring by weekday or one-shot by date) and create_timer (auto-off N minutes after a device turns on). Only ids returned by these tools are valid: never invent a deviceId, sceneId, automation id or room. Values: brightness, shade position and volume are percent 0-100; temperatures are °C (rooms 10-32, sauna 40-100); bed warmth is Eight Sleep's -100…+100 scale, not degrees. "The lights in X" means set_room_lights (or a room action in an automation), which sweeps real lights only (never fans, vents, towel rails or floor heating). Relative dates ("tomorrow", "Saturday") resolve against the houseTime that get_home_state and list_automations report; a one-shot must carry its resolved date. Jewish holidays already follow Shabbat (a Yom Tov runs the Saturday automations, its eve the Friday ones), so never schedule one-shot copies of Shabbat automations for a holiday. The sauna heater is safety-sensitive: command it only when the person explicitly asked, tell them it will start or stop the heater, and pass confirm: true only after they agreed; it cannot be scheduled from here. Door locks, gates and alarms are not available here by policy. Commands answer "sent" the moment Home Assistant accepts them; read get_home_state a few seconds later to see the result. Recurring automations are the house admin's: they can be created only when the connected person is an admin; anyone else may schedule one-offs (every step dated). Auto-off timers are open to everyone. You may edit or delete only the automations and timers you created. Every action is written to the house's audit log under this connection's name.`;
+const INSTRUCTIONS = `You are connected to a private smart home (Control4 + KNX behind Home Assistant, with a few extra devices) through its own app. Read state with get_home_state and act with control_device, set_room_lights and activate_scene. The whole-house modes — Night, Morning, Exit, Welcome (and Main All House) — are scenes: list_scenes returns them as kind "mode" with ids mode_night, mode_morning, mode_exit, mode_welcome and mode_main, and activate_scene (or a {type: "scene"} automation step) takes those ids or their aliases ("night mode", "sleep mode", "day mode", "morning mode", "exit mode", "leaving", "away mode", "welcome mode", "arriving"), so "put the house in night mode" is activate_scene with sceneId "mode_night" — no device search needed. Schedule with create_automation (clock or sunrise/sunset steps, recurring by weekday or one-shot by date) and create_timer (auto-off N minutes after a device turns on). Only ids returned by these tools are valid: never invent a deviceId, sceneId, automation id or room. Values: brightness, shade position and volume are percent 0-100; temperatures are °C (rooms 10-32, sauna 40-100); bed warmth is Eight Sleep's -100…+100 scale, not degrees. "The lights in X" means set_room_lights (or a room action in an automation), which sweeps real lights only (never fans, vents, towel rails or floor heating). Relative dates ("tomorrow", "Saturday") resolve against the houseTime that get_home_state and list_automations report; a one-shot must carry its resolved date. Jewish holidays already follow Shabbat (a Yom Tov runs the Saturday automations, its eve the Friday ones), so never schedule one-shot copies of Shabbat automations for a holiday. The sauna heater is safety-sensitive: command it only when the person explicitly asked, tell them it will start or stop the heater, and pass confirm: true only after they agreed; it cannot be scheduled from here. Door locks, gates and alarms are not available here by policy. Commands answer "sent" the moment Home Assistant accepts them; read get_home_state a few seconds later to see the result. Recurring automations are the house admin's: they can be created only when the connected person is an admin; anyone else may schedule one-offs (every step dated). Auto-off timers are open to everyone. You may edit or delete only the automations and timers you created. Every action is written to the house's audit log under this connection's name.`;
 
 /** The MCP step shape: the assistant's step with every trigger field
  *  optional (an agent should not have to spell out nulls), actions kept
@@ -221,8 +246,12 @@ export function buildAutomationSpec(name: string, steps: McpStep[], caller: McpC
         if (roomLights(r.room).length === 0) throw new Error(`${r.room} has no lights the app controls`);
         return { ...a, room: r.room };
       }
-      if (!getScene(a.sceneId)) throw new Error(`unknown scene "${a.sceneId}" — use ids from list_scenes`);
-      return a;
+      // A saved scene by id, or a house mode by id, name or alias — stored
+      // under the mode's canonical id so the scheduler (lib/execute
+      // applySceneById) and list_automations both read it plainly.
+      const ref = resolveSceneRef(a.sceneId);
+      if ("error" in ref) throw new Error(ref.error);
+      return ref.kind === "mode" ? { ...a, sceneId: ref.mode.id } : a;
     });
   const proposal: Extract<LlmProposal, { kind: "automation" }> = {
     kind: "automation",
@@ -314,7 +343,53 @@ function programmingLine(caller: McpCaller, entityId: string, command: string, a
 }
 
 const STEP_DESCRIPTION =
-  "Each step fires on exactly one trigger: `time` (HH:MM, 24h house time) OR `sun` (\"sunrise\"/\"sunset\", with optional `sunOffsetMinutes`, negative = before, ±120). `days` (0=Sunday…6) limits a recurring step; omit for every day. `date` (YYYY-MM-DD) makes it one-shot. `actions`: {type:\"device\", deviceId, command, value} (control_device's vocabulary, value null when unused), {type:\"room\", room, command:\"lights_on\"|\"lights_off\"}, or {type:\"scene\", sceneId}.";
+  "Each step fires on exactly one trigger: `time` (HH:MM, 24h house time) OR `sun` (\"sunrise\"/\"sunset\", with optional `sunOffsetMinutes`, negative = before, ±120). `days` (0=Sunday…6) limits a recurring step; omit for every day. `date` (YYYY-MM-DD) makes it one-shot. `actions`: {type:\"device\", deviceId, command, value} (control_device's vocabulary, value null when unused), {type:\"room\", room, command:\"lights_on\"|\"lights_off\"}, or {type:\"scene\", sceneId} — a saved scene id, or a house mode by id or alias (mode_night, mode_morning, mode_exit, mode_welcome, mode_main; \"night mode\", \"day mode\", \"leaving\", \"arriving\" …), stored under the mode id.";
+
+/**
+ * One command to one device, the way control_device sends it — shared with
+ * activate_scene for a house mode, which is a press of a scene switch.
+ * Refuses a device Home Assistant reports unavailable (lib/reachability)
+ * rather than answering "sent" over a dead switch, dispatches through the
+ * shared executor, takes the picture Frames along (lib/artframes), and
+ * writes one audit line under the caller either way. `extraArgs` rides
+ * into that line (a mode activation names its scene).
+ */
+async function sendDeviceCommand(
+  caller: McpCaller, device: Device, cmd: Command, extraArgs: Record<string, unknown> = {},
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { command: name, ...args } = cmd;
+  const started = Date.now();
+  const line = (extra: Partial<Parameters<typeof audit>[0]>) =>
+    audit({
+      ts: new Date().toISOString(), user: caller.user, deviceId: device.id, entityId: device.entityId,
+      command: name, args: { ...args, ...extraArgs, via: "mcp" }, ok: true, durationMs: Date.now() - started, ...extra,
+    });
+  try {
+    // Unavailable is not off (lib/reachability): refuse loudly when Home
+    // Assistant has lost the device, as the interactive route does,
+    // instead of returning "sent" over a dead switch.
+    if (device.kind !== "sauna" && device.kind !== "noise") {
+      const reads = new Map(
+        await Promise.all(
+          commandEntityIds(device).map(async (id) => [id, await getState(id).catch(() => undefined)] as const),
+        ),
+      );
+      if (deviceUnreachable(device, (id) => reads.get(id))) {
+        const message = `${device.label} is not responding — Home Assistant reports it unavailable`;
+        line({ ok: false, error: message });
+        return { ok: false, message };
+      }
+    }
+    await executeOnDevice(device, cmd);
+    void followArtFrames(device, cmd, caller.user);
+    line({});
+    return { ok: true };
+  } catch (err) {
+    const message = errorText(err);
+    line({ ok: false, error: message });
+    return { ok: false, message: `${device.label}: ${message}` };
+  }
+}
 
 /**
  * Build a server for one caller. One per request in the stateless HTTP
@@ -391,18 +466,32 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
     {
       title: "List scenes",
       description:
-        "The saved scenes (captured room states) with their ids for activate_scene. A scene that includes the sauna applies without it here.",
+        "Everything activate_scene can apply, two kinds. kind \"saved\": scenes captured in the app (room states replayed device by device; one that includes the sauna applies without it here). kind \"mode\": the whole-house modes — Night, Morning, Exit, Welcome and Main All House — the house's scene switches offered as scenes, each with a stable id (mode_night, mode_morning, mode_exit, mode_welcome, mode_main) and the aliases activate_scene also accepts: " +
+        houseModeVocabulary() + ". Read this vocabulary before searching get_home_state for a switch: \"put the house in night mode\" is activate_scene with sceneId \"mode_night\".",
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
     async () =>
       ok({
-        scenes: listScenes().map((s) => ({
-          id: s.id,
-          name: s.name,
-          room: s.room,
-          devices: s.states.length,
-          includesSauna: s.states.some((st) => getDevice(st.deviceId)?.kind === "sauna"),
-        })),
+        scenes: [
+          ...listScenes().map((s) => ({
+            id: s.id,
+            name: s.name,
+            kind: "saved" as const,
+            room: s.room,
+            devices: s.states.length,
+            includesSauna: s.states.some((st) => getDevice(st.deviceId)?.kind === "sauna"),
+          })),
+          ...listHouseModes()
+            .filter(({ device }) => agentVisible(device))
+            .map(({ mode, device }) => ({
+              id: mode.id,
+              name: mode.name,
+              kind: "mode" as const,
+              room: device.room,
+              deviceId: device.id,
+              aliases: [...mode.aliases],
+            })),
+        ],
       }),
   );
 
@@ -437,43 +526,14 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
       } catch (err) {
         return fail(`${device.label}: ${errorText(err)}. Accepted: ${commandHint(device)}`);
       }
-      const { command: name, ...args } = cmd;
-      const started = Date.now();
-      const line = (extra: Partial<Parameters<typeof audit>[0]>) =>
-        audit({
-          ts: new Date().toISOString(), user: caller.user, deviceId: device.id, entityId: device.entityId,
-          command: name, args: { ...args, via: "mcp" }, ok: true, durationMs: Date.now() - started, ...extra,
-        });
-      try {
-        // Unavailable is not off (lib/reachability): refuse loudly when Home
-        // Assistant has lost the device, as the interactive route does,
-        // instead of returning "sent" over a dead switch.
-        if (device.kind !== "sauna" && device.kind !== "noise") {
-          const reads = new Map(
-            await Promise.all(
-              commandEntityIds(device).map(async (id) => [id, await getState(id).catch(() => undefined)] as const),
-            ),
-          );
-          if (deviceUnreachable(device, (id) => reads.get(id))) {
-            const message = `${device.label} is not responding — Home Assistant reports it unavailable`;
-            line({ ok: false, error: message });
-            return fail(message);
-          }
-        }
-        await executeOnDevice(device, cmd);
-        void followArtFrames(device, cmd, caller.user);
-        line({});
-        return ok({
-          status: "sent",
-          device: { id: device.id, label: device.label, room: device.room },
-          command: cmd,
-          note: "Home Assistant accepted the command; read get_home_state in a few seconds to see the result.",
-        });
-      } catch (err) {
-        const message = errorText(err);
-        line({ ok: false, error: message });
-        return fail(`${device.label}: ${message}`);
-      }
+      const sent = await sendDeviceCommand(caller, device, cmd);
+      if (!sent.ok) return fail(sent.message);
+      return ok({
+        status: "sent",
+        device: { id: device.id, label: device.label, room: device.room },
+        command: cmd,
+        note: "Home Assistant accepted the command; read get_home_state in a few seconds to see the result.",
+      });
     },
   );
 
@@ -516,18 +576,34 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
     {
       title: "Activate a scene",
       description:
-        "Apply a saved scene by id (from list_scenes). The sauna heater never fires from here even if the scene captured it.",
+        "Apply a scene from list_scenes. A saved scene replays its captured states (the sauna heater never fires from here even if the scene captured it). A house mode — Night, Morning, Exit, Welcome, Main All House — presses its whole-house scene switch, the same turn_on control_device would send. Mode ids and their aliases are accepted case-insensitively: " +
+        houseModeVocabulary() + ". \"Put the house in night mode\" is sceneId \"mode_night\" (or \"night mode\"); the response names the scene that was resolved.",
       inputSchema: {
-        sceneId: z.string().min(1).max(120).describe("The scene id from list_scenes."),
+        sceneId: z.string().min(1).max(120).describe("A scene id from list_scenes, or a house mode by id, name or alias (mode_night, \"night mode\", \"day mode\", \"leaving\", \"arriving\" …)."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ sceneId }) => {
-      const scene = getScene(sceneId);
-      if (!scene) return fail(`unknown scene "${sceneId}" — use the ids returned by list_scenes`);
+      const ref = resolveSceneRef(sceneId);
+      if ("error" in ref) return fail(ref.error);
+      if (ref.kind === "mode") {
+        const { mode, device } = ref;
+        const cmd: Command = { command: "turn_on" };
+        const sent = await sendDeviceCommand(caller, device, cmd, { scene: mode.id });
+        if (!sent.ok) return fail(`${mode.name}: ${sent.message}`);
+        return ok({
+          status: "sent",
+          scene: { id: mode.id, name: mode.name, kind: "mode", room: device.room },
+          ...(sceneId.trim() !== mode.id ? { resolvedFrom: sceneId } : {}),
+          device: { id: device.id, label: device.label, room: device.room },
+          command: cmd,
+          note: `${device.label} pressed; Home Assistant accepted the command. Read get_home_state in a few seconds to see the result.`,
+        });
+      }
+      const { scene } = ref;
       const started = Date.now();
       try {
-        const result = await applySceneById(sceneId);
+        const result = await applySceneById(scene.id, { user: caller.user });
         audit({
           ts: new Date().toISOString(), user: caller.user, deviceId: "mcp", entityId: `scene.${sceneId}`,
           command: "apply_scene", args: { name: scene.name, targets: result.total, failed: result.failed.length, via: "mcp" },
@@ -536,7 +612,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
         });
         return ok({
           status: result.failed.length === 0 ? "sent" : "partial",
-          scene: { id: scene.id, name: scene.name, room: scene.room },
+          scene: { id: scene.id, name: scene.name, kind: "saved", room: scene.room },
           devices: result.total,
           failed: result.failed,
         });
@@ -576,7 +652,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
       title: "Create an automation",
       description:
         "Schedule one or more steps under a name; the house runs them on its own clock from now on. " + STEP_DESCRIPTION +
-        " Only devices from get_home_state, rooms from list_rooms, and scenes from list_scenes are valid; the sauna cannot be scheduled. Recurring schedules are the house admin's alone: for anyone else every step must carry a `date` (a one-off). Say back to the person exactly what will run and when.",
+        " Only devices from get_home_state, rooms from list_rooms, and scenes from list_scenes are valid; the sauna cannot be scheduled. The house modes are scenes here too: a step {type:\"scene\", sceneId:\"mode_night\"} presses the Night switch, likewise mode_morning, mode_exit, mode_welcome and mode_main, and the aliases activate_scene accepts (\"night mode\", \"sleep mode\", \"day mode\", \"morning mode\", \"exit mode\", \"leaving\", \"away mode\", \"welcome mode\", \"arriving\") are taken and stored under the mode id. Recurring schedules are the house admin's alone: for anyone else every step must carry a `date` (a one-off). Say back to the person exactly what will run and when.",
       inputSchema: {
         name: z4.string().min(1).max(80).describe("A short name, e.g. \"Kitchen lights weekday morning\"."),
         steps: z4.array(McpStepSchema).min(1).max(12).describe("The scheduled steps."),
@@ -600,7 +676,7 @@ export function createHouseMcpServer(caller: McpCaller): McpServer {
     {
       title: "Update an automation",
       description:
-        "Replace the name and steps of an automation this connection created (id from list_automations); it keeps its id and enabled state. A listed action shown as `unsupported` (made in the app, e.g. a room-targeted vacuum clean) cannot be expressed here: leave that automation to the app rather than re-sending it. " + STEP_DESCRIPTION,
+        "Replace the name and steps of an automation this connection created (id from list_automations); it keeps its id and enabled state. A listed action shown as `unsupported` (made in the app, e.g. a room-targeted vacuum clean) cannot be expressed here: leave that automation to the app rather than re-sending it. Scene steps take saved scene ids and the house modes alike (mode_night, mode_morning, mode_exit, mode_welcome, mode_main, or an alias such as \"night mode\", \"day mode\", \"leaving\", \"arriving\"), stored under the mode id. " + STEP_DESCRIPTION,
       inputSchema: {
         id: z4.string().min(1).max(120).describe("The automation id from list_automations."),
         name: z4.string().min(1).max(80),

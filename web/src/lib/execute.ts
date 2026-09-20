@@ -23,6 +23,7 @@ import { getDevice, registry, type Device } from "./registry";
 import { saunaSetTemperature, saunaStart, saunaStop } from "./sauna";
 import { noiseTurnOff, noiseTurnOn, setNoiseVolume } from "./whitenoise";
 import { getScene } from "./scenes";
+import { houseModeById } from "./houseModes";
 import type { Action, Step } from "./automations";
 
 /**
@@ -254,8 +255,21 @@ async function runBatch(
 
 export async function applySceneById(
   sceneId: string,
-  opts: { includeSauna?: boolean } = {},
+  opts: { includeSauna?: boolean; user?: string } = {},
 ): Promise<BatchResult> {
+  // A house mode (lib/houseModes: Night, Morning, Exit, Welcome, Main) is a
+  // scene id too. Applying it is a press of its KNX scene switch — the one
+  // turn_on control_device would send — and the picture Frames follow the
+  // press as they do for a scheduled device step below.
+  const mode = houseModeById(sceneId);
+  if (mode) {
+    const device = getDevice(mode.deviceId);
+    if (!device) throw new Error(`no such scene: ${sceneId}`);
+    const cmd: Command = { command: "turn_on" };
+    const result = await runBatch([{ target: device.id, run: () => executeOnDevice(device, cmd) }]);
+    if (result.failed.length === 0) void followArtFrames(device, cmd, opts.user ?? "automation");
+    return result;
+  }
   const scene = getScene(sceneId);
   if (!scene) throw new Error(`no such scene: ${sceneId}`);
   // The sauna heater replays ONLY behind an explicit per-apply confirmation

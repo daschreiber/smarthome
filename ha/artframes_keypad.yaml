@@ -79,7 +79,18 @@ knx:
         - "0/0/0"   # ← door keypad: Lights 6
         - "0/0/0"   # ← door keypad: Lights 5
         - "0/0/0"   # ← door keypad: Exit
-        - "0/0/0"   # ← Exit floor 5
+        - "0/0/0"   # ← Exit floor 5 (this house: 0/0/2, keypad 1.1.43 writes 0)
+
+# Frames back to art after a wake (frame_art.py, 2026-09-20). No template, so
+# no shell and no input. Merge into an existing `shell_command:` key; reload
+# "Shell commands" (or shell_command.reload) after adding.
+shell_command:
+  frame_art_lounge: 'python3 /config/frame_art.py "Lounge TV"'
+  frame_art_lounge_check: 'python3 /config/frame_art.py "Lounge TV" --check'
+  frame_art_dining_left: 'python3 /config/frame_art.py "Left 32"'
+  frame_art_dining_middle: 'python3 /config/frame_art.py "Middle 32"'
+  frame_art_dining_right: 'python3 /config/frame_art.py "Right 32"'
+  frame_art_dining_check: 'python3 /config/frame_art.py "Left 32" --check'
 
 rest_command:
   # The relay to the app. `payload` is rendered by HA and sent as JSON —
@@ -198,3 +209,27 @@ automation manual_artframes_keypad:
         # So the trace shows what the app answered: 202 accepted, 200
         # duplicate, 401 wrong key, 503 HA_HOOK_KEY not set.
         response_variable: answer
+      # A Frame wakes into whatever it showed when it went off, and the app can
+      # only say "on". After a Morning that reaches floor 6, ask each set
+      # itself and put it in art if it is not (frame_art.py; a set already in
+      # art is left alone). Two passes, at 20 s and about 45 s, because a set
+      # still waking answers "unreachable"; the second pass costs nothing on
+      # a set the first one settled. The trace shows every answer.
+      - if:
+          - condition: template
+            value_template: "{{ press == 'morning' and (hit.floor | default(6)) == 6 }}"
+        then:
+          - repeat:
+              count: 2
+              sequence:
+                - delay: "00:00:20"
+                - repeat:
+                    for_each:
+                      - frame_art_lounge
+                      - frame_art_dining_left
+                      - frame_art_dining_middle
+                      - frame_art_dining_right
+                    sequence:
+                      - service: "shell_command.{{ repeat.item }}"
+                        response_variable: art_answer
+                        continue_on_error: true

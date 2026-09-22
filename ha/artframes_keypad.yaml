@@ -91,6 +91,8 @@ shell_command:
   frame_art_dining_middle: 'python3 /config/frame_art.py "Middle 32"'
   frame_art_dining_right: 'python3 /config/frame_art.py "Right 32"'
   frame_art_dining_check: 'python3 /config/frame_art.py "Left 32" --check'
+  frame_art_den: 'python3 /config/frame_art.py "Den TV"'
+  frame_art_den_check: 'python3 /config/frame_art.py "Den TV" --check'
 
 rest_command:
   # The relay to the app. `payload` is rendered by HA and sent as JSON —
@@ -210,25 +212,26 @@ automation manual_artframes_keypad:
         # duplicate, 401 wrong key, 503 HA_HOOK_KEY not set.
         response_variable: answer
       # A Frame wakes into whatever it showed when it went off, and the app can
-      # only say "on". After a Morning that reaches floor 6, ask each set
-      # itself and put it in art if it is not (frame_art.py; a set already in
-      # art is left alone). Two passes, at 20 s and about 45 s, because a set
-      # still waking answers "unreachable"; the second pass costs nothing on
-      # a set the first one settled. The trace shows every answer.
+      # only say "on". After a Morning, ask each set it reached itself and put
+      # it in art if it is not (frame_art.py; a set already in art is left
+      # alone): floor 6 is the Lounge TV and the three Dining sets, floor 5 the
+      # Den TV, a whole-house Morning all five. Two passes, at 20 s and about
+      # 45 s, because a set still waking answers "unreachable"; the second pass
+      # costs nothing on a set the first one settled. The trace shows every answer.
       - if:
           - condition: template
-            value_template: "{{ press == 'morning' and (hit.floor | default(6)) == 6 }}"
+            value_template: "{{ press == 'morning' }}"
         then:
           - repeat:
               count: 2
               sequence:
                 - delay: "00:00:20"
                 - repeat:
-                    for_each:
-                      - frame_art_lounge
-                      - frame_art_dining_left
-                      - frame_art_dining_middle
-                      - frame_art_dining_right
+                    for_each: >-
+                      {%- set f = hit.floor | default(none) -%}
+                      {%- set six = ['frame_art_lounge', 'frame_art_dining_left', 'frame_art_dining_middle', 'frame_art_dining_right'] -%}
+                      {%- set five = ['frame_art_den'] -%}
+                      {{ six if f == 6 else (five if f == 5 else six + five) }}
                     sequence:
                       - service: "shell_command.{{ repeat.item }}"
                         response_variable: art_answer

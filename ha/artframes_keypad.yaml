@@ -214,24 +214,26 @@ automation manual_artframes_keypad:
       # A Frame wakes into whatever it showed when it went off, and the app can
       # only say "on". After a Morning, ask each set it reached itself and put
       # it in art if it is not (frame_art.py; a set already in art is left
-      # alone): floor 6 is the Lounge TV and the three Dining sets, floor 5 the
-      # Den TV, a whole-house Morning all five. Two passes, at 20 s and about
+      # alone): the Lounge TV and the three Dining sets, on a whole-house
+      # Morning or the door's Lights 6. Not the Den TV: no press switches it
+      # on (owner, 2026-09-22, `art_frame_off_only` in the app's map), and
+      # asking a standing-by set could wake it. Two passes, at 20 s and about
       # 45 s, because a set still waking answers "unreachable"; the second pass
       # costs nothing on a set the first one settled. The trace shows every answer.
       - if:
           - condition: template
-            value_template: "{{ press == 'morning' }}"
+            value_template: "{{ press == 'morning' and (hit.floor | default(6)) == 6 }}"
         then:
           - repeat:
               count: 2
               sequence:
                 - delay: "00:00:20"
                 - repeat:
-                    for_each: >-
-                      {%- set f = hit.floor | default(none) -%}
-                      {%- set six = ['frame_art_lounge', 'frame_art_dining_left', 'frame_art_dining_middle', 'frame_art_dining_right'] -%}
-                      {%- set five = ['frame_art_den'] -%}
-                      {{ six if f == 6 else (five if f == 5 else six + five) }}
+                    for_each:
+                      - frame_art_lounge
+                      - frame_art_dining_left
+                      - frame_art_dining_middle
+                      - frame_art_dining_right
                     sequence:
                       - service: "shell_command.{{ repeat.item }}"
                         response_variable: art_answer

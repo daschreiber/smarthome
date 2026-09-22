@@ -73,6 +73,11 @@ export interface MapRow {
    *  art is being watched, and a Night press leaves it alone. Set on the
    *  Den and Lounge TVs; the Dining sets are never used as televisions. */
   art_mode_entity?: string;
+  /** An art_frame that only ever goes OFF with the house: Night, Exit and
+   *  Exit floor darken it, no press switches it on (owner, 2026-09-22: the
+   *  Den TV "can stay off" — its Morning wake landed it on television as
+   *  often as on art). */
+  art_frame_off_only?: boolean;
 }
 
 export interface Device {
@@ -104,6 +109,8 @@ export interface Device {
   artFrame?: boolean;
   /** See MapRow.art_mode_entity. */
   artModeEntityId?: string;
+  /** See MapRow.art_frame_off_only. */
+  artFrameOffOnly?: boolean;
 }
 
 /** Shared app-wide slug: scene and automation ids use the same rules as
@@ -202,6 +209,7 @@ export function buildDevices(rows: MapRow[]): Device[] {
       ...(row.wake_entity ? { wakeEntityId: row.wake_entity } : {}),
       ...(row.art_frame ? { artFrame: true } : {}),
       ...(row.art_mode_entity ? { artModeEntityId: row.art_mode_entity } : {}),
+      ...(row.art_frame_off_only ? { artFrameOffOnly: true } : {}),
       ...(row.pinned ? { pinned: true } : {}),
     };
   });

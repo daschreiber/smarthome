@@ -70,9 +70,8 @@ it was not yet in the relay; its address goes in that row.
 **Back to art after a wake** (owner, 2026-09-20: Day Mode brought the Lounge
 TV up as a television). A Frame wakes into whatever it showed when it went
 off, and SmartThings has no "show art" command. `frame_art.py` goes in
-`/config`; the relay runs it after a Morning press, for the sets that press
-reached — floor 6 the Lounge TV and the three Dining sets, floor 5 the Den
-TV, a whole-house Morning all five (`shell_command.frame_art_*`) — in
+`/config`; the relay runs it after a Morning press that reaches floor 6, for
+the Lounge TV and the three Dining sets (`shell_command.frame_art_*`), in
 two passes at 20 s and about 45 s because a set still waking answers
 `unreachable`. It asks the set's own Art API (port 8002) first and leaves
 a set already in art alone, and it reads host and token from HA's Samsung TV
@@ -80,9 +79,11 @@ config entry, so the TV shows no second "Allow" prompt.
 `shell_command.frame_art_lounge_check` only reports (`art` / `tv` /
 `unreachable`) — the honest "is someone watching" signal the sticking
 SmartThings sensor is not. After adding the `shell_command:` lines, reload
-**Shell commands** as well. The Den TV rides it through HA's second Samsung
-entry for that set (owner, 2026-09-22: Day Mode brought it up as a
-television while the other four came up as art).
+**Shell commands** as well. The Den TV is reachable the same way (HA's
+second Samsung entry for that set; `frame_art_den_check` answers `art` /
+`tv`), but no press switches it on since 2026-09-22 — it is
+`art_frame_off_only` in the app's map: Night, Exit and Exit floor darken
+it, Morning and Lights 5 leave it off — so the Morning step does not ask it.
 
 One press is one sweep, whichever roads it takes. A press in the app is
 not seen on the KNX road — it goes through Control4, whose telegrams reach

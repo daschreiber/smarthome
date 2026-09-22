@@ -211,9 +211,19 @@ export function sparesWatched(device: Device): boolean {
   return device.entityId !== EXIT_SCENE_SWITCH;
 }
 
-/** Every device the map flags as a picture Frame — on one floor, when asked. */
-export function artFrames(floor?: 5 | 6): Device[] {
-  return registry().devices.filter((d) => d.artFrame === true && (floor == null || d.floor === floor));
+/**
+ * Every device the map flags as a picture Frame — on one floor, when asked.
+ * A Morning leaves out the sets the map marks `art_frame_off_only`: they go
+ * dark with the house and stay dark until someone wants them (the Den TV,
+ * 2026-09-22). Night, Exit and Exit floor still take them.
+ */
+export function artFrames(floor?: 5 | 6, press?: Press): Device[] {
+  return registry().devices.filter(
+    (d) =>
+      d.artFrame === true &&
+      (floor == null || d.floor === floor) &&
+      !(press === "morning" && d.artFrameOffOnly === true),
+  );
 }
 
 /**

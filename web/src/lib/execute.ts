@@ -105,12 +105,12 @@ export async function executeOnDevice(device: Device, cmd: Command): Promise<voi
 export async function followArtFrames(device: Device, cmd: Command, user: string, scope: PressScope = {}): Promise<void> {
   const follow = artFrameFollow(device, cmd);
   if (!follow) return;
-  const frames = artFrames(scope.floor);
+  const press = pressOf(follow);
+  const frames = artFrames(scope.floor, press);
   if (frames.length === 0) return;
   const started = Date.now();
   // One press, one sweep, whichever roads it arrives by (lib/artframes
   // `recordPress`): a repeat inside the window is logged and dropped.
-  const press = pressOf(follow);
   if (recordPress(press, started, scope.floor)) {
     audit({
       ts: new Date(started).toISOString(),

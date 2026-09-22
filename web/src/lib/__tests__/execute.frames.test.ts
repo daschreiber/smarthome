@@ -71,7 +71,7 @@ describe("followArtFrames", () => {
     });
     // Morning right after is a different press and sweeps.
     await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "daniel");
-    expect(calls).toHaveBeenCalledTimes(14);
+    expect(calls).toHaveBeenCalledTimes(13); // 5 off + 4 on with their wakes; the Den TV stays off
   });
 
   it("Night pressed: every Frame gets turn_off, one audit line for the sweep", async () => {
@@ -90,13 +90,17 @@ describe("followArtFrames", () => {
     expect(audits.mock.calls[0][0]).toMatchObject({ deviceId: "system:artframes", command: "frames_turn_off", ok: true, user: "daniel" });
   });
 
-  it("Morning pressed: every Frame gets turn_on — packet plus cloud wake where there is one", async () => {
+  it("Morning pressed: every Frame but the off-only Den TV gets turn_on — packet plus cloud wake", async () => {
     const morning = getDevice("whole_house__all_house_morning")!;
     await followArtFrames(morning, { command: "turn_on" }, "daniel");
-    // 5 Frames: 4 with a wake entity (2 sends) + Den TV (1) = 9 sends
-    expect(calls).toHaveBeenCalledTimes(9);
+    // 4 Frames with a wake entity, 2 sends each; the Den TV stays off (2026-09-22)
+    expect(calls).toHaveBeenCalledTimes(8);
     expect(calls.mock.calls.every((c) => c[1] === "turn_on")).toBe(true);
-    expect(audits.mock.calls[0][0]).toMatchObject({ command: "frames_turn_on", ok: true });
+    expect(calls.mock.calls.some((c) => c[2].entity_id === "media_player.den_den_tv")).toBe(false);
+    expect(audits.mock.calls[0][0]).toMatchObject({
+      command: "frames_turn_on", ok: true,
+      args: { targets: ["dining__dining_left", "dining__dining_middle", "dining__dining_right", "lounge__lounge_tv"] },
+    });
   });
 
   it("Night spares a Den or Lounge set that is showing television, and says so", async () => {
@@ -148,13 +152,13 @@ describe("followArtFrames", () => {
     expect(audits.mock.calls[0][0]).toMatchObject({ command: "frames_turn_off", args: { floor: 6 } });
   });
 
-  it("Lights 5: the Den TV alone, off and back on", async () => {
+  it("Lights 5: the Den TV alone goes off; Lights 5 back on leaves it off (off-only) and logs nothing", async () => {
     await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { floor: 5, spare: false });
     await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.18", { floor: 5, spare: false });
     expect(calls.mock.calls.map((c) => [c[1], c[2].entity_id])).toEqual([
       ["turn_off", "media_player.den_den_tv"],
-      ["turn_on", "media_player.den_den_tv"],
     ]);
+    expect(audits).toHaveBeenCalledTimes(1);
   });
 
   it("a door press does not spare: a Lounge sensor stuck on a video app still goes dark, unread", async () => {

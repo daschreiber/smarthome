@@ -2203,6 +2203,7 @@
   "visible": true,
   "retry_power": true,
   "art_frame": true,
+  "art_frame_off_only": true,
   "art_mode_entity": "sensor.den_den_tv_tv_channel_name"
  }
 ]

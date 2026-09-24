@@ -2205,5 +2205,17 @@
   "art_frame": true,
   "art_frame_off_only": true,
   "art_mode_entity": "sensor.den_den_tv_tv_channel_name"
+ },
+ {
+  "entity_id": "media_player.tv_in_master_bedroom_wall_qe43ls03bguxsq",
+  "domain": "media_player",
+  "original_name": "TV in master bedroom wall",
+  "display_name": "Wall TV",
+  "room": "Master Bedroom",
+  "floor": 6,
+  "category": "media",
+  "group": "Media",
+  "visible": true,
+  "retry_power": true
  }
 ]

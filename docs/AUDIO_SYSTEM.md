@@ -126,8 +126,16 @@ The owner presses Night and Morning **on the wall**, or says it to Alexa
 or Siri, none of which the app can see by itself; since 2026-09-16 Home
 Assistant relays both the keypad's KNX telegram and the service call to
 `POST /api/artframes` (`ha/artframes_keypad.yaml`, key `HA_HOOK_KEY`), and
-the same follower runs — once per press, however many roads carry it. The bedroom-wall Frame is not
-mapped.
+the same follower runs — once per press, however many roads carry it.
+**The master bedroom wall Frame** (43", QE43LS03BGUXSQ) is mapped since
+2026-09-24 as a **plain Master Bedroom media card**, "Wall TV"
+(`media_player.tv_in_master_bedroom_wall_qe43ls03bguxsq`, read from its HA
+device page; `retry_power`; no `wake_entity` — the device has only its
+media_player and remote). It is **deliberately NOT an art frame**: no
+`art_frame`, no `art_mode_entity`, so it follows none of Night, Morning,
+Exit or the floor-scoped "Lights 6" press (`artFrames()` in lib/artframes
+filters on that flag). The owner wants it out of the sweeps until it gets
+handling of its own — do not "complete" the set by adding the flag.
 Apple TV "Basement Jerusalem". Rack has its own AC (`climate.rack_unit_109`).
 
 ## Spotify device-picker decoder

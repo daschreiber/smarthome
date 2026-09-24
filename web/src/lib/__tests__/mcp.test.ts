@@ -21,6 +21,9 @@ process.env.SAUNA_API_TOKEN = "t";
 const LOUNGE_COVE = "light.knx_dimmer_lounge_cove";
 const LOUNGE_SPOTS = "light.knx_dimmer_lounge_spots";
 const FRONT_DOOR = "lock.front_front_door";
+const NIGHT_SWITCH = "light.knx_switch_all_house_night";
+const MORNING_SWITCH = "light.knx_switch_all_house_morning";
+const EXIT_SWITCH = "light.knx_switch_all_house_exit";
 
 type Fixture = { entity_id: string; state: string; attributes: Record<string, unknown>; last_updated: string; last_changed: string };
 const st = (entity_id: string, state: string, attributes: Record<string, unknown> = {}): Fixture =>
@@ -44,6 +47,13 @@ vi.mock("../ha", async (importOriginal) => {
   };
 });
 vi.mock("../audit", () => ({ audit: vi.fn() }));
+// A press of Night or Morning takes the picture Frames along in the
+// background (lib/artframes, with a read-back loop). None here: the mode
+// tests below look at the switch's own command, not the sweep.
+vi.mock("../artframes", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../artframes")>();
+  return { ...actual, artFrames: vi.fn(() => []) };
+});
 vi.mock("../sauna", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../sauna")>();
   return {
@@ -57,7 +67,8 @@ vi.mock("../sauna", async (importOriginal) => {
 import { callService } from "../ha";
 import { audit } from "../audit";
 import { saunaStart } from "../sauna";
-import { authenticateMcp, compactDevice, createHouseMcpServer, resolveRoom, type McpCaller } from "../mcp";
+import { authenticateMcp, compactDevice, createHouseMcpServer, resolveRoom, resolveSceneRef, type McpCaller } from "../mcp";
+import { executeAction } from "../execute";
 import { getDevice, registry } from "../registry";
 import { createScene } from "../scenes";
 import { createAutomation, listAutomations } from "../automations";
@@ -328,6 +339,8 @@ describe("set_room_lights", () => {
   });
 });
 
+type ListedScene = { id: string; name: string; kind: string; room: string | null; deviceId?: string; aliases?: string[] };
+
 describe("scenes", () => {
   it("lists saved scenes and applies one by id", async () => {
     const scene = createScene("Cozy", "Lounge", "daniel", [
@@ -335,18 +348,151 @@ describe("scenes", () => {
     ]);
     const client = await connect();
     const listed = json(await call(client, "list_scenes"));
-    expect(listed.scenes).toEqual([{ id: scene.id, name: "Cozy", room: "Lounge", devices: 1, includesSauna: false }]);
+    const saved = listed.scenes.filter((s: ListedScene) => s.kind === "saved");
+    expect(saved).toEqual([{ id: scene.id, name: "Cozy", kind: "saved", room: "Lounge", devices: 1, includesSauna: false }]);
+    expect(listed.scenes[0]).toEqual(saved[0]); // saved scenes first, as before
     const applied = json(await call(client, "activate_scene", { sceneId: scene.id }));
     expect(applied.status).toBe("sent");
+    expect(applied.scene).toEqual({ id: scene.id, name: "Cozy", kind: "saved", room: "Lounge" });
+    expect(calls).toHaveBeenCalledTimes(1);
     expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: LOUNGE_COVE, brightness_pct: 20 }]);
     expect(audits.mock.calls[0][0]).toMatchObject({ user: "mcp", command: "apply_scene", entityId: `scene.${scene.id}` });
   });
 
-  it("an unknown scene is an error, not a silent no-op", async () => {
+  it("an unknown scene is an error that names the vocabulary, not a silent no-op", async () => {
     const client = await connect();
     const r = await call(client, "activate_scene", { sceneId: "nope" });
     expect(r.isError).toBe(true);
+    expect(text(r)).toMatch(/unknown scene "nope"/);
+    expect(text(r)).toMatch(/mode_night/);
     expect(calls).not.toHaveBeenCalled();
+  });
+
+  it("list_scenes offers the whole-house modes as scenes of kind 'mode', after the saved ones", async () => {
+    createScene("Cozy", "Lounge", "daniel", [{ deviceId: deviceIdFor(LOUNGE_COVE), command: { command: "turn_on" } }]);
+    const client = await connect();
+    const listed = json(await call(client, "list_scenes"));
+    expect(listed.scenes.map((s: ListedScene) => [s.id, s.kind])).toEqual([
+      ["cozy", "saved"], ["mode_night", "mode"], ["mode_morning", "mode"], ["mode_exit", "mode"], ["mode_welcome", "mode"], ["mode_main", "mode"],
+    ]);
+    const night = listed.scenes.find((s: ListedScene) => s.id === "mode_night");
+    expect(night).toEqual({
+      id: "mode_night", name: "Night", kind: "mode", room: "Whole House",
+      deviceId: "whole_house__all_house_night", aliases: ["night mode", "night", "sleep mode"],
+    });
+    expect(listed.scenes.map((s: ListedScene) => s.name)).toEqual(["Cozy", "Night", "Morning", "Exit", "Welcome", "Main All House"]);
+    // Every mode's deviceId is one control_device would take.
+    for (const s of listed.scenes.filter((x: ListedScene) => x.kind === "mode")) expect(getDevice(s.deviceId!)?.category).toBe("scene_switch");
+    // And the tool tells the model the vocabulary before it searches.
+    const tool = (await client.listTools()).tools.find((t) => t.name === "list_scenes")!;
+    expect(tool.description).toMatch(/Night, Morning, Exit, Welcome/);
+    expect(tool.description).toMatch(/"night mode"/);
+    expect(tool.description).toMatch(/mode_morning/);
+  });
+
+  it("activate_scene takes a mode by alias, presses its switch as control_device would, and names what it resolved", async () => {
+    const client = await connect();
+    const r = json(await call(client, "activate_scene", { sceneId: "night mode" }));
+    expect(r).toMatchObject({
+      status: "sent",
+      scene: { id: "mode_night", name: "Night", kind: "mode", room: "Whole House" },
+      resolvedFrom: "night mode",
+      device: { id: "whole_house__all_house_night", label: "All House Night" },
+      command: { command: "turn_on" },
+    });
+    expect(calls).toHaveBeenCalledTimes(1);
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: NIGHT_SWITCH }]);
+    expect(audits).toHaveBeenCalledTimes(1);
+    expect(audits.mock.calls[0][0]).toMatchObject({
+      user: "mcp", deviceId: "whole_house__all_house_night", entityId: NIGHT_SWITCH, command: "turn_on", ok: true,
+      args: { scene: "mode_night", via: "mcp" },
+    });
+    // Exactly what control_device sends for the same switch.
+    calls.mockClear();
+    const direct = json(await call(client, "control_device", { deviceId: "whole_house__all_house_night", command: "turn_on" }));
+    expect(direct.status).toBe("sent");
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: NIGHT_SWITCH }]);
+  });
+
+  it("every alias and spelling resolves case-insensitively; a canonical id reports no resolvedFrom", async () => {
+    const client = await connect();
+    const want: Array<[string, string, string]> = [
+      ["Sleep Mode", "mode_night", NIGHT_SWITCH], ["MODE_NIGHT", "mode_night", NIGHT_SWITCH],
+      ["day mode", "mode_morning", MORNING_SWITCH], ["morning", "mode_morning", MORNING_SWITCH], ["Day", "mode_morning", MORNING_SWITCH],
+      ["leaving", "mode_exit", EXIT_SWITCH], ["away mode", "mode_exit", EXIT_SWITCH], ["Exit", "mode_exit", EXIT_SWITCH],
+      ["arriving", "mode_welcome", "light.knx_switch_welcome"], ["welcome mode", "mode_welcome", "light.knx_switch_welcome"],
+      ["mode_main", "mode_main", "light.knx_switch_main_all_house"],
+    ];
+    for (const [said, id, entity] of want) {
+      calls.mockClear();
+      const r = json(await call(client, "activate_scene", { sceneId: said }));
+      expect(r.scene.id, said).toBe(id);
+      expect(calls.mock.calls[0].slice(0, 3), said).toEqual(["light", "turn_on", { entity_id: entity }]);
+    }
+    const canonical = json(await call(client, "activate_scene", { sceneId: "mode_exit" }));
+    expect(canonical).not.toHaveProperty("resolvedFrom");
+  });
+
+  it("a saved scene wins on an exact id; the modes answer only to their own words", async () => {
+    const night = createScene("Night", "Lounge", "daniel", [{ deviceId: deviceIdFor(LOUNGE_COVE), command: { command: "turn_off" } }]);
+    expect(night.id).toBe("night");
+    const saved = resolveSceneRef("night");
+    expect(saved).toMatchObject({ kind: "saved", scene: { id: "night" } });
+    expect(resolveSceneRef("night mode")).toMatchObject({ kind: "mode", mode: { id: "mode_night" } });
+    expect(resolveSceneRef("mode_night")).toMatchObject({ kind: "mode", device: { id: "whole_house__all_house_night" } });
+    expect(resolveSceneRef("party mode")).toMatchObject({ error: expect.stringMatching(/unknown scene "party mode"/) });
+    const client = await connect();
+    const r = json(await call(client, "activate_scene", { sceneId: "night" }));
+    expect(r.scene).toMatchObject({ id: "night", kind: "saved" });
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_off", { entity_id: LOUNGE_COVE }]);
+  });
+
+  it("a mode whose switch Home Assistant has lost is refused, never 'sent'", async () => {
+    fixtures.set(EXIT_SWITCH, st(EXIT_SWITCH, "unavailable"));
+    try {
+      const client = await connect();
+      const r = await call(client, "activate_scene", { sceneId: "leaving" });
+      expect(r.isError).toBe(true);
+      expect(text(r)).toMatch(/Exit: All House Exit is not responding/);
+      expect(calls).not.toHaveBeenCalled();
+      expect(audits.mock.calls[0][0]).toMatchObject({ ok: false, deviceId: "whole_house__all_house_exit", args: { scene: "mode_exit" } });
+    } finally {
+      fixtures.delete(EXIT_SWITCH);
+    }
+  });
+
+  it("a saved scene can never take a mode's id, and an older record under one still wins everywhere (Codex review, PR #142)", async () => {
+    // New captures skip the reserved ids.
+    const dodged = createScene("Mode Night", "Lounge", "daniel", [{ deviceId: deviceIdFor(LOUNGE_COVE), command: { command: "turn_off" } }]);
+    expect(dodged.id).toBe("mode_night_2");
+    // A record that already sits on a mode id (written before the modes
+    // existed) is the saved scene, for the MCP tool and the executor alike.
+    fs.writeFileSync(process.env.SCENES_PATH!, JSON.stringify([{
+      id: "mode_morning", name: "Old morning", room: "Lounge", createdBy: "daniel", createdAt: "2026-01-01T00:00:00Z",
+      states: [{ deviceId: deviceIdFor(LOUNGE_COVE), command: { command: "set_brightness", brightnessPct: 10 } }],
+    }]));
+    expect(resolveSceneRef("mode_morning")).toMatchObject({ kind: "saved", scene: { id: "mode_morning" } });
+    const client = await connect();
+    const r = json(await call(client, "activate_scene", { sceneId: "mode_morning" }));
+    expect(r.scene).toMatchObject({ id: "mode_morning", name: "Old morning", kind: "saved" });
+    expect(calls).toHaveBeenCalledTimes(1);
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: LOUNGE_COVE, brightness_pct: 10 }]);
+    calls.mockClear();
+    expect(await executeAction({ type: "scene", sceneId: "mode_morning" })).toEqual({ total: 1, failed: [] });
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: LOUNGE_COVE, brightness_pct: 10 }]);
+    // The alias still reaches the switch: "morning mode" is not a stored id.
+    calls.mockClear();
+    expect(json(await call(client, "activate_scene", { sceneId: "morning mode" })).scene.id).toBe("mode_morning");
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: MORNING_SWITCH }]);
+  });
+
+  it("the executor's scene path presses a mode switch too, so a scheduled mode step fires", async () => {
+    const r = await executeAction({ type: "scene", sceneId: "mode_morning" });
+    expect(r).toEqual({ total: 1, failed: [] });
+    expect(calls).toHaveBeenCalledTimes(1);
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: MORNING_SWITCH }]);
+    // Storage is canonical: an alias is not a stored id.
+    await expect(executeAction({ type: "scene", sceneId: "morning mode" })).rejects.toThrow(/no such scene/);
   });
 });
 
@@ -415,6 +561,38 @@ describe("automations", () => {
     const r = await call(client, "update_automation", { id: stored.id, name: "Kitchen clean", steps: listed.steps });
     expect(r.isError).toBe(true);
     expect(listAutomations()[0].steps[0].actions[0]).toEqual({ type: "device", deviceId: vac, command: { command: "start_cleaning", segments: [16], repeat: 2 } });
+  });
+
+  it("a scene step takes a house mode by id or alias and stores the mode id, which lists and updates as-is", async () => {
+    const client = await connect(ADMIN);
+    const made = json(await call(client, "create_automation", {
+      name: "Bedtime",
+      steps: [
+        { time: "23:00", actions: [{ type: "scene", sceneId: "Night Mode" }] },
+        { sun: "sunrise", actions: [{ type: "scene", sceneId: "mode_morning" }] },
+      ],
+    }));
+    expect(made.ok).toBe(true);
+    expect(made.automation.steps).toEqual([
+      { time: "23:00", actions: [{ type: "scene", sceneId: "mode_night" }] },
+      { sun: "sunrise", actions: [{ type: "scene", sceneId: "mode_morning" }] },
+    ]);
+    expect(listAutomations()[0].steps[0].actions).toEqual([{ type: "scene", sceneId: "mode_night" }]);
+    const listed = json(await call(client, "list_automations")).automations[0];
+    expect(listed.steps).toEqual(made.automation.steps);
+    const updated = json(await call(client, "update_automation", {
+      id: made.automation.id, name: "Leaving", steps: [{ time: "08:30", actions: [{ type: "scene", sceneId: "leaving" }] }],
+    }));
+    expect(updated.automation.steps).toEqual([{ time: "08:30", actions: [{ type: "scene", sceneId: "mode_exit" }] }]);
+    // The stored step runs through the same executor the scheduler uses.
+    const fired = await executeAction(listAutomations()[0].steps[0].actions[0]);
+    expect(fired).toEqual({ total: 1, failed: [] });
+    expect(calls.mock.calls[0].slice(0, 3)).toEqual(["light", "turn_on", { entity_id: EXIT_SWITCH }]);
+    for (const tool of ["create_automation", "update_automation"]) {
+      const desc = (await client.listTools()).tools.find((t) => t.name === tool)!.description!;
+      expect(desc, tool).toMatch(/mode_night/);
+      expect(desc, tool).toMatch(/"night mode"/);
+    }
   });
 
   it("refuses what the app refuses: no trigger, two triggers, bad times, unknown rooms, the lock, the sauna, unknown scenes", async () => {

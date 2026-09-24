@@ -23,12 +23,12 @@ Code: `web/src/lib/mcp.ts` (the server and its tools), `web/src/app/api/mcp/rout
 | --- | --- | --- |
 | `list_rooms` | rooms by floor, device kinds per room, the owner's synonyms | read-only; the vocabulary |
 | `get_home_state` | every device's live state (`room?` filter, synonyms accepted) plus warm floors and each floor's heat/cool mode | read-only; same snapshot as `GET /api/home` (`lib/homeSnapshot`) |
-| `list_scenes` | saved scenes with ids | read-only |
+| `list_scenes` | saved scenes (`kind: "saved"`) and the whole-house modes as scenes (`kind: "mode"`: Night, Morning, Exit, Welcome, Main All House — ids `mode_night`, `mode_morning`, `mode_exit`, `mode_welcome`, `mode_main`, each with its switch's `deviceId` and its aliases) | read-only; the modes come from `lib/houseModes`, a fixed table over the `scene_switch` devices |
 | `control_device` | one typed command to one device: `turn_on`, `turn_off`, `set_brightness`, `open`, `close`, `stop`, `set_position`, `set_temperature`, `set_volume`, `start_cleaning`, `pause_cleaning`, `return_to_dock`, `set_bed_level`, with `value` for the set_* commands | the assistant's exact vocabulary (`lib/assistant` `DEVICE_COMMANDS` → `toCommand`), validated by `lib/commands`, executed by `lib/execute` |
 | `set_room_lights` | a room's real lights on or off | group Lighting only, as everywhere else |
-| `activate_scene` | apply a scene by id | the sauna never replays from here |
+| `activate_scene` | apply a saved scene by id, or a house mode by id, name or alias (case-insensitive: "night mode", "night", "sleep mode" → `mode_night`; "day mode", "morning mode", "morning", "day" → `mode_morning`; "exit mode", "leaving", "away mode" → `mode_exit`; "welcome mode", "arriving" → `mode_welcome`) | a saved scene replays through `applySceneById`, the sauna never; a mode is one `turn_on` on its scene switch — exactly `control_device`'s path (reachability check, Frames follow, audit line naming the scene) — and the response says which scene was resolved |
 | `list_automations` | every scheduled rule with its steps, enabled/active state, creator, and whether this connection may edit it; plus the house time | read-only |
-| `create_automation` | schedule steps under a name: clock time or sunrise/sunset (± offset), weekdays or a one-shot date, actions on devices / rooms / scenes | the assistant's step shape (`LlmStepSchema`, trigger fields optional) → `toAutomationSpec` → `AutomationSpecSchema`; the sauna is never schedulable; recurring (any undated step) is admin-only |
+| `create_automation` | schedule steps under a name: clock time or sunrise/sunset (± offset), weekdays or a one-shot date, actions on devices / rooms / scenes (a `{type: "scene"}` step takes the house modes and their aliases too, stored under the mode id) | the assistant's step shape (`LlmStepSchema`, trigger fields optional) → `toAutomationSpec` → `AutomationSpecSchema`; the sauna is never schedulable; recurring (any undated step) is admin-only |
 | `update_automation` | replace name and steps of one this connection created | ownership: `canDeleteRecord` as a guest |
 | `set_automation_enabled` | pause / resume any automation | as the app: anyone who may program can toggle |
 | `delete_automation` | remove one this connection created | ownership |
@@ -51,7 +51,12 @@ that person's role (`lib/permissions`); an agent holding the legacy shared
 `MCP_TOKEN` is a **guest of the house** (`guest`) named `mcp`. Either way
 the tool surface is the same, and it is narrower than the app:
 
-- It can read state, command devices, and run scenes.
+- It can read state, command devices, and run scenes — the saved ones and
+  the whole-house modes (Night, Morning, Exit, Welcome), which `list_scenes`
+  offers as scenes so "put the house in night mode" resolves without a
+  device search. A mode is a press of its KNX scene switch, and a scheduled
+  mode step fires through the same executor path (`lib/execute`
+  `applySceneById`).
 - It can schedule, with a line the app's own screens don't draw yet:
   **recurring automations are the admin's alone** (owner decision,
   2026-09-18). An admin's agent creates recurring automations; anyone

@@ -15,13 +15,6 @@ import { TV_LIFT_ENTITY, liftSleepState } from "./sleepwatch";
  * app, or Control4 — the TV turns on; whenever it goes back UP, the TV
  * turns off. Working since 2026-09-04.
  *
- * The same lowering also turns OFF the room's wall Frame ("Wall TV",
- * owner request 2026-09-25): two screens in one bedroom is one too many.
- * Only on the down edge, only when the wall set affirmatively reads on
- * (a Frame's off is a held power key — never sent at a set that is
- * already off or unreadable), and never the other way: raising the lift
- * does not turn the wall TV back on. See wallTvOffOnLower.
- *
  * A standing house rule like Sleep sense and the Sauna follower, NOT a
  * user-authored automation: the trigger is the lift relay's STATE, which
  * the step builder can't express. Evaluated on the scheduler's 30s tick
@@ -186,14 +179,6 @@ async function maybeDiscoverTvPower(nowMs: number): Promise<void> {
  *  casting). */
 export function tvTruthEntity(): string {
   return tvPowerEntity() || TV_ENTITY;
-}
-
-/** The master bedroom wall Frame ("Wall TV", mapped 2026-09-24). It is
- *  switched off when the lift comes down; nothing else here touches it. */
-export const WALL_TV_ENTITY = "media_player.tv_in_master_bedroom_wall_qe43ls03bguxsq";
-
-export function wallTvDevice(): Device | null {
-  return registry().devices.find((d) => d.entityId === WALL_TV_ENTITY) ?? null;
 }
 
 /** The Control4 zone for the room: `turn_off` is Control4's Room Off —
@@ -474,34 +459,4 @@ export async function tickLiftwatch(): Promise<void> {
     `[liftwatch] lift ${action === "tv_on" ? "down → TV on" : `up → TV off (attempt ${attempt}/${offAttemptsAllowed()})`} via ${dev.entityId}` +
     (error ? ` FAILED: ${error}` : ""),
   );
-  if (action === "tv_on") await wallTvOffOnLower();
-}
-
-/**
- * The lift came down: switch the wall Frame off if it is showing. After
- * the lift TV's own command, so the screen being lowered is never held up
- * by a Frame's multi-second held-power off. Reads the wall set first and
- * acts only on an affirmative "on" — a held power key at a set that is
- * already off (or unreadable) is not sent. One command, no retries; a
- * pause flipped since the tick began wins. Audited either way it acts.
- */
-export async function wallTvOffOnLower(): Promise<void> {
-  const wall = wallTvDevice();
-  if (!wall) return;
-  const on = tvOnFromState((await getState(WALL_TV_ENTITY).catch(() => null))?.state);
-  if (on !== true) return;
-  if (!loadLiftwatch().enabled) return;
-  const started = Date.now();
-  let error: string | undefined;
-  try {
-    await executeOnDevice(wall, { command: "turn_off" });
-  } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
-  }
-  audit({
-    ts: new Date().toISOString(), user: "liftwatch", deviceId: wall.id,
-    entityId: wall.entityId, command: "lift_wall_tv_off", args: { lift: "down" },
-    ok: !error, durationMs: Date.now() - started, error,
-  });
-  console.log(`[liftwatch] lift down → wall TV off via ${wall.entityId}` + (error ? ` FAILED: ${error}` : ""));
 }

@@ -2267,3 +2267,32 @@ whether a command gets through.
 - [ ] Why HA's local link lags on Dining Left and Middle only (Right and
   the Lounge TV read within 7–15 s): compare their Samsung TV entries (IP
   lease, token) with Right's.
+
+## 2026-09-25 (evening) — REVERTED: the wall TV off on lift-down (#146)
+
+Owner, about two hours after #146 deployed: "the bedside table button for
+TV Lift has stopped working." HA state at 18:00 house time: the wall TV
+went `off` at 17:59:21, the lift relay went `off` (up) at 17:59:28, seven
+seconds later, and the room's lights were re-set at 17:59:23. The lift came
+down, the follower turned the wall TV off, and the lift went back up.
+
+This is the 2026-08-30 lesson again (the reverted held-power-press
+escalation, #105): **a held power key at a TV that Control4 can observe
+feeds back into the lift.** Control4 still carries TV↔lift coupling
+programming. The Frame's off *is* a held power key (`retry_power`), so
+switching the wall Frame off at the moment the lift lowers made Control4
+drive the lift back up. Nothing in the app commands the lift relay; the
+effect is indirect, exactly as in August.
+
+Reverted in full: `wallTvOffOnLower` and its call, its tests, the
+Automations card wording, and the AUDIO_SYSTEM / API_CONTRACT lines. The
+09-25 entry above stays as the record of what was tried.
+
+### Before any retry
+
+- Establish in Control4 Composer which programming ties the MBR TVs to the
+  lift (the 08-30 follow-up, still open). The wall Frame appears to be
+  part of it.
+- Any future "wall TV off" must use a road Control4 does not observe or
+  react to (a SmartThings switch off is the candidate), and the test must
+  watch the lift relay itself.

@@ -183,7 +183,8 @@ TV follower (the Master Bedroom TV mirrors its ceiling lift: lift down →
 TV on on the edge; lift up → TV off, one command per stow by default
 (`LIFTWATCH_OFF_ATTEMPTS` re-enables the still-reads-on enforcement); a
 circuit breaker stands the rule down for 10 min if the lift moves six
-times in five). GET: `{ enabled, available, tvPower, tvCandidates,
+times in five). The down edge also turns the room's wall Frame off when
+it reads on (audited as `lift_wall_tv_off`; never turned back on). GET: `{ enabled, available, tvPower, tvCandidates,
 canToggle }` — `tvPower` is the TV's own (Samsung TV integration)
 entity, discovered or env-named, null until the integration exists;
 `tvCandidates[]` (`{ entityId, name }`) lists the TVs the last scan found

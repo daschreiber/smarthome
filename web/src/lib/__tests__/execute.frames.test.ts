@@ -12,7 +12,7 @@ vi.mock("../ha", async (importOriginal) => {
 });
 vi.mock("../audit", () => ({ audit: vi.fn() }));
 
-import { callService, getStates } from "../ha";
+import { callService, getStates, type HaState } from "../ha";
 import { audit } from "../audit";
 import { executeOnDevice, followArtFrames } from "../execute";
 import { resetPressMemory } from "../artframes";
@@ -192,6 +192,88 @@ describe("followArtFrames", () => {
         args: { failed: [{ target: "dining__dining_left" }] },
       });
       expect(audits.mock.calls[0][0].args).not.toHaveProperty("viaCloud");
+    });
+
+    /** Every command to one set, in the order it reached HA. */
+    const sentTo = (entityIds: string[]) =>
+      calls.mock.calls.filter((c) => entityIds.includes(c[2].entity_id as string)).map((c) => [c[1], c[2].entity_id]);
+
+    it("Lights 6 back on while the off is still failing: the on waits its turn, and no cloud off follows it (Codex, #147)", async () => {
+      let failLocal: (err: Error) => void = () => {};
+      calls.mockImplementation(async (_domain, service, data) => {
+        if (service === "turn_off" && data.entity_id === left().entityId) {
+          await new Promise<void>((_, reject) => { failLocal = reject; });
+        }
+      });
+      const night = followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      await vi.waitFor(() => expect(sentTo([left().entityId])).toHaveLength(1));
+      const morning = followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      await Promise.resolve();
+      // Nothing has overtaken the held power key.
+      expect(sentTo([left().entityId, left().wakeEntityId!])).toEqual([["turn_off", left().entityId]]);
+      failLocal(new Error("timeout"));
+      await Promise.all([night, morning]);
+      expect(sentTo([left().entityId, left().wakeEntityId!])).toEqual([
+        ["turn_off", left().entityId],
+        ["turn_on", left().entityId],
+        ["turn_on", left().wakeEntityId],
+      ]);
+      expect(audits.mock.calls.find((c) => c[0].command === "frames_turn_off")![0]).toMatchObject({
+        ok: false,
+        args: { failed: [{ target: "dining__dining_left" }] },
+      });
+    });
+
+    it("an on pressed while the cloud off is in flight goes out after it lands (Codex, #148)", async () => {
+      let landCloudOff: () => void = () => {};
+      calls.mockImplementation(async (_domain, service, data) => {
+        if (service === "turn_off" && data.entity_id === left().entityId) throw new Error("timeout");
+        if (service === "turn_off" && data.entity_id === left().wakeEntityId) {
+          await new Promise<void>((resolve) => { landCloudOff = resolve; });
+        }
+      });
+      const night = followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      await vi.waitFor(() => expect(sentTo([left().wakeEntityId!])).toHaveLength(1));
+      const morning = followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      await Promise.resolve();
+      expect(sentTo([left().entityId, left().wakeEntityId!])).toEqual([
+        ["turn_off", left().entityId],
+        ["turn_off", left().wakeEntityId],
+      ]);
+      landCloudOff();
+      await Promise.all([night, morning]);
+      expect(sentTo([left().entityId, left().wakeEntityId!])).toEqual([
+        ["turn_off", left().entityId],
+        ["turn_off", left().wakeEntityId],
+        ["turn_on", left().entityId],
+        ["turn_on", left().wakeEntityId],
+      ]);
+    });
+
+    it("Morning pressed while Night is still reading the sensors: the older Night stands down (Codex, #148)", async () => {
+      let answerRead: (s: HaState[]) => void = () => {};
+      vi.mocked(getStates).mockImplementationOnce(() => new Promise<HaState[]>((resolve) => { answerRead = resolve; }));
+      const night = followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "daniel");
+      await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:voice-or-ui");
+      answerRead([]);
+      await night;
+      // Morning's ons went out; Night, the older press, sent no off to the
+      // sets Morning claimed. (The Den TV is off-only: Morning never claims
+      // it, so Night still darkens it.)
+      const den = getDevice("den__den_tv")!.entityId;
+      expect(calls.mock.calls.filter((c) => c[1] === "turn_off").map((c) => c[2].entity_id)).toEqual([den]);
+      expect(calls.mock.calls.filter((c) => c[1] === "turn_on").length).toBeGreaterThan(0);
+      // Its audit line does not pretend it sent them an off.
+      const nightLine = audits.mock.calls.find((c) => c[0].command === "frames_turn_off")![0];
+      expect((nightLine.args as { superseded: string[] }).superseded.sort()).toEqual([
+        "dining__dining_left", "dining__dining_middle", "dining__dining_right", "lounge__lounge_tv",
+      ]);
+    });
+
+    it("a cloud off that lands with no newer press sends nothing more", async () => {
+      localDown(left().entityId);
+      await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
+      expect(calls.mock.calls.some((c) => c[1] === "turn_on")).toBe(false);
     });
 
     it("an off that went through locally sends nothing to the cloud", async () => {

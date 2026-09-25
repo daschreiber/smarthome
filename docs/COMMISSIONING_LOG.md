@@ -2246,6 +2246,20 @@ whether a command gets through.
   before. An unavailable or unknown SmartThings entity proves nothing. A
   set that never settles is reported as `"off, SmartThings on"`.
 - The on side and each Frame's own card are unchanged.
+- **One command at a time per Frame** (Codex review of #147 and #148,
+  three rounds). A held power key, its cloud fallback and the read-back's
+  re-sends can each take up to 12 s. A newer press in that window (Lights
+  6 off and on in quick succession, or keypad 1.1.24's paired telegrams)
+  could have an older command overtake it: first a late cloud off, then an
+  off in flight, then a corrective on in flight. Patching each race drew
+  the next, so the fix is at the root. Every Frames send (sweep, cloud
+  fallback, read-back re-send) queues behind the set's previous one, and
+  when its turn comes it checks that its sweep still owns the set. The
+  cloud fallback runs inside the same turn as the local off it replaces,
+  so nothing can slip in between. A newer on now waits for the older off
+  to finish (up to ~12 s longer in the rare overlap) instead of racing it.
+  A press claims its Frames the moment it arrives, before a Night's
+  watched-sensor read, so sets are owned in arrival order.
 - Tests: execute.frames (cloud off on a local failure; not on success; not
   for an on sweep; both roads down still fails) and execute.framesVerify
   (cloud contradiction chased via the cloud; unavailable cloud proves

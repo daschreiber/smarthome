@@ -125,6 +125,11 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
     });
     return;
   }
+  // The press owns its Frames from the moment it arrives, before any await:
+  // a Morning pressed while this Night is still reading the sensors below
+  // claims after it, so it is the newer press and the older off stands down
+  // (Codex review, #148). Presses own sets in the order they arrived.
+  const token = claimFrames(frames.map((f) => f.id));
   // A Night press spares a set that is showing television (lib/artframes).
   // One bulk read; a failed read spares nothing — only positive evidence,
   // and only fresh evidence: the reading's `last_changed` travels with it,
@@ -140,24 +145,37 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
       )
     : new Map<string, SensorRead>();
   const { targets, spared } = spareWatched(frames, follow, (id) => states.get(id));
-  const token = claimFrames(targets.map((f) => f.id));
-  const result = targets.length ? await executeOnDevices(targets, follow) : { total: 0, failed: [] };
   // The held power key travels HA's local link to the set. When that link
   // cannot reach a set that is on (2026-09-25: Dining Left and Middle read
   // "off" for a minute after being switched on, and Lights 6 off errored on
-  // both), the off goes through the set's SmartThings entity instead.
+  // both), the off goes through the set's SmartThings entity instead —
+  // inside the same queued turn, so no newer press can slip in between.
   const viaCloud: Record<string, string> = {};
-  let failed = result.failed;
-  if (follow.command === "turn_off" && failed.length) {
-    await Promise.all(
-      failed.map(async (f) => {
-        const d = targets.find((t) => t.id === f.target);
-        if (!d?.wakeEntityId) return;
-        await cloudOff(d).then(() => { viaCloud[d.id] = f.error; }, () => {});
-      }),
-    );
-    failed = failed.filter((f) => !(f.target in viaCloud));
-  }
+  /** Sets a newer press took over before this sweep's turn came: nothing
+   *  was sent to them, and the audit line says so rather than implying it. */
+  const superseded: string[] = [];
+  const result = await runBatch(
+    targets.map((d) => ({
+      target: d.id,
+      run: () =>
+        onFrame(d.id, async () => {
+          // A newer press claimed the set while this turn waited: it is not
+          // this sweep's to command any more.
+          if (!ownsFrame(d.id, token)) {
+            superseded.push(d.id);
+            return;
+          }
+          try {
+            await executeOnDevice(d, follow);
+          } catch (err) {
+            if (follow.command !== "turn_off" || !d.wakeEntityId || !ownsFrame(d.id, token)) throw err;
+            await cloudOff(d).catch(() => { throw err; });
+            viaCloud[d.id] = err instanceof Error ? err.message : String(err);
+          }
+        }),
+    })),
+  );
+  const failed = result.failed;
   audit({
     ts: new Date().toISOString(),
     user,
@@ -170,6 +188,7 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
       targets: targets.map((f) => f.id),
       ...(spared.length ? { spared: spared.map((f) => f.id) } : {}),
       ...(Object.keys(viaCloud).length ? { viaCloud } : {}),
+      ...(superseded.length ? { superseded } : {}),
       failed,
     },
     ok: failed.length === 0,
@@ -182,6 +201,22 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * One command at a time per Frame. A held power key, its cloud fallback and
+ * the read-back's re-sends can each take up to the 12 s slow timeout, and a
+ * newer press arriving meanwhile (Lights 6 off and on in quick succession;
+ * keypad 1.1.24's paired telegrams) must not have its command overtaken by an
+ * older one still in flight (Codex review, #147/#148). Every Frames send
+ * queues behind the set's previous one, and checks when its turn comes that
+ * its sweep still owns the set.
+ */
+const frameQueue = new Map<string, Promise<void>>();
+function onFrame(frameId: string, job: () => Promise<void>): Promise<void> {
+  const turn = (frameQueue.get(frameId) ?? Promise.resolve()).then(job);
+  frameQueue.set(frameId, turn.catch(() => {}));
+  return turn;
+}
 
 /** A Frame's off through its SmartThings entity. A plain "switch off", not a
  *  power key: at a set that is already off it does nothing. */
@@ -254,7 +289,9 @@ export async function verifyFrameSweep(
       const call = viaCloud
         ? { domain: "media_player", service: "turn_off", data: { entity_id: d.wakeEntityId! } }
         : reassertCall(d, cmd, n);
-      await callService(call.domain, call.service, call.data, { timeoutMs: SLOW_SERVICE_TIMEOUT_MS }).catch(() => {});
+      await onFrame(d.id, async () => {
+        if (ownsFrame(d.id, token)) await callService(call.domain, call.service, call.data, { timeoutMs: SLOW_SERVICE_TIMEOUT_MS });
+      }).catch(() => {});
       attempts.set(d.id, n + 1);
       lastSent.set(d.id, Date.now());
     }

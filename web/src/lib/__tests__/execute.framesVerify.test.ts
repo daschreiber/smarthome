@@ -84,6 +84,74 @@ describe("verifyFrameSweep", () => {
     expect(audits).not.toHaveBeenCalled();
   });
 
+  describe("the local link reads a lit set 'off' (Dining Left and Middle, 2026-09-25)", () => {
+    const left = () => getDevice("dining__dining_left")!;
+    const readLeft = (own: string, cloud: string) =>
+      [
+        { entity_id: left().entityId, state: own, attributes: {} },
+        { entity_id: left().wakeEntityId!, state: cloud, attributes: {} },
+      ] as unknown as HaState[];
+
+    it("'off' is not believed while SmartThings says on: the off goes through the cloud, not the power key", async () => {
+      states
+        .mockResolvedValueOnce(readLeft("off", "on"))
+        .mockResolvedValueOnce(readLeft("off", "on"))
+        .mockResolvedValueOnce(readLeft("off", "on"))
+        .mockResolvedValue(readLeft("off", "off"));
+      const run = verifyFrameSweep([left()], { command: "turn_off" }, "ha:1.1.18", claimFrames([left().id]), { floor: 6 });
+      await vi.advanceTimersByTimeAsync(FRAME_POLL_MS * 5);
+      await run;
+      expect(calls).toHaveBeenCalledTimes(1);
+      expect(calls.mock.calls[0].slice(0, 3)).toEqual(["media_player", "turn_off", { entity_id: left().wakeEntityId }]);
+      expect(audits.mock.calls[0][0]).toMatchObject({
+        command: "frames_turn_off_verify", ok: true,
+        args: { reasserted: { dining__dining_left: 1 }, unverified: {} },
+      });
+    });
+
+    it("a SmartThings entity that is unavailable proves nothing: 'off' stands", async () => {
+      states.mockResolvedValue(readLeft("off", "unavailable"));
+      const run = verifyFrameSweep([left()], { command: "turn_off" }, "ha:1.1.18", claimFrames([left().id]));
+      await vi.advanceTimersByTimeAsync(FRAME_POLL_MS);
+      await run;
+      expect(calls).not.toHaveBeenCalled();
+      expect(audits).not.toHaveBeenCalled();
+    });
+
+    it("a set that reads on locally is chased with the held power key, as before", async () => {
+      states
+        .mockResolvedValueOnce(readLeft("on", "on"))
+        .mockResolvedValueOnce(readLeft("on", "on"))
+        .mockResolvedValueOnce(readLeft("on", "on"))
+        .mockResolvedValue(readLeft("off", "off"));
+      const run = verifyFrameSweep([left()], { command: "turn_off" }, "ha:1.1.18", claimFrames([left().id]));
+      await vi.advanceTimersByTimeAsync(FRAME_POLL_MS * 5);
+      await run;
+      expect(calls.mock.calls.map((c) => c[2].entity_id)).toEqual([left().entityId]);
+    });
+
+    it("never settled: the verdict says the cloud still had it on", async () => {
+      states.mockResolvedValue(readLeft("off", "on"));
+      const run = verifyFrameSweep([left()], { command: "turn_off" }, "ha:1.1.18", claimFrames([left().id]));
+      await vi.advanceTimersByTimeAsync(FRAME_VERIFY_MS + FRAME_POLL_MS);
+      await run;
+      expect(calls).toHaveBeenCalledTimes(2);
+      expect(audits.mock.calls[0][0]).toMatchObject({
+        ok: false,
+        args: { unverified: { dining__dining_left: "off, SmartThings on" } },
+      });
+    });
+
+    it("an ON sweep ignores the cloud's reading", async () => {
+      states.mockResolvedValue(readLeft("on", "off"));
+      const run = verifyFrameSweep([left()], { command: "turn_on" }, "ha:1.1.18", claimFrames([left().id]));
+      await vi.advanceTimersByTimeAsync(FRAME_POLL_MS);
+      await run;
+      expect(calls).not.toHaveBeenCalled();
+      expect(audits).not.toHaveBeenCalled();
+    });
+  });
+
   it("stops at three sends for a set that positively ignores them", async () => {
     states.mockResolvedValue(read("on"));
     const run = verifyFrameSweep([den()], { command: "turn_off" }, "ha:1.1.43", claimFrames([den().id]));

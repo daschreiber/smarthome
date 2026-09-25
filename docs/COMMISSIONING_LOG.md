@@ -1510,9 +1510,11 @@ settled it — the integration now holds six Frames, each with 2 entities
 - [x] ~~First home load after deploy: check the deploy log for
   `entity id settled` lines~~ — moot: neither id existed (2026-09-10
   below). The map now carries the ids HA actually has.
-- [ ] Map the Den, Lounge and master-bedroom-wall Frames when cards for
+- [x] ~~Map the Den, Lounge and master-bedroom-wall Frames when cards for
   those rooms are wanted (same recipe; get the entity ids from the
-  device page, or run `tools/export_inventory.py` from the house LAN).
+  device page, or run `tools/export_inventory.py` from the house LAN).~~
+  Den and Lounge 2026-09-10; the wall Frame 2026-09-24 (below), as a plain
+  media card and deliberately not an art frame.
 - [ ] The Den TV's 4 entities suggest its soundbar/`dlna_dmr` pair — check
   before mapping it that the media_player chosen is the TV, not the bar.
 
@@ -1818,7 +1820,9 @@ if the owner uses the keypad more than the app.
 - [x] Wall-keypad presses (above) — relayed by HA since 2026-09-16 (entry below).
 - [x] "Not while being watched" — added the same afternoon (below).
 - [ ] Refinements the owner asked to defer: home/away gating, the floor 6
-  all-lights-off keypad, the bedroom-wall Frame.
+  all-lights-off keypad, the bedroom-wall Frame. (The wall Frame got a
+  plain media card on 2026-09-24 but is still deliberately outside every
+  sweep — its own handling is the deferred part.)
 
 ### Same day — a Night press spares a set that is showing television
 
@@ -2086,3 +2090,59 @@ the app's own button were not. Expected in Activity: every
 - [ ] The real fix for "is it in art?" is still the local Art API sensor
   (09-10 follow-up); the window is a stopgap that makes the stuck sensor
   harmless.
+
+## 2026-09-24 — The master bedroom wall Frame: a plain media card, not an art frame
+
+The sixth Frame — config entry "TV in master bedroom wall", QE43LS03BGUXSQ,
+43", HA area Master Bedroom — was the only one missing from the entity map.
+It now has a card, "Wall TV", in the Master Bedroom's Media group.
+
+### The ids, read not guessed
+
+Read by the owner from HA → Settings → Devices & services → Samsung TV →
+the device "TV in master bedroom wall (QE43LS03BGUXSQ)" → its media player →
+settings: **`media_player.tv_in_master_bedroom_wall_qe43ls03bguxsq`**. The
+device's Controls hold only that media_player and its remote — no second
+media_player of the kind the Dining and Lounge rows use as `wake_entity`
+(those are SmartThings entities on separate devices), so the row has none.
+(The first value offered was the entity's registry ULID; HA's service calls
+and the app's state reads need the `media_player.` id.)
+
+### The row
+
+Appended to `data/entity_map.json` and `web/data/entity_map.json` (kept
+byte-identical): media_player, original name "TV in master bedroom wall",
+display "Wall TV", room Master Bedroom, floor 6, category media, group
+Media, visible, **`retry_power: true`** (the Frames' turn_on is a
+Wake-on-LAN packet that lands about half the time; the command route
+re-sends while the set disagrees, 2026-09-10).
+
+**Deliberately no `art_frame` and no `art_mode_entity`.** Those flags are
+what put a screen into the Night, Morning and Exit sweeps and the
+floor-scoped "Lights 6" press (`artFrames()`, lib/artframes). The owner
+wants this TV out of all of it until it gets handling of its own. Leaving
+the flags off is the whole mechanism; `ha/artframes_keypad.yaml` names no
+TVs and was not touched. Do not add the flag to make the six consistent.
+
+### Checks
+
+- Registry: loads as `master_bedroom__wall_tv`, visible, capabilities
+  on_off / volume / select_source / transport, `retryPower`.
+- In no art-frame set: whole house, floor 5, floor 6, each of Night /
+  Morning / Exit — the sweeps still hold exactly the five other Frames.
+- The lift TV follower (lib/liftwatch) finds the bedroom lift TV by a name
+  pattern; "TV in master bedroom wall (QE43LS03BGUXSQ)" does not match it,
+  so the wall set can never appear as a lift-TV candidate. (A rename to
+  something like "Master Bedroom Wall TV" would match — harmless while the
+  follower remembers the lift TV, since it only scans when it doesn't, and
+  it never picks between several candidates.)
+- `npm run typecheck` clean; `npm test` 595/595.
+
+### Follow-ups
+
+- [ ] Live check from the card: off and on, owner at the set. If turn_on
+  misses even with the re-sends (as the right Dining Frame did), the next
+  step is a `wake_entity` — only if SmartThings exposes this set.
+- [ ] Its own handling (whatever the owner decides it should follow) —
+  deferred by design; see the 2026-09-10 refinements list.
+

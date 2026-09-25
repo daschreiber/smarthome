@@ -142,6 +142,22 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
   const { targets, spared } = spareWatched(frames, follow, (id) => states.get(id));
   const token = claimFrames(targets.map((f) => f.id));
   const result = targets.length ? await executeOnDevices(targets, follow) : { total: 0, failed: [] };
+  // The held power key travels HA's local link to the set. When that link
+  // cannot reach a set that is on (2026-09-25: Dining Left and Middle read
+  // "off" for a minute after being switched on, and Lights 6 off errored on
+  // both), the off goes through the set's SmartThings entity instead.
+  const viaCloud: Record<string, string> = {};
+  let failed = result.failed;
+  if (follow.command === "turn_off" && failed.length) {
+    await Promise.all(
+      failed.map(async (f) => {
+        const d = targets.find((t) => t.id === f.target);
+        if (!d?.wakeEntityId) return;
+        await cloudOff(d).then(() => { viaCloud[d.id] = f.error; }, () => {});
+      }),
+    );
+    failed = failed.filter((f) => !(f.target in viaCloud));
+  }
   audit({
     ts: new Date().toISOString(),
     user,
@@ -153,11 +169,12 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
       ...(scope.floor ? { floor: scope.floor } : {}),
       targets: targets.map((f) => f.id),
       ...(spared.length ? { spared: spared.map((f) => f.id) } : {}),
-      failed: result.failed,
+      ...(Object.keys(viaCloud).length ? { viaCloud } : {}),
+      failed,
     },
-    ok: result.failed.length === 0,
+    ok: failed.length === 0,
     durationMs: Date.now() - started,
-    error: result.failed.length ? result.failed.map((f) => `${f.target}: ${f.error}`).join("; ") : undefined,
+    error: failed.length ? failed.map((f) => `${f.target}: ${f.error}`).join("; ") : undefined,
   });
   // The line above says what was sent. Whether the sets obeyed is read back
   // in the background — the caller has long since answered.
@@ -165,6 +182,29 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** A Frame's off through its SmartThings entity. A plain "switch off", not a
+ *  power key: at a set that is already off it does nothing. */
+function cloudOff(d: Device): Promise<void> {
+  return callService("media_player", "turn_off", { entity_id: d.wakeEntityId! }, { timeoutMs: SLOW_SERVICE_TIMEOUT_MS });
+}
+
+/** Does SmartThings positively say this Frame is on? Unavailable, unknown or
+ *  no reading proves nothing. */
+function cloudSaysOn(d: Device, states: Map<string, string>): boolean {
+  const s = d.wakeEntityId ? states.get(d.wakeEntityId) : undefined;
+  return s != null && mediaAgrees({ command: "turn_on" }, s);
+}
+
+/** Has this Frame obeyed? Its own (Samsung TV) entity decides — except that
+ *  an "off" there is not believed while SmartThings says the set is on: the
+ *  local link read Dining Left and Middle "off" for a minute while they were
+ *  lit (2026-09-25). */
+function frameAgrees(d: Device, cmd: Command, states: Map<string, string>): boolean {
+  const seen = states.get(d.entityId);
+  if (seen == null || !mediaAgrees(cmd, seen)) return false;
+  return !(cmd.command === "turn_off" && cloudSaysOn(d, states));
+}
 
 /**
  * Read a Frame sweep back and chase the sets that did not obey (lib/artframes
@@ -195,16 +235,25 @@ export async function verifyFrameSweep(
     waiting = waiting.filter((d) => {
       if (!ownsFrame(d.id, token)) return false;
       const seen = states.get(d.entityId);
-      if (seen != null) lastSeen.set(d.id, seen);
-      return seen == null || !mediaAgrees(cmd, seen);
+      // Only the cloud contradicts an "off" reading: say both, so the
+      // verdict line shows why the set was not believed.
+      const cloudOnly = cmd.command === "turn_off" && seen != null && mediaAgrees(cmd, seen) && cloudSaysOn(d, states);
+      if (seen != null) lastSeen.set(d.id, cloudOnly ? `${seen}, SmartThings on` : seen);
+      return !frameAgrees(d, cmd, states);
     });
     if (waiting.length === 0 || Date.now() >= deadline) break;
     for (const d of waiting) {
       const seen = states.get(d.entityId);
-      if (seen == null || seen === "unavailable" || seen === "unknown") continue;
+      // The set's own entity does not read it on, but SmartThings does: the
+      // local link is not seeing the set, so the held power key would not
+      // reach it either. The cloud's off does, and is harmless if it is off.
+      const viaCloud = cmd.command === "turn_off" && !(seen != null && mediaAgrees({ command: "turn_on" }, seen)) && cloudSaysOn(d, states);
+      if (!viaCloud && (seen == null || seen === "unavailable" || seen === "unknown")) continue;
       const n = attempts.get(d.id)!;
       if (n >= TV_ATTEMPTS || Date.now() - lastSent.get(d.id)! < FRAME_REASSERT_AFTER_MS) continue;
-      const call = reassertCall(d, cmd, n);
+      const call = viaCloud
+        ? { domain: "media_player", service: "turn_off", data: { entity_id: d.wakeEntityId! } }
+        : reassertCall(d, cmd, n);
       await callService(call.domain, call.service, call.data, { timeoutMs: SLOW_SERVICE_TIMEOUT_MS }).catch(() => {});
       attempts.set(d.id, n + 1);
       lastSent.set(d.id, Date.now());

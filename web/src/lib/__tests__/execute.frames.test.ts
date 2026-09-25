@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The batch path (scenes, automations, the assistant) has no read-back, so
@@ -150,6 +150,60 @@ describe("followArtFrames", () => {
       "media_player.right_32_qe32ls03cbuxil",
     ]);
     expect(audits.mock.calls[0][0]).toMatchObject({ command: "frames_turn_off", args: { floor: 6 } });
+  });
+
+  describe("an off the local link cannot deliver goes through SmartThings (2026-09-25)", () => {
+    const left = () => getDevice("dining__dining_left")!;
+    const middle = () => getDevice("dining__dining_middle")!;
+    /** HA's local link cannot reach the sets named; everything else answers. */
+    const localDown = (...entityIds: string[]) =>
+      calls.mockImplementation(async (_domain, _service, data) => {
+        if (entityIds.includes(data.entity_id as string)) throw new Error("HA 500: failed to connect");
+      });
+    afterEach(() => calls.mockImplementation(async () => {}));
+
+    it("Lights 6 off: Left and Middle unreachable locally get the cloud off; the sweep is not a failure", async () => {
+      localDown(left().entityId, middle().entityId);
+      await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
+      const cloud = calls.mock.calls.filter((c) => c[2].entity_id === left().wakeEntityId || c[2].entity_id === middle().wakeEntityId);
+      expect(cloud.map((c) => [c[1], c[2].entity_id, c[3]?.timeoutMs]).sort()).toEqual([
+        ["turn_off", left().wakeEntityId, 12_000],
+        ["turn_off", middle().wakeEntityId, 12_000],
+      ]);
+      // The two that answered locally get nothing more.
+      expect(calls).toHaveBeenCalledTimes(6);
+      expect(audits.mock.calls[0][0]).toMatchObject({
+        command: "frames_turn_off", ok: true,
+        args: {
+          failed: [],
+          viaCloud: {
+            dining__dining_left: expect.stringContaining("failed to connect"),
+            dining__dining_middle: expect.stringContaining("failed to connect"),
+          },
+        },
+      });
+    });
+
+    it("both roads down: the set is still reported failed", async () => {
+      localDown(left().entityId, left().wakeEntityId!);
+      await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
+      expect(audits.mock.calls[0][0]).toMatchObject({
+        ok: false,
+        args: { failed: [{ target: "dining__dining_left" }] },
+      });
+      expect(audits.mock.calls[0][0].args).not.toHaveProperty("viaCloud");
+    });
+
+    it("an off that went through locally sends nothing to the cloud", async () => {
+      await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
+      expect(calls.mock.calls.some((c) => String(c[2].entity_id).startsWith("media_player.living_room_"))).toBe(false);
+    });
+
+    it("a failed ON is not answered with a cloud off", async () => {
+      localDown(left().entityId);
+      await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
+      expect(calls.mock.calls.some((c) => c[1] === "turn_off")).toBe(false);
+    });
   });
 
   it("Lights 5: the Den TV alone goes off; Lights 5 back on leaves it off (off-only) and logs nothing", async () => {

@@ -9,6 +9,7 @@ import {
   artFrameFollow,
   artFrames,
   claimFrames,
+  frameOwner,
   ownsFrame,
   pressOf,
   recordPress,
@@ -140,7 +141,7 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
       )
     : new Map<string, SensorRead>();
   const { targets, spared } = spareWatched(frames, follow, (id) => states.get(id));
-  const token = claimFrames(targets.map((f) => f.id));
+  const token = claimFrames(targets.map((f) => f.id), follow, user);
   const result = targets.length ? await executeOnDevices(targets, follow) : { total: 0, failed: [] };
   // The held power key travels HA's local link to the set. When that link
   // cannot reach a set that is on (2026-09-25: Dining Left and Middle read
@@ -156,7 +157,17 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
         // newer press (Lights 6 back on) may own the set by then, and a late
         // cloud off must not undo it.
         if (!d?.wakeEntityId || !ownsFrame(d.id, token)) return;
-        await cloudOff(d).then(() => { viaCloud[d.id] = f.error; }, () => {});
+        const sent = await cloudOff(d).then(() => true, () => false);
+        if (!sent) return;
+        viaCloud[d.id] = f.error;
+        // A newer press can still claim the set while the cloud off is in
+        // flight, and its read-back may see the set on and finish before the
+        // off lands. Put the newer "on" back and read it back again.
+        const now = frameOwner(d.id);
+        if (now && now.token !== token && now.intent?.command === "turn_on") {
+          await executeOnDevice(d, now.intent).catch(() => {});
+          void verifyFrameSweep([d], now.intent, now.user ?? user, now.token, scope);
+        }
       }),
     );
     failed = failed.filter((f) => !(f.target in viaCloud));

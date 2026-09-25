@@ -2251,7 +2251,11 @@ whether a command gets through.
   Lights 6 pressed back on in that window claims the sets. The cloud
   fallback is sent only to sets the off sweep still owns (`ownsFrame`),
   as the read-back already did. Otherwise the pair keypad 1.1.24 sends
-  would have its late off undo the on.
+  would have its late off undo the on. The window left, a newer "on"
+  claiming the set while the cloud off is in flight (Codex, #148), is
+  closed after the fact: each sweep records its intent with its claim
+  (`frameOwner`), and when a cloud off lands on a set a newer on sweep now
+  owns, that on is sent again and read back under the newer sweep's claim.
 - Tests: execute.frames (cloud off on a local failure; not on success; not
   for an on sweep; both roads down still fails) and execute.framesVerify
   (cloud contradiction chased via the cloud; unavailable cloud proves

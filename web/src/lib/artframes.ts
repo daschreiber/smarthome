@@ -111,6 +111,7 @@ export function recordPress(press: Press, now = Date.now(), floor?: 5 | 6): bool
 export function resetPressMemory(): void {
   lastPress.clear();
   sweepOwner.clear();
+  sweepIntent.clear();
 }
 
 /**
@@ -134,12 +135,26 @@ export const FRAME_REASSERT_AFTER_MS = 30_000;
 /** Which sweep owns a Frame's verdict. A newer press over the same set takes
  *  it, and the older chase lets go rather than fight the newer intent. */
 const sweepOwner = new Map<string, number>();
+/** What the owning sweep wants of each Frame, and on whose behalf. */
+const sweepIntent = new Map<string, { intent: Command; user: string }>();
 let sweepSeq = 0;
 
-export function claimFrames(frameIds: string[]): number {
+export function claimFrames(frameIds: string[], intent?: Command, user = "system"): number {
   const token = ++sweepSeq;
-  for (const id of frameIds) sweepOwner.set(id, token);
+  for (const id of frameIds) {
+    sweepOwner.set(id, token);
+    if (intent) sweepIntent.set(id, { intent, user });
+    else sweepIntent.delete(id);
+  }
   return token;
+}
+
+/** The sweep that owns a Frame now, and what it asked for — so a command
+ *  from an older sweep that landed late can be followed by the current one. */
+export function frameOwner(frameId: string): { token: number; intent?: Command; user?: string } | undefined {
+  const token = sweepOwner.get(frameId);
+  if (token == null) return undefined;
+  return { token, ...sweepIntent.get(frameId) };
 }
 
 export function ownsFrame(frameId: string, token: number): boolean {

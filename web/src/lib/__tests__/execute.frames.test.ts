@@ -213,6 +213,34 @@ describe("followArtFrames", () => {
       });
     });
 
+    it("a newer on that claims the set while the cloud off is in flight is put back after it (Codex, #148)", async () => {
+      let landCloudOff: () => void = () => {};
+      calls.mockImplementation(async (_domain, service, data) => {
+        if (service === "turn_off" && data.entity_id === left().entityId) throw new Error("timeout");
+        if (service === "turn_off" && data.entity_id === left().wakeEntityId) {
+          await new Promise<void>((resolve) => { landCloudOff = resolve; });
+        }
+      });
+      const night = followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      // Let the local off fail and the cloud off go out.
+      await vi.waitFor(() => expect(calls.mock.calls.some((c) => c[2].entity_id === left().wakeEntityId)).toBe(true));
+      await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      const beforeLanding = calls.mock.calls.length;
+      landCloudOff();
+      await night;
+      const after = calls.mock.calls.slice(beforeLanding).map((c) => [c[1], c[2].entity_id]);
+      expect(after).toEqual([
+        ["turn_on", left().entityId],
+        ["turn_on", left().wakeEntityId],
+      ]);
+    });
+
+    it("a cloud off that lands with no newer press sends nothing more", async () => {
+      localDown(left().entityId);
+      await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
+      expect(calls.mock.calls.some((c) => c[1] === "turn_on")).toBe(false);
+    });
+
     it("an off that went through locally sends nothing to the cloud", async () => {
       await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
       expect(calls.mock.calls.some((c) => String(c[2].entity_id).startsWith("media_player.living_room_"))).toBe(false);

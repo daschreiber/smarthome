@@ -86,10 +86,8 @@ but its "off" only quits the cast and cannot power the TV down. The
 `samsungtv` entity, device name **Master Bedroom Lift TV** (QE55Q70DATXSQ,
 added 2026-09-04), is the real power control. The TV follower
 (lib/liftwatch) uses the Cast receiver for ON and the Samsung entity for
-OFF and for "is the panel on?". Since 2026-09-25 the same lowering also
-turns the room's **wall Frame** ("Wall TV", below) off when it reads on —
-one command, down edge only, never back on when the lift rises. The
-house's second 55" QLED (QE55Q60DAUXSQ) was deliberately left un-added.
+OFF and for "is the panel on?". The house's second 55" QLED
+(QE55Q60DAUXSQ) was deliberately left un-added.
 
 **The Frames (2026-09-09).** Six Samsung The Frame sets are in HA's Samsung
 TV integration, each with a media_player + remote: the three 32" screens in
@@ -138,13 +136,6 @@ media_player and remote). It is **deliberately NOT an art frame**: no
 Exit or the floor-scoped "Lights 6" press (`artFrames()` in lib/artframes
 filters on that flag). The owner wants it out of the sweeps until it gets
 handling of its own — do not "complete" the set by adding the flag.
-Its one rule so far (2026-09-25, owner request): **lowering the lift TV
-turns it off** (`wallTvOffOnLower` in lib/liftwatch) — only on the lift's
-down edge, only when the wall set affirmatively reads on (a Frame's off is
-a held power key, not sent blind at a set that is already off), one
-command, no retries, after the lift TV's own on. Raising the lift does not
-turn it back on. Paused with the TV follower, silenced by its breaker.
-This is still not art-frame handling: the flags stay off.
 Apple TV "Basement Jerusalem". Rack has its own AC (`climate.rack_unit_109`).
 
 ## Spotify device-picker decoder

@@ -7,7 +7,6 @@ import {
   TV_ENTITY, evaluateTvFollow, liftDownFromState, loadLiftwatch, offAttemptsAllowed, offDevice,
   TV_POWER_SCAN_MS, discoverTvPowerCandidates, discoverTvPowerEntity, pickTvPower, saveLiftwatch,
   tickLiftwatch, tvDevice, tvOnFromState, tvPowerDevice, tvTruthEntity, type LiftwatchState,
-  WALL_TV_ENTITY, wallTvDevice, wallTvOffOnLower,
 } from "../liftwatch";
 import { TV_LIFT_ENTITY } from "../sleepwatch";
 import { getState, getStates, type HaState } from "../ha";
@@ -300,98 +299,6 @@ describe("tick", () => {
     await tickLiftwatch();
     expect(executeOnDevice).not.toHaveBeenCalled();
     expect(loadLiftwatch().lastDown).toBe(true);
-  });
-});
-
-describe("the wall Frame goes off when the lift lowers (owner request 2026-09-25)", () => {
-  beforeEach(() => {
-    vi.mocked(getState).mockReset();
-    vi.mocked(executeOnDevice).mockReset();
-  });
-
-  /** Lift, lift TV and wall TV read independently. */
-  const states = (lift: string, tv: string, wall: string) => async (id: string) =>
-    ({ state: id === TV_LIFT_ENTITY ? lift : id === WALL_TV_ENTITY ? wall : tv }) as never;
-  const wallCalls = () =>
-    vi.mocked(executeOnDevice).mock.calls.filter(([d]) => d.entityId === WALL_TV_ENTITY);
-
-  it("resolves to the wall TV card in the real entity map — a plain media card, not an art frame", () => {
-    const d = wallTvDevice();
-    expect(d).toMatchObject({ id: "master_bedroom__wall_tv", entityId: WALL_TV_ENTITY, kind: "media_player" });
-    expect(d?.artFrame).toBeFalsy();
-  });
-
-  it("lift down with the wall TV on → the lift TV on first, then the wall TV off", async () => {
-    saveLiftwatch({ enabled: true, lastDown: false });
-    vi.mocked(getState).mockImplementation(states("on", "off", "on"));
-    await tickLiftwatch();
-    const calls = vi.mocked(executeOnDevice).mock.calls.map(([d, c]) => [d.entityId, c.command]);
-    expect(calls).toEqual([[TV_ENTITY, "turn_on"], [WALL_TV_ENTITY, "turn_off"]]);
-  });
-
-  it.each(["off", "standby", "unavailable", "unknown"])(
-    "a wall TV reading %s gets no command (no blind held power key)",
-    async (wall) => {
-      saveLiftwatch({ enabled: true, lastDown: false });
-      vi.mocked(getState).mockImplementation(states("on", "off", wall));
-      await tickLiftwatch();
-      expect(executeOnDevice).toHaveBeenCalledTimes(1);
-      expect(wallCalls()).toEqual([]);
-    },
-  );
-
-  it("an unreadable wall TV (HA error) gets no command", async () => {
-    saveLiftwatch({ enabled: true, lastDown: false });
-    vi.mocked(getState).mockImplementation(async (id: string) => {
-      if (id === WALL_TV_ENTITY) throw new Error("HA 502");
-      return { state: id === TV_LIFT_ENTITY ? "on" : "off" } as never;
-    });
-    await tickLiftwatch();
-    expect(wallCalls()).toEqual([]);
-  });
-
-  it("only the down edge: a lift already down, or going up, never touches the wall TV", async () => {
-    saveLiftwatch({ enabled: true, lastDown: true, offAttempts: 0 });
-    vi.mocked(getState).mockImplementation(states("on", "on", "on"));
-    await tickLiftwatch();
-    expect(executeOnDevice).not.toHaveBeenCalled();
-    vi.mocked(getState).mockImplementation(states("off", "on", "on"));
-    await tickLiftwatch();
-    expect(executeOnDevice).toHaveBeenCalledTimes(1);
-    expect(wallCalls()).toEqual([]);
-  });
-
-  it("the first reading after a restart is a baseline — no wall command", async () => {
-    saveLiftwatch({ enabled: true, lastDown: null });
-    vi.mocked(getState).mockImplementation(states("on", "off", "on"));
-    await tickLiftwatch();
-    expect(executeOnDevice).not.toHaveBeenCalled();
-  });
-
-  it("an open breaker sends nothing to the wall TV either", async () => {
-    saveLiftwatch({ enabled: true, lastDown: false, breakerUntil: Date.now() + 60_000 });
-    vi.mocked(getState).mockImplementation(states("on", "off", "on"));
-    await tickLiftwatch();
-    expect(executeOnDevice).not.toHaveBeenCalled();
-  });
-
-  it("a failed wall off is swallowed (audited), and the lift TV's on already went out", async () => {
-    saveLiftwatch({ enabled: true, lastDown: false });
-    vi.mocked(getState).mockImplementation(states("on", "off", "on"));
-    vi.mocked(executeOnDevice).mockImplementation(async (d) => {
-      if (d.entityId === WALL_TV_ENTITY) throw new Error("timeout");
-      return undefined as never;
-    });
-    await expect(tickLiftwatch()).resolves.toBeUndefined();
-    expect(vi.mocked(executeOnDevice).mock.calls[0][0].entityId).toBe(TV_ENTITY);
-    expect(wallCalls()).toHaveLength(1);
-  });
-
-  it("a pause flipped before the wall read wins", async () => {
-    saveLiftwatch({ enabled: false, lastDown: null });
-    vi.mocked(getState).mockImplementation(states("on", "off", "on"));
-    await wallTvOffOnLower();
-    expect(executeOnDevice).not.toHaveBeenCalled();
   });
 });
 

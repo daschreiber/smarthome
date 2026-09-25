@@ -263,6 +263,11 @@ describe("followArtFrames", () => {
       const den = getDevice("den__den_tv")!.entityId;
       expect(calls.mock.calls.filter((c) => c[1] === "turn_off").map((c) => c[2].entity_id)).toEqual([den]);
       expect(calls.mock.calls.filter((c) => c[1] === "turn_on").length).toBeGreaterThan(0);
+      // Its audit line does not pretend it sent them an off.
+      const nightLine = audits.mock.calls.find((c) => c[0].command === "frames_turn_off")![0];
+      expect((nightLine.args as { superseded: string[] }).superseded.sort()).toEqual([
+        "dining__dining_left", "dining__dining_middle", "dining__dining_right", "lounge__lounge_tv",
+      ]);
     });
 
     it("a cloud off that lands with no newer press sends nothing more", async () => {

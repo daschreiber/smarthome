@@ -151,6 +151,9 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
   // both), the off goes through the set's SmartThings entity instead —
   // inside the same queued turn, so no newer press can slip in between.
   const viaCloud: Record<string, string> = {};
+  /** Sets a newer press took over before this sweep's turn came: nothing
+   *  was sent to them, and the audit line says so rather than implying it. */
+  const superseded: string[] = [];
   const result = await runBatch(
     targets.map((d) => ({
       target: d.id,
@@ -158,7 +161,10 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
         onFrame(d.id, async () => {
           // A newer press claimed the set while this turn waited: it is not
           // this sweep's to command any more.
-          if (!ownsFrame(d.id, token)) return;
+          if (!ownsFrame(d.id, token)) {
+            superseded.push(d.id);
+            return;
+          }
           try {
             await executeOnDevice(d, follow);
           } catch (err) {
@@ -182,6 +188,7 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
       targets: targets.map((f) => f.id),
       ...(spared.length ? { spared: spared.map((f) => f.id) } : {}),
       ...(Object.keys(viaCloud).length ? { viaCloud } : {}),
+      ...(superseded.length ? { superseded } : {}),
       failed,
     },
     ok: failed.length === 0,

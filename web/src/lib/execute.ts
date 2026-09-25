@@ -152,7 +152,10 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
     await Promise.all(
       failed.map(async (f) => {
         const d = targets.find((t) => t.id === f.target);
-        if (!d?.wakeEntityId) return;
+        // A local failure can take the whole slow timeout to come back; a
+        // newer press (Lights 6 back on) may own the set by then, and a late
+        // cloud off must not undo it.
+        if (!d?.wakeEntityId || !ownsFrame(d.id, token)) return;
         await cloudOff(d).then(() => { viaCloud[d.id] = f.error; }, () => {});
       }),
     );

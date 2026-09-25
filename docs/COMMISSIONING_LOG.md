@@ -2246,6 +2246,12 @@ whether a command gets through.
   before. An unavailable or unknown SmartThings entity proves nothing. A
   set that never settles is reported as `"off, SmartThings on"`.
 - The on side and each Frame's own card are unchanged.
+- **A newer press wins over a late cloud off** (Codex review of #147):
+  a local off that fails can take the full 12 s timeout to come back, and
+  Lights 6 pressed back on in that window claims the sets. The cloud
+  fallback is sent only to sets the off sweep still owns (`ownsFrame`),
+  as the read-back already did. Otherwise the pair keypad 1.1.24 sends
+  would have its late off undo the on.
 - Tests: execute.frames (cloud off on a local failure; not on success; not
   for an on sweep; both roads down still fails) and execute.framesVerify
   (cloud contradiction chased via the cloud; unavailable cloud proves

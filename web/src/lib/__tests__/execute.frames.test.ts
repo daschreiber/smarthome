@@ -194,6 +194,25 @@ describe("followArtFrames", () => {
       expect(audits.mock.calls[0][0].args).not.toHaveProperty("viaCloud");
     });
 
+    it("a newer press that claims the set while the local off is failing gets no late cloud off (Codex, #147)", async () => {
+      let failLocal: (err: Error) => void = () => {};
+      calls.mockImplementation(async (_domain, service, data) => {
+        if (service === "turn_off" && data.entity_id === left().entityId) {
+          await new Promise<void>((_, reject) => { failLocal = reject; });
+        }
+      });
+      const night = followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      // Lights 6 back on while the held power key is still timing out.
+      await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      failLocal(new Error("timeout"));
+      await night;
+      expect(calls.mock.calls.some((c) => c[1] === "turn_off" && c[2].entity_id === left().wakeEntityId)).toBe(false);
+      expect(audits.mock.calls.find((c) => c[0].command === "frames_turn_off")![0]).toMatchObject({
+        ok: false,
+        args: { failed: [{ target: "dining__dining_left" }] },
+      });
+    });
+
     it("an off that went through locally sends nothing to the cloud", async () => {
       await followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.18", { floor: 6, spare: false });
       expect(calls.mock.calls.some((c) => String(c[2].entity_id).startsWith("media_player.living_room_"))).toBe(false);

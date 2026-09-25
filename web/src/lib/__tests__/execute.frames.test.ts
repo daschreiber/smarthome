@@ -194,7 +194,11 @@ describe("followArtFrames", () => {
       expect(audits.mock.calls[0][0].args).not.toHaveProperty("viaCloud");
     });
 
-    it("a newer press that claims the set while the local off is failing gets no late cloud off (Codex, #147)", async () => {
+    /** Every command to one set, in the order it reached HA. */
+    const sentTo = (entityIds: string[]) =>
+      calls.mock.calls.filter((c) => entityIds.includes(c[2].entity_id as string)).map((c) => [c[1], c[2].entity_id]);
+
+    it("Lights 6 back on while the off is still failing: the on waits its turn, and no cloud off follows it (Codex, #147)", async () => {
       let failLocal: (err: Error) => void = () => {};
       calls.mockImplementation(async (_domain, service, data) => {
         if (service === "turn_off" && data.entity_id === left().entityId) {
@@ -202,18 +206,25 @@ describe("followArtFrames", () => {
         }
       });
       const night = followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
-      // Lights 6 back on while the held power key is still timing out.
-      await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      await vi.waitFor(() => expect(sentTo([left().entityId])).toHaveLength(1));
+      const morning = followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      await Promise.resolve();
+      // Nothing has overtaken the held power key.
+      expect(sentTo([left().entityId, left().wakeEntityId!])).toEqual([["turn_off", left().entityId]]);
       failLocal(new Error("timeout"));
-      await night;
-      expect(calls.mock.calls.some((c) => c[1] === "turn_off" && c[2].entity_id === left().wakeEntityId)).toBe(false);
+      await Promise.all([night, morning]);
+      expect(sentTo([left().entityId, left().wakeEntityId!])).toEqual([
+        ["turn_off", left().entityId],
+        ["turn_on", left().entityId],
+        ["turn_on", left().wakeEntityId],
+      ]);
       expect(audits.mock.calls.find((c) => c[0].command === "frames_turn_off")![0]).toMatchObject({
         ok: false,
         args: { failed: [{ target: "dining__dining_left" }] },
       });
     });
 
-    it("a newer on that claims the set while the cloud off is in flight is put back after it (Codex, #148)", async () => {
+    it("an on pressed while the cloud off is in flight goes out after it lands (Codex, #148)", async () => {
       let landCloudOff: () => void = () => {};
       calls.mockImplementation(async (_domain, service, data) => {
         if (service === "turn_off" && data.entity_id === left().entityId) throw new Error("timeout");
@@ -222,14 +233,18 @@ describe("followArtFrames", () => {
         }
       });
       const night = followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
-      // Let the local off fail and the cloud off go out.
-      await vi.waitFor(() => expect(calls.mock.calls.some((c) => c[2].entity_id === left().wakeEntityId)).toBe(true));
-      await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
-      const beforeLanding = calls.mock.calls.length;
+      await vi.waitFor(() => expect(sentTo([left().wakeEntityId!])).toHaveLength(1));
+      const morning = followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:1.1.24", { floor: 6, spare: false });
+      await Promise.resolve();
+      expect(sentTo([left().entityId, left().wakeEntityId!])).toEqual([
+        ["turn_off", left().entityId],
+        ["turn_off", left().wakeEntityId],
+      ]);
       landCloudOff();
-      await night;
-      const after = calls.mock.calls.slice(beforeLanding).map((c) => [c[1], c[2].entity_id]);
-      expect(after).toEqual([
+      await Promise.all([night, morning]);
+      expect(sentTo([left().entityId, left().wakeEntityId!])).toEqual([
+        ["turn_off", left().entityId],
+        ["turn_off", left().wakeEntityId],
         ["turn_on", left().entityId],
         ["turn_on", left().wakeEntityId],
       ]);

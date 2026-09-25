@@ -2146,6 +2146,54 @@ TVs and was not touched. Do not add the flag to make the six consistent.
 - [ ] Its own handling (whatever the owner decides it should follow) —
   deferred by design; see the 2026-09-10 refinements list.
 
+## 2026-09-25 — Lowering the lift TV turns the wall Frame off
+
+Owner request: when the master bedroom lift TV comes down, the wall TV
+("Wall TV", mapped 2026-09-24) should go off — one screen at a time in the
+room. Built into the existing TV follower (lib/liftwatch) rather than as a
+scheduled automation: the follower already owns the lift's down edge, its
+restart baseline, its pause switch and its circuit breaker, and a second
+reader of the same relay would need all four again.
+
+### Behaviour
+
+- **Down edge only.** On the tick the follower sends the lift TV its
+  `turn_on`, it then reads the wall set (`wallTvOffOnLower`). A lift that
+  was already down at a restart is a baseline, not an edge — nothing sent.
+- **Only if it reads on.** The Frame's off is a held power key
+  (`retry_power`, 12 s slow-service timeout); sent at a set that is already
+  off or unreadable it is at best wasted and at worst a toggle. `off`,
+  `standby`, `unavailable`, `unknown` or an HA error → no command.
+- **After the lift TV's own on**, so the screen coming down is never held
+  up by the Frame's multi-second off.
+- **One command, no retries**; a failure is audited (`lift_wall_tv_off`,
+  device `master_bedroom__wall_tv`, `ok: false`) and logged, never thrown.
+- **One direction.** Raising the lift never turns the wall TV back on.
+- **Same switches.** Pausing the TV follower (Automations card) pauses this
+  too, including a pause flipped mid-tick; an open breaker sends nothing.
+- A wall TV switched on while the lift is already down is left alone —
+  the rule is "the lift coming down", not "never both on".
+
+Still **not** an art frame: no `art_frame`, no `art_mode_entity`; Night,
+Morning, Exit and "Lights 6" still skip it. The Automations card's TV
+follower description now says "and the wall TV off if it's on".
+
+### Checks
+
+- New vitest cases (liftwatch.test.ts): the wall device resolves from the
+  real entity map as `master_bedroom__wall_tv` with no art-frame flag; lift
+  down + wall on → `[lift TV turn_on, wall turn_off]` in that order; wall
+  off/standby/unavailable/unknown/HA error → no wall command; lift already
+  down or going up → no wall command; restart baseline and open breaker →
+  nothing; a failed wall off doesn't throw; a pause wins.
+- `npm run typecheck` clean; `npm test` 607/607.
+
+### Follow-ups
+
+- [ ] Live check, owner in the room: wall TV on, lower the lift — the lift
+  TV comes on and the wall TV goes off within a tick (~30 s). The audit log
+  shows `lift_tv_on` then `lift_wall_tv_off`.
+
 
 ## 2026-09-25 — Lights 6: Dining Left and Middle ignored the off; the cloud now takes it
 

@@ -2146,3 +2146,76 @@ TVs and was not touched. Do not add the flag to make the six consistent.
 - [ ] Its own handling (whatever the owner decides it should follow) —
   deferred by design; see the 2026-09-10 refinements list.
 
+
+## 2026-09-25 — Lights 6: Dining Left and Middle ignored the off; the cloud now takes it
+
+Owner: "'Lights 6' turns off the lounge and dining screens when the lights
+go off, but the 4 screens don't come back on when the same button is
+toggled." Watched live from HA state reads plus the owner's Activity
+screenshots, in two rounds.
+
+### What the house showed (house time)
+
+- **Round 1.** Lights 6 on at 16:24:15; the Lounge TV read on 15 s later,
+  Dining Left / Middle ~50 s, Right ~55 s. Then at 16:26:05 keypad
+  **1.1.24** (the Kitchen+Lounge keypad) sent an off *and* an on in the same
+  second, lights untouched. Both were relayed: the on sweep (1.0 s, a
+  no-op — the sets were on) and the off sweep (held power key, 5.9 s)
+  started together, the slower off landed last, and all four went dark.
+  The on sweep then owned the sets and chased them for three minutes
+  (`frames_turn_on_verify` FAILED, "never obeyed turn_on", all four off):
+  a set just held off does not answer a wake for a while.
+- **Round 2** (owner: all four on by hand, then Lights 6 off, then on).
+  HA saw only the Lounge TV and Dining Right come on; **Left and Middle
+  kept reading "off" (unchanged since 16:26) although they were lit.**
+  Lights 6 off at 16:36:01 → Lounge and Right off at 16:36:03; the
+  sweep's `frames_turn_off` line listed Left and Middle as **failed** (HA's
+  local link could not deliver the held power key) and a verify line
+  followed. The verify took their "off" reading as obedience, so nothing
+  chased them; HA only caught up at 16:36:25 ("on", lights still off).
+  Lights 6 on at 16:36:49 → all four on within 7 s, and they stayed on.
+
+So the relay and the on side work. The off side trusted one road — HA's
+local Samsung TV link — which for Left and Middle lags about a minute
+behind reality after they are switched on, both in what it reads and in
+whether a command gets through.
+
+### What changed (lib/execute)
+
+- **A failed off goes through SmartThings.** After a Frames off sweep, any
+  set whose local off failed and that has a `wake_entity` gets
+  `media_player.turn_off` on that SmartThings entity. It is a plain switch
+  off, not a power key, so at a set that is already off it does nothing.
+  (The Den TV has gone dark through its SmartThings entity on every Night
+  since 09-10.) The audit line lists such sets under `viaCloud` with the
+  local error, and they no longer count as `failed`. A set that failed both
+  roads still does.
+- **"Off" needs SmartThings' agreement too.** The sweep's read-back no
+  longer believes a local "off" while the set's SmartThings entity
+  positively reads it on. Such a set is chased with the cloud off, not the
+  held key: the local link that misreads it would not carry the key
+  either. A set that reads on locally is chased with the held key as
+  before. An unavailable or unknown SmartThings entity proves nothing. A
+  set that never settles is reported as `"off, SmartThings on"`.
+- The on side and each Frame's own card are unchanged.
+- Tests: execute.frames (cloud off on a local failure; not on success; not
+  for an on sweep; both roads down still fails) and execute.framesVerify
+  (cloud contradiction chased via the cloud; unavailable cloud proves
+  nothing; local "on" still gets the held key; the unsettled verdict;
+  on sweeps ignore the cloud). `npm run typecheck` clean; `npm test` 604/604.
+
+### Follow-ups
+
+- [ ] Live check after deploy: all four on, Lights 6 off within a minute.
+  Expect all four dark. If the local link fails again, the sweep line shows
+  `viaCloud` naming Left and Middle.
+- [ ] **Keypad 1.1.24 sends an off and an on together** (16:26:05, lights
+  unchanged). Find out which of its buttons writes to an address the
+  relay maps (KNX Group monitor while pressing its buttons), and either
+  drop that address from the relay's rows or give it its own row.
+  Collapsing an off/on pair to the later press would have saved round 1,
+  but it would also wake the screens at night if the pair is not a real
+  press. Decide once the button is known.
+- [ ] Why HA's local link lags on Dining Left and Middle only (Right and
+  the Lounge TV read within 7–15 s): compare their Samsung TV entries (IP
+  lease, token) with Right's.

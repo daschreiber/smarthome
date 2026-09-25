@@ -2258,6 +2258,8 @@ whether a command gets through.
   cloud fallback runs inside the same turn as the local off it replaces,
   so nothing can slip in between. A newer on now waits for the older off
   to finish (up to ~12 s longer in the rare overlap) instead of racing it.
+  A press claims its Frames the moment it arrives, before a Night's
+  watched-sensor read, so sets are owned in arrival order.
 - Tests: execute.frames (cloud off on a local failure; not on success; not
   for an on sweep; both roads down still fails) and execute.framesVerify
   (cloud contradiction chased via the cloud; unavailable cloud proves

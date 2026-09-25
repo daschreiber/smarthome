@@ -12,7 +12,7 @@ vi.mock("../ha", async (importOriginal) => {
 });
 vi.mock("../audit", () => ({ audit: vi.fn() }));
 
-import { callService, getStates } from "../ha";
+import { callService, getStates, type HaState } from "../ha";
 import { audit } from "../audit";
 import { executeOnDevice, followArtFrames } from "../execute";
 import { resetPressMemory } from "../artframes";
@@ -248,6 +248,21 @@ describe("followArtFrames", () => {
         ["turn_on", left().entityId],
         ["turn_on", left().wakeEntityId],
       ]);
+    });
+
+    it("Morning pressed while Night is still reading the sensors: the older Night stands down (Codex, #148)", async () => {
+      let answerRead: (s: HaState[]) => void = () => {};
+      vi.mocked(getStates).mockImplementationOnce(() => new Promise<HaState[]>((resolve) => { answerRead = resolve; }));
+      const night = followArtFrames(getDevice("whole_house__all_house_night")!, { command: "turn_on" }, "daniel");
+      await followArtFrames(getDevice("whole_house__all_house_morning")!, { command: "turn_on" }, "ha:voice-or-ui");
+      answerRead([]);
+      await night;
+      // Morning's ons went out; Night, the older press, sent no off to the
+      // sets Morning claimed. (The Den TV is off-only: Morning never claims
+      // it, so Night still darkens it.)
+      const den = getDevice("den__den_tv")!.entityId;
+      expect(calls.mock.calls.filter((c) => c[1] === "turn_off").map((c) => c[2].entity_id)).toEqual([den]);
+      expect(calls.mock.calls.filter((c) => c[1] === "turn_on").length).toBeGreaterThan(0);
     });
 
     it("a cloud off that lands with no newer press sends nothing more", async () => {

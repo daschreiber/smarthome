@@ -125,6 +125,11 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
     });
     return;
   }
+  // The press owns its Frames from the moment it arrives, before any await:
+  // a Morning pressed while this Night is still reading the sensors below
+  // claims after it, so it is the newer press and the older off stands down
+  // (Codex review, #148). Presses own sets in the order they arrived.
+  const token = claimFrames(frames.map((f) => f.id));
   // A Night press spares a set that is showing television (lib/artframes).
   // One bulk read; a failed read spares nothing — only positive evidence,
   // and only fresh evidence: the reading's `last_changed` travels with it,
@@ -140,7 +145,6 @@ export async function followArtFrames(device: Device, cmd: Command, user: string
       )
     : new Map<string, SensorRead>();
   const { targets, spared } = spareWatched(frames, follow, (id) => states.get(id));
-  const token = claimFrames(targets.map((f) => f.id));
   // The held power key travels HA's local link to the set. When that link
   // cannot reach a set that is on (2026-09-25: Dining Left and Middle read
   // "off" for a minute after being switched on, and Lights 6 off errored on

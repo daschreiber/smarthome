@@ -2311,6 +2311,44 @@ Automations card wording, and the AUDIO_SYSTEM / API_CONTRACT lines. The
   react to (a SmartThings switch off is the candidate), and the test must
   watch the lift relay itself.
 
+### Aftermath: the lift locked out; a power cycle cleared it (2026-09-26)
+
+After the 17:59 reversal the lift stopped responding. The bedside buttons
+and the app both switched the relay, which HA read latched `on` from 18:12:56.
+The app's TV follower duly switched the lift TV on (the owner heard it inside
+the ceiling), but the lift motor did not move. So the command path (keypad or
+app → KNX relay) was intact and the lift's own controller had locked out.
+The relay was returned to `off` from the app (18:14:46) so the house again
+matched the lift, which was still up and stowed. Next morning the owner
+unplugged the lift and plugged it back in (the room's KNX devices re-reported
+at 08:49:55), and the lift came down on the next press.
+
+**Reassessed (2026-09-26): the revert may have been unnecessary.** The
+17:59 trace (relay down, wall TV off at :21, lights re-set at :23, relay up
+at :28) fits two stories equally: Control4 reacting to the wall Frame's held
+power key, or a lift that was *already* locked out, pressed once, not moving,
+and pressed again. The owner thinks they "probably" pressed twice, and the
+lockout that only a power cycle cleared fits the second story better. The
+feedback theory rests on the August precedent, not on anything seen on 09-25.
+HA's state does not record which device wrote a KNX telegram; the KNX Group
+monitor (Source column) would. So #146's rule is not proven guilty. If it
+comes back, test it with the owner watching the lift and the Group monitor
+open, so a relay write shows whether it came from the bedside keypad or from
+Control4. (The wall Frame has no SmartThings entity, so a non-power-key off is
+not available for it; the held key is the only off.)
+
+**If the lift ever stops moving while the relay toggles:** the lift's
+controller has locked out, typically after an interrupted move or a quick
+reversal. Set the relay to match where the lift physically is: `off` only
+if it is really up and stowed, `on` if it is down or stuck part-way. Sleep
+sense treats `off` as "stowed for sleep" and the TV follower reads the relay
+as the lift's position, so a relay that lies misleads both. If you can't
+tell where the lift is, pause the TV follower on the Automations card until
+it is fixed. Then power-cycle the lift. No automation in the app commands
+the relay (the TV follower and Sleep sense only read it); only a person
+does, from the bedside buttons or the lift's card in the app. So a relay
+change that nobody made came from Control4 or KNX, not from the app.
+
 ## 2026-09-26 — REINSTATED: the wall TV off on lift-down (#146), pending a watched test
 
 The 09-25 revert rested on the theory that the wall Frame's held power key

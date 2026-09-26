@@ -2348,3 +2348,24 @@ it is fixed. Then power-cycle the lift. No automation in the app commands
 the relay (the TV follower and Sleep sense only read it); only a person
 does, from the bedside buttons or the lift's card in the app. So a relay
 change that nobody made came from Control4 or KNX, not from the app.
+
+## 2026-09-26 — REINSTATED: the wall TV off on lift-down (#146), pending a watched test
+
+The 09-25 revert rested on the theory that the wall Frame's held power key
+made Control4 send the lift back up. The owner now thinks they "probably"
+pressed the lift button twice at 17:59, which explains the relay's down/up
+pair with no feedback at all, and fits the lockout that followed (cleared
+only by a power cycle) better. So the rule is back unchanged: when the lift
+comes down and the wall TV reads on, one held-power-key off, after the lift
+TV's on. (The wall Frame has no SmartThings entity, so there is no other
+road for its off.)
+
+### The test that settles it
+
+- Wall TV on, lift up. Press the lift button **once** and leave it.
+- Watch the relay (`light.knx_switch_mbr_tv_lift`) and, ideally, the KNX
+  Group monitor.
+- Lift comes down and stays down while the wall TV goes off → the rule is
+  cleared.
+- Relay flips back to `off` with no second press → it is Control4 feedback.
+  Remove the rule for good and record the Group monitor's source address.

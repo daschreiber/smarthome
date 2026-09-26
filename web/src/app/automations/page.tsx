@@ -1227,7 +1227,7 @@ function TvFollower() {
               ? `${st.tvCandidates.length} TVs in Home Assistant match the bedroom set's name — which one is on the lift? (The wrong pick would switch off a TV in another room.)`
               : !st.tvPower
                 ? "lift comes down → TV on · lift goes up → nothing can switch the TV off yet: Home Assistant only has the TV's Cast receiver, whose \"off\" merely quits the cast. Add the Samsung TV integration in Home Assistant (Settings → Devices & services → Samsung TV → Add, accept the prompt on the TV) — the follower finds it by itself within five minutes"
-                : "lift comes down → TV on · lift goes up → TV off (one command per stow) · however the lift was moved — keypad, app, or Control4 · turning the TV off by remote with the lift down is left alone · stands down for 10 minutes if the lift moves six times in five"}
+                : "lift comes down → TV on, and the wall TV off if it's on · lift goes up → TV off (one command per stow) · however the lift was moved — keypad, app, or Control4 · turning the TV off by remote with the lift down is left alone · stands down for 10 minutes if the lift moves six times in five"}
         </div>
         {st.enabled && !st.tvPower && st.tvCandidates.length > 1 && (
           <div className="btn-row" style={{ marginTop: 6 }}>

@@ -2323,6 +2323,20 @@ matched the lift, which was still up and stowed. Next morning the owner
 unplugged the lift and plugged it back in (the room's KNX devices re-reported
 at 08:49:55), and the lift came down on the next press.
 
+**Reassessed (2026-09-26): the revert may have been unnecessary.** The
+17:59 trace (relay down, wall TV off at :21, lights re-set at :23, relay up
+at :28) fits two stories equally: Control4 reacting to the wall Frame's held
+power key, or a lift that was *already* locked out, pressed once, not moving,
+and pressed again. The owner thinks they "probably" pressed twice, and the
+lockout that only a power cycle cleared fits the second story better. The
+feedback theory rests on the August precedent, not on anything seen on 09-25.
+HA's state does not record which device wrote a KNX telegram; the KNX Group
+monitor (Source column) would. So #146's rule is not proven guilty. If it
+comes back, test it with the owner watching the lift and the Group monitor
+open, so a relay write shows whether it came from the bedside keypad or from
+Control4. (The wall Frame has no SmartThings entity, so a non-power-key off is
+not available for it; the held key is the only off.)
+
 **If the lift ever stops moving while the relay toggles:** the lift's
 controller has locked out, typically after an interrupted move or a quick
 reversal. Set the relay to match where the lift physically is: `off` only

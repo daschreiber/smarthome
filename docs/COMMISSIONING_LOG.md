@@ -2325,5 +2325,12 @@ at 08:49:55), and the lift came down on the next press.
 
 **If the lift ever stops moving while the relay toggles:** the lift's
 controller has locked out, typically after an interrupted move or a quick
-reversal. Set the relay back to off so the TV and Sleep sense are not
-misled, then power-cycle the lift. The app never commands the relay itself.
+reversal. Set the relay to match where the lift physically is: `off` only
+if it is really up and stowed, `on` if it is down or stuck part-way. Sleep
+sense treats `off` as "stowed for sleep" and the TV follower reads the relay
+as the lift's position, so a relay that lies misleads both. If you can't
+tell where the lift is, pause the TV follower on the Automations card until
+it is fixed. Then power-cycle the lift. No automation in the app commands
+the relay (the TV follower and Sleep sense only read it); only a person
+does, from the bedside buttons or the lift's card in the app. So a relay
+change that nobody made came from Control4 or KNX, not from the app.

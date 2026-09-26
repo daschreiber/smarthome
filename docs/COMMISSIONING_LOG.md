@@ -2310,3 +2310,20 @@ Automations card wording, and the AUDIO_SYSTEM / API_CONTRACT lines. The
 - Any future "wall TV off" must use a road Control4 does not observe or
   react to (a SmartThings switch off is the candidate), and the test must
   watch the lift relay itself.
+
+### Aftermath: the lift locked out; a power cycle cleared it (2026-09-26)
+
+After the 17:59 reversal the lift stopped responding. The bedside buttons
+and the app both switched the relay, which HA read latched `on` from 18:12:56.
+The app's TV follower duly switched the lift TV on (the owner heard it inside
+the ceiling), but the lift motor did not move. So the command path (keypad or
+app → KNX relay) was intact and the lift's own controller had locked out.
+The relay was returned to `off` from the app (18:14:46) so the house again
+matched the lift, which was still up and stowed. Next morning the owner
+unplugged the lift and plugged it back in (the room's KNX devices re-reported
+at 08:49:55), and the lift came down on the next press.
+
+**If the lift ever stops moving while the relay toggles:** the lift's
+controller has locked out, typically after an interrupted move or a quick
+reversal. Set the relay back to off so the TV and Sleep sense are not
+misled, then power-cycle the lift. The app never commands the relay itself.

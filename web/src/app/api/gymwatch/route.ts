@@ -29,8 +29,9 @@ export async function POST(req: NextRequest) {
   }
   const st = loadGymwatch();
   // Re-enabling starts from a fresh baseline, so turning the rule back on
-  // with the lights already on does not switch the TV.
-  saveGymwatch({ enabled: body.enabled, lastLightsOn: null });
+  // with the lights already on does not switch the TV. The generation bump
+  // cancels an app launch still waiting from before the toggle.
+  saveGymwatch({ enabled: body.enabled, lastLightsOn: null, gen: (st.gen ?? 0) + 1 });
   audit({
     ts: new Date().toISOString(), user: auth.user, deviceId: "automations",
     entityId: "gymwatch", command: body.enabled ? "gymwatch_enable" : "gymwatch_disable",

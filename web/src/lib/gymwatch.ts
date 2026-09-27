@@ -59,6 +59,10 @@ export interface GymwatchState {
   enabled: boolean;
   /** Last KNOWN lights state, kept across restarts; null = no baseline yet. */
   lastLightsOn: boolean | null;
+  /** Bumped by every pause / re-enable (/api/gymwatch). An app launcher
+   *  started before a toggle must not act after it, even when the new
+   *  baseline happens to read "on" again. Absent = 0. */
+  gen?: number;
 }
 
 const DEFAULT_STATE: GymwatchState = { enabled: true, lastLightsOn: null };
@@ -209,7 +213,7 @@ async function tickOnce(): Promise<void> {
   );
   if (action === "tv_on" && !error && tvWasOn === false) {
     // Not awaited: the scheduler must not wait on a waking TV.
-    void openFitnessWhenAwake(tv).catch((err) => console.error("[gymwatch] fitness launch failed:", err));
+    void openFitnessWhenAwake(tv, st.gen ?? 0).catch((err) => console.error("[gymwatch] fitness launch failed:", err));
   }
 }
 
@@ -224,7 +228,7 @@ export function _resetGymwatchForTests(): void {
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Wait for the TV to read on, then open the Apple TV app. One at a time. */
-export async function openFitnessWhenAwake(tv: Device): Promise<void> {
+export async function openFitnessWhenAwake(tv: Device, gen: number): Promise<void> {
   if (launching) return;
   launching = true;
   const mine = epoch;
@@ -247,7 +251,7 @@ export async function openFitnessWhenAwake(tv: Device): Promise<void> {
       } catch {
         return;
       }
-      if (!st.enabled || st.lastLightsOn !== true) {
+      if (!st.enabled || st.lastLightsOn !== true || (st.gen ?? 0) !== gen) {
         record(true, { skipped: "lights off or paused before the TV woke" });
         return;
       }
@@ -275,7 +279,7 @@ export async function openFitnessWhenAwake(tv: Device): Promise<void> {
       } catch {
         return;
       }
-      if (lights === false || !latest.enabled || latest.lastLightsOn !== true) {
+      if (lights === false || !latest.enabled || latest.lastLightsOn !== true || (latest.gen ?? 0) !== gen) {
         record(true, { skipped: "lights off or paused before the TV woke" });
         return;
       }

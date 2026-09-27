@@ -315,6 +315,18 @@ describe("Apple Fitness: the Apple TV app opens once the rule has woken the TV",
     expect(appAudit()).toMatchObject({ args: { skipped: expect.stringContaining("paused") } });
   });
 
+  it("paused and re-enabled while the TV wakes (lights still on): the old launch is cancelled", async () => {
+    saveGymwatch(OFF);
+    waking(3);
+    await tickGymwatch(); // edge → turn_on, launcher waiting
+    saveGymwatch({ enabled: true, lastLightsOn: null, gen: 1 }); // what /api/gymwatch writes on a toggle
+    await tickGymwatch(); // fresh baseline: lights on → lastLightsOn true, no action
+    expect(loadGymwatch()).toMatchObject({ enabled: true, lastLightsOn: true, gen: 1 });
+    await vi.advanceTimersByTimeAsync(FITNESS_WAIT_MS);
+    expect(launches()).toHaveLength(0);
+    expect(executeOnDevice).toHaveBeenCalledTimes(1);
+  });
+
   it("paused meanwhile: given up", async () => {
     saveGymwatch(OFF);
     waking(100);

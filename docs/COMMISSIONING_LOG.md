@@ -2430,7 +2430,9 @@ TV app; whether it lands on Fitness depends on where the app last was.
 - It gives up if the lights go off or the rule is paused meanwhile. The
   lights themselves are read just before the launch (the stored state lags
   by up to a tick), and a pause flipped while the TV is read at the on edge
-  stops the on too.
+  stops the on too. Every pause / re-enable bumps a generation counter in
+  the state file (`gen`), so a launch still waiting from before a toggle is
+  cancelled even if the fresh baseline reads "on" again.
 - Audited as `gym_tv_app` (ok, failed, or `skipped` with why).
 - [ ] Live check: lights on → TV on → Apple TV app within ~5–15 s of the
   TV coming on. If the TV answers the launch with an error, the id is

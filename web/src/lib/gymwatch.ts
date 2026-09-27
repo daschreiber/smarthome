@@ -162,6 +162,9 @@ async function tickOnce(): Promise<void> {
     } catch {
       tvWasOn = null;
     }
+    // Pause or re-enable while the TV was read wins, as on the off path.
+    const now = loadGymwatch();
+    if (!now.enabled || now.lastLightsOn !== next.lastLightsOn) return;
   }
 
   if (action === "tv_off") {
@@ -255,6 +258,19 @@ export async function openFitnessWhenAwake(tv: Device): Promise<void> {
         on = null;
       }
       if (on !== true) continue;
+      // The stored state lags the lights by up to a tick: ask the lights
+      // themselves before opening anything. Only a real "off" stops it.
+      let lights: boolean | null = null;
+      try {
+        lights = lightsOnFromState((await getState(GYM_LIGHTS_ENTITY))?.state);
+      } catch {
+        lights = null;
+      }
+      if (mine !== epoch) return;
+      if (lights === false) {
+        record(true, { skipped: "lights off or paused before the TV woke" });
+        return;
+      }
       let error: string | undefined;
       try {
         await callService("media_player", "play_media", {

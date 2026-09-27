@@ -2427,7 +2427,10 @@ TV app; whether it lands on Fitness depends on where the app last was.
 - It waits for the TV to read on (polls every 3 s, up to 60 s), because a
   Samsung won't take an app launch while it wakes. It runs apart from the
   tick, so the scheduler never waits on it; one launcher at a time.
-- It gives up if the lights go off or the rule is paused meanwhile.
+- It gives up if the lights go off or the rule is paused meanwhile. The
+  lights themselves are read just before the launch (the stored state lags
+  by up to a tick), and a pause flipped while the TV is read at the on edge
+  stops the on too.
 - Audited as `gym_tv_app` (ok, failed, or `skipped` with why).
 - [ ] Live check: lights on → TV on → Apple TV app within ~5–15 s of the
   TV coming on. If the TV answers the launch with an error, the id is

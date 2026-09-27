@@ -273,6 +273,34 @@ describe("Apple Fitness: the Apple TV app opens once the rule has woken the TV",
     expect(appAudit()).toMatchObject({ args: { skipped: expect.stringContaining("lights off") } });
   });
 
+  it("the lights read off when the TV wakes (before the next tick records it): nothing opens", async () => {
+    saveGymwatch(OFF);
+    // The tick: lights on, TV off. Then the lights go off; the TV wakes.
+    let lightsReads = 0;
+    let tvReads = 0;
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      if (id === GYM_LIGHTS_ENTITY) return { state: lightsReads++ === 0 ? "on" : "off" } as never;
+      return { state: tvReads++ === 0 ? "off" : "on" } as never;
+    });
+    await tickGymwatch();
+    expect(executeOnDevice).toHaveBeenCalledWith(expect.anything(), { command: "turn_on" });
+    await vi.advanceTimersByTimeAsync(FITNESS_POLL_MS);
+    expect(launches()).toHaveLength(0);
+    expect(appAudit()).toMatchObject({ args: { skipped: expect.stringContaining("lights off") } });
+  });
+
+  it("a pause flipped while the TV is read at the on edge wins: no turn_on", async () => {
+    saveGymwatch(OFF);
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      if (id === GYM_TV_ENTITY) saveGymwatch({ enabled: false, lastLightsOn: null });
+      return { state: id === GYM_LIGHTS_ENTITY ? "on" : "off" } as never;
+    });
+    await tickGymwatch();
+    expect(executeOnDevice).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(FITNESS_WAIT_MS);
+    expect(launches()).toHaveLength(0);
+  });
+
   it("paused meanwhile: given up", async () => {
     saveGymwatch(OFF);
     waking(100);

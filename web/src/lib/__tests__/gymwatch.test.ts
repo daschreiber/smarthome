@@ -1,16 +1,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  GYM_LIGHTS_ENTITY, GYM_TV_ENTITY, evaluateGymFollow, gymTvDevice, gymwatchAvailable,
-  lightsOnFromState, loadGymwatch, saveGymwatch, tickGymwatch, tvOnFromState, type GymwatchState,
+  FITNESS_APP_ID, FITNESS_POLL_MS, FITNESS_WAIT_MS, GYM_LIGHTS_ENTITY, GYM_TV_ENTITY, _resetGymwatchForTests,
+  evaluateGymFollow, gymTvDevice, gymwatchAvailable, lightsOnFromState, loadGymwatch, saveGymwatch,
+  tickGymwatch, tvOnFromState, type GymwatchState,
 } from "../gymwatch";
-import { getState } from "../ha";
+import { callService, getState } from "../ha";
 import { executeOnDevice } from "../execute";
 import { audit } from "../audit";
 
-vi.mock("../ha", () => ({ getState: vi.fn(), getStates: vi.fn() }));
+vi.mock("../ha", () => ({ getState: vi.fn(), getStates: vi.fn(), callService: vi.fn() }));
 vi.mock("../execute", () => ({ executeOnDevice: vi.fn() }));
 vi.mock("../audit", () => ({ audit: vi.fn() }));
 
@@ -22,7 +23,9 @@ vi.mock("../audit", () => ({ audit: vi.fn() }));
 beforeEach(() => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gymwatch-test-"));
   process.env.GYMWATCH_PATH = path.join(dir, "gymwatch.json");
+  _resetGymwatchForTests();
   vi.mocked(getState).mockReset();
+  vi.mocked(callService).mockReset();
   vi.mocked(executeOnDevice).mockReset();
   vi.mocked(audit).mockClear();
 });
@@ -212,5 +215,104 @@ describe("tick", () => {
     await tickGymwatch();
     expect(executeOnDevice).not.toHaveBeenCalled();
     expect(loadGymwatch()).toEqual({ enabled: false, lastLightsOn: null });
+  });
+});
+
+describe("Apple Fitness: the Apple TV app opens once the rule has woken the TV", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const launches = () => vi.mocked(callService).mock.calls.filter((c) => c[1] === "play_media");
+  const appAudit = () => vi.mocked(audit).mock.calls.map((c) => c[0]).find((a) => a.command === "gym_tv_app");
+
+  /** Lights on; the TV reads off until `wakesAfter` reads of it, then on. */
+  const waking = (wakesAfter: number) => {
+    let tvReads = 0;
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      if (id === GYM_LIGHTS_ENTITY) return { state: "on" } as never;
+      return { state: tvReads++ < wakesAfter ? "off" : "on" } as never;
+    });
+  };
+
+  it("lights on, TV off → turn_on, then the Apple TV app once the TV reads on", async () => {
+    saveGymwatch(OFF);
+    waking(3); // the read at the edge, then two polls still off
+    await tickGymwatch();
+    expect(executeOnDevice).toHaveBeenCalledWith(expect.anything(), { command: "turn_on" });
+    expect(launches()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(FITNESS_POLL_MS * 3);
+    expect(launches()).toEqual([
+      ["media_player", "play_media", { entity_id: GYM_TV_ENTITY, media_content_type: "app", media_content_id: FITNESS_APP_ID }],
+    ]);
+    expect(appAudit()).toMatchObject({ ok: true, args: { app: FITNESS_APP_ID } });
+  });
+
+  it("a TV already on is left on whatever it shows", async () => {
+    saveGymwatch(OFF);
+    vi.mocked(getState).mockImplementation(states("on", "playing"));
+    await tickGymwatch();
+    await vi.advanceTimersByTimeAsync(FITNESS_WAIT_MS * 2);
+    expect(launches()).toHaveLength(0);
+  });
+
+  it("an unreadable TV at the edge: no app (it might be showing something)", async () => {
+    saveGymwatch(OFF);
+    vi.mocked(getState).mockImplementation(states("on", "unavailable"));
+    await tickGymwatch();
+    await vi.advanceTimersByTimeAsync(FITNESS_WAIT_MS * 2);
+    expect(launches()).toHaveLength(0);
+  });
+
+  it("the lights go off before the TV wakes: given up, audited", async () => {
+    saveGymwatch(OFF);
+    waking(100);
+    await tickGymwatch();
+    saveGymwatch(OFF); // the next tick recorded the lights going off
+    await vi.advanceTimersByTimeAsync(FITNESS_POLL_MS);
+    expect(launches()).toHaveLength(0);
+    expect(appAudit()).toMatchObject({ args: { skipped: expect.stringContaining("lights off") } });
+  });
+
+  it("paused meanwhile: given up", async () => {
+    saveGymwatch(OFF);
+    waking(100);
+    await tickGymwatch();
+    saveGymwatch({ enabled: false, lastLightsOn: true });
+    await vi.advanceTimersByTimeAsync(FITNESS_WAIT_MS);
+    expect(launches()).toHaveLength(0);
+  });
+
+  it("a TV that never wakes: given up after the wait, audited as a failure", async () => {
+    saveGymwatch(OFF);
+    waking(1_000);
+    await tickGymwatch();
+    await vi.advanceTimersByTimeAsync(FITNESS_WAIT_MS + FITNESS_POLL_MS);
+    expect(launches()).toHaveLength(0);
+    expect(appAudit()).toMatchObject({ ok: false, args: { skipped: expect.stringContaining("not on within") } });
+  });
+
+  it("a failed turn_on opens nothing", async () => {
+    saveGymwatch(OFF);
+    waking(0);
+    vi.mocked(executeOnDevice).mockRejectedValue(new Error("HA 500"));
+    await tickGymwatch();
+    await vi.advanceTimersByTimeAsync(FITNESS_WAIT_MS);
+    expect(launches()).toHaveLength(0);
+  });
+
+  it("a failed launch is audited, not thrown", async () => {
+    saveGymwatch(OFF);
+    waking(1);
+    vi.mocked(callService).mockRejectedValue(new Error("HTTP 400"));
+    await tickGymwatch();
+    await vi.advanceTimersByTimeAsync(FITNESS_POLL_MS);
+    expect(appAudit()).toMatchObject({ ok: false, error: "HTTP 400" });
+  });
+
+  it("the tick doesn't wait for the TV to wake", async () => {
+    saveGymwatch(OFF);
+    waking(1_000);
+    await expect(tickGymwatch()).resolves.toBeUndefined(); // no timers advanced
+    expect(executeOnDevice).toHaveBeenCalledTimes(1);
   });
 });

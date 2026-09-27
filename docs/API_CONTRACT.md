@@ -184,6 +184,8 @@ Gym TV follower (the Gym TV mirrors the gym lights' on/off edges: lights on
 `{ enabled, available, canToggle }`. POST (canProgram): `{ enabled }`;
 re-enabling resets the baseline so it never acts on a stale edge. Commands
 are audited as `gym_tv_on` / `gym_tv_off` (a skipped off carries `skipped`).
+After an on that woke the TV, the Apple TV app (Apple Fitness) is opened once
+the TV reads on, audited as `gym_tv_app`.
 
 ### `GET | POST /api/liftwatch`
 TV follower (the Master Bedroom TV mirrors its ceiling lift: lift down →

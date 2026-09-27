@@ -2410,3 +2410,26 @@ Gym TV was not in the map; the "Gym" media player is the Sonos Arc Ultra
   power command that Control4 reacts to (as feared for the lift) would show
   as the lights changing on their own.
 
+### After the merge, and Apple Fitness (same day)
+
+The first live off worked: the lights went off at 07:51:30 house time and
+the TV followed at 07:51:36. The TV now reads through the app: a Samsung
+(`samsungtv`), source list only `TV`/`HDMI` — it does not report its apps.
+
+Owner: "Can you make it start in Apple fitness app?" Fitness runs in the
+**Apple TV app on the Samsung itself** (owner, same day). So after the rule
+switches the TV on, it opens that app by its Tizen id, **`3201807016597`**
+(`media_player.play_media`, `media_content_type: app`). This opens the Apple
+TV app; whether it lands on Fitness depends on where the app last was.
+
+- Only on a TV **this rule woke**: the TV is read at the on edge, and a set
+  already on (or unreadable) is left showing what it shows.
+- It waits for the TV to read on (polls every 3 s, up to 60 s), because a
+  Samsung won't take an app launch while it wakes. It runs apart from the
+  tick, so the scheduler never waits on it; one launcher at a time.
+- It gives up if the lights go off or the rule is paused meanwhile.
+- Audited as `gym_tv_app` (ok, failed, or `skipped` with why).
+- [ ] Live check: lights on → TV on → Apple TV app within ~5–15 s of the
+  TV coming on. If the TV answers the launch with an error, the id is
+  wrong for this model; read the right one off the TV before changing it.
+

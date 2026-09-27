@@ -673,6 +673,7 @@ export default function Automations() {
       <SleepSense away={away} />
       <SaunaFollower />
       <TvFollower />
+      <GymTvFollower />
       <div className="section-label">Auto-off timers</div>
       <p className="h-sub" style={{ marginTop: -2 }}>
         Whenever the device turns on — from any switch, scene, or app — it turns itself off after
@@ -1159,6 +1160,57 @@ function SaunaFollower() {
         className="toggle"
         aria-pressed={st.enabled}
         aria-label={`Sauna follower ${st.enabled ? "on" : "paused"}`}
+        disabled={busy || !st.canToggle}
+        onClick={toggle}
+      />
+    </div>
+  );
+}
+
+/**
+ * The Gym TV follower's card: the Gym TV goes on and off with the gym
+ * lights — a standing house rule triggered by the lights' STATE. Server
+ * logic lives in lib/gymwatch; this card only reads status and flips enabled.
+ */
+function GymTvFollower() {
+  const [st, setSt] = useState<{ enabled: boolean; available: boolean; canToggle: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/gymwatch", { headers: appKeyHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setSt)
+      .catch(() => setSt(null));
+  }, []);
+
+  if (!st || !st.available) return null;
+
+  const toggle = () => {
+    setBusy(true);
+    fetch("/api/gymwatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...appKeyHeaders() },
+      body: JSON.stringify({ enabled: !st.enabled }),
+    })
+      .then((r) => r.json())
+      .then((out) => { if (out.ok) setSt({ ...st, enabled: out.enabled }); })
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className={`dev${st.enabled ? "" : " paused"}`} style={{ alignItems: "flex-start" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="nm">Gym TV follower — gym lights</div>
+        <div className="st">
+          {st.enabled
+            ? "gym lights on → Gym TV on · lights off → TV off (only if it's on) · dimming doesn't count · switching the TV yourself is left alone"
+            : "paused"}
+        </div>
+      </div>
+      <button
+        className="toggle"
+        aria-pressed={st.enabled}
+        aria-label={`Gym TV follower ${st.enabled ? "on" : "paused"}`}
         disabled={busy || !st.canToggle}
         onClick={toggle}
       />

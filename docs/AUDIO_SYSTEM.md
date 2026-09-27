@@ -76,7 +76,9 @@ Spotify Connect to the receiver exits the same speakers as C4 audio.
 ### 4. The rest
 
 Sonos Arc Ultra in the Gym (`media_player.gym_gym`, full transport +
-grouping). Samsung TVs via cast/`samsungtv` (+ `dlna_dmr` Den TV soundbar).
+grouping). The Gym TV itself is `media_player.gym_gym_tv` (owner-read
+2026-09-27, card "Gym TV"). It goes on and off with the gym lights
+(lib/gymwatch); the Sonos plays its "TV" input. Samsung TVs via cast/`samsungtv` (+ `dlna_dmr` Den TV soundbar).
 
 **The Master Bedroom lift TV has TWO entities, and they are not
 interchangeable** (learned the hard way, 2026-08-30 → 2026-09-04):

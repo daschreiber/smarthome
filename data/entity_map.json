@@ -2217,5 +2217,16 @@
   "group": "Media",
   "visible": true,
   "retry_power": true
+ },
+ {
+  "entity_id": "media_player.gym_gym_tv",
+  "domain": "media_player",
+  "original_name": "Gym TV",
+  "display_name": "Gym TV",
+  "room": "Gym",
+  "floor": 5,
+  "category": "media",
+  "group": "Media",
+  "visible": true
  }
 ]

@@ -137,6 +137,33 @@ describe("tick", () => {
     expect(vi.mocked(getState).mock.calls.map((c) => c[0])).toEqual([GYM_LIGHTS_ENTITY]);
   });
 
+  it("overlapping passes: a second tick while one is in flight is skipped", async () => {
+    saveGymwatch(ON);
+    let release!: () => void;
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      if (id === GYM_TV_ENTITY) await new Promise<void>((r) => { release = r; });
+      return { state: id === GYM_LIGHTS_ENTITY ? "off" : "on" } as never;
+    });
+    const first = tickGymwatch();
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    await tickGymwatch(); // overlaps: returns without reading anything
+    expect(vi.mocked(getState).mock.calls.map((c) => c[0])).toEqual([GYM_LIGHTS_ENTITY, GYM_TV_ENTITY]);
+    release();
+    await first;
+    expect(executeOnDevice).toHaveBeenCalledTimes(1);
+    expect(executeOnDevice).toHaveBeenCalledWith(expect.anything(), { command: "turn_off" });
+  });
+
+  it("the lights come back on while the TV is being read: the stale off is dropped", async () => {
+    saveGymwatch(ON);
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      if (id === GYM_TV_ENTITY) saveGymwatch(ON); // a newer edge was recorded meanwhile
+      return { state: id === GYM_LIGHTS_ENTITY ? "off" : "on" } as never;
+    });
+    await tickGymwatch();
+    expect(executeOnDevice).not.toHaveBeenCalled();
+  });
+
   it("an unreadable TV at the off edge is skipped, not guessed", async () => {
     saveGymwatch(ON);
     vi.mocked(getState).mockImplementation(async (id: string) => {

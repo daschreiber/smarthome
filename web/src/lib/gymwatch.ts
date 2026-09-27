@@ -100,8 +100,23 @@ export function evaluateGymFollow(
   return { action: lightsOn ? "tv_on" : "tv_off", next: { ...st, lastLightsOn: lightsOn } };
 }
 
+/** One pass at a time: the scheduler's setInterval doesn't wait for a slow
+ *  pass, and two overlapping passes could send a stale command after a
+ *  newer one. A tick that finds one in flight is skipped; the next runs. */
+let inFlight = false;
+
 /** Scheduler hook, every 30s tick. */
 export async function tickGymwatch(): Promise<void> {
+  if (inFlight) return;
+  inFlight = true;
+  try {
+    await tickOnce();
+  } finally {
+    inFlight = false;
+  }
+}
+
+async function tickOnce(): Promise<void> {
   if (!loadGymwatch().enabled) return;
   const tv = gymTvDevice();
   if (!tv) return;
@@ -132,7 +147,9 @@ export async function tickGymwatch(): Promise<void> {
     } catch {
       tvState = "unreadable";
     }
-    if (!loadGymwatch().enabled) return;
+    // Pause, re-enable or a newer edge while the TV was read: this off is stale.
+    const now = loadGymwatch();
+    if (!now.enabled || now.lastLightsOn !== next.lastLightsOn) return;
     if (tvOnFromState(tvState) !== true) {
       audit({
         ts: new Date().toISOString(), user: "gymwatch", deviceId: tv.id, entityId: tv.entityId,

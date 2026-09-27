@@ -2395,6 +2395,9 @@ Gym TV was not in the map; the "Gym" media player is the Sonos Arc Ultra
   off, until the lights next go off and on.
 - Pause switch on the Automations page (`/api/gymwatch`); a pause flipped
   mid-tick wins. State in `GYMWATCH_PATH` (default `/data/gymwatch.json`).
+- One pass at a time: the scheduler doesn't wait for a slow pass, so an
+  overlapping gym tick is skipped, and an off whose edge was overtaken while
+  the TV was being read (lights back on) is dropped rather than sent late.
 - Tests: `gymwatch.test.ts` (map row, state mapping, edges, tick incl. the
   guarded off, hand-switched TV, failure, pause). `npm run typecheck`
   clean; `npm test` 635/635.

@@ -1203,7 +1203,7 @@ function GymTvFollower() {
         <div className="nm">Gym TV follower — gym lights</div>
         <div className="st">
           {st.enabled
-            ? "gym lights on → Gym TV on · lights off → TV off (only if it's on) · dimming doesn't count · switching the TV yourself is left alone"
+            ? "gym lights on → Gym TV on, opening the Apple TV app (Fitness) · lights off → TV off (only if it's on) · dimming doesn't count · switching the TV yourself is left alone"
             : "paused"}
         </div>
       </div>

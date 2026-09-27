@@ -3,7 +3,7 @@ import path from "node:path";
 import { readJsonFile, writeJsonFile } from "./store";
 import { audit } from "./audit";
 import { executeOnDevice } from "./execute";
-import { getState } from "./ha";
+import { callService, getState } from "./ha";
 import { registry, type Device } from "./registry";
 
 /**
@@ -32,6 +32,14 @@ import { registry, type Device } from "./registry";
  *   it could switch it ON. The on is sent regardless: a TV that is already
  *   on ignores it.
  * - A pause flipped while HA is being read wins.
+ * - Once the rule has switched the TV on, it opens the Apple TV app, where
+ *   the owner runs Apple Fitness (owner request, 2026-09-27). The app opens
+ *   only when the TV was off before the on — a TV already on is showing
+ *   something someone chose — and only once the TV reads on (a Samsung
+ *   takes a few seconds to accept an app launch). This runs apart from the
+ *   tick so the scheduler never waits on a waking TV; it gives up if the
+ *   lights go off or the rule is paused meanwhile, or if the TV hasn't
+ *   woken within FITNESS_WAIT_MS.
  */
 
 /** The gym's lights (one KNX dimmer) and the TV, as HA names them. The TV's
@@ -39,10 +47,22 @@ import { registry, type Device } from "./registry";
 export const GYM_LIGHTS_ENTITY = "light.knx_dimmer_gym_lights";
 export const GYM_TV_ENTITY = "media_player.gym_gym_tv";
 
+/** The Samsung (Tizen) id of the Apple TV app, where Apple Fitness lives on
+ *  this TV. The TV doesn't list its apps to HA (its source list is only
+ *  TV/HDMI), so the app is opened by id: samsungtv's play_media with
+ *  media_content_type "app". */
+export const FITNESS_APP_ID = "3201807016597";
+export const FITNESS_POLL_MS = 3_000;
+export const FITNESS_WAIT_MS = 60_000;
+
 export interface GymwatchState {
   enabled: boolean;
   /** Last KNOWN lights state, kept across restarts; null = no baseline yet. */
   lastLightsOn: boolean | null;
+  /** Bumped by every pause / re-enable (/api/gymwatch). An app launcher
+   *  started before a toggle must not act after it, even when the new
+   *  baseline happens to read "on" again. Absent = 0. */
+  gen?: number;
 }
 
 const DEFAULT_STATE: GymwatchState = { enabled: true, lastLightsOn: null };
@@ -137,6 +157,20 @@ async function tickOnce(): Promise<void> {
   if (next.lastLightsOn !== st.lastLightsOn) saveGymwatch(next);
   if (!action) return;
 
+  // Read the TV before an on, too: the app is opened only on a TV this rule
+  // actually woke, never over something already on screen.
+  let tvWasOn: boolean | null = null;
+  if (action === "tv_on") {
+    try {
+      tvWasOn = tvOnFromState((await getState(GYM_TV_ENTITY))?.state);
+    } catch {
+      tvWasOn = null;
+    }
+    // Pause or re-enable while the TV was read wins, as on the off path.
+    const now = loadGymwatch();
+    if (!now.enabled || now.lastLightsOn !== next.lastLightsOn) return;
+  }
+
   if (action === "tv_off") {
     // The TV is read only now, right before the off: a reading taken
     // alongside the lights could be stale by the time the edge is known,
@@ -177,4 +211,92 @@ async function tickOnce(): Promise<void> {
   console.log(
     `[gymwatch] lights ${action === "tv_on" ? "on → TV on" : "off → TV off"}` + (error ? ` FAILED: ${error}` : ""),
   );
+  if (action === "tv_on" && !error && tvWasOn === false) {
+    // Not awaited: the scheduler must not wait on a waking TV.
+    void openFitnessWhenAwake(tv, st.gen ?? 0).catch((err) => console.error("[gymwatch] fitness launch failed:", err));
+  }
+}
+
+let launching = false;
+/** Bumped by tests to stop a launcher left running by an earlier test. */
+let epoch = 0;
+export function _resetGymwatchForTests(): void {
+  epoch++;
+  launching = false;
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Wait for the TV to read on, then open the Apple TV app. One at a time. */
+export async function openFitnessWhenAwake(tv: Device, gen: number): Promise<void> {
+  if (launching) return;
+  launching = true;
+  const mine = epoch;
+  const started = Date.now();
+  const record = (ok: boolean, extra: { skipped?: string; error?: string }) => {
+    audit({
+      ts: new Date().toISOString(), user: "gymwatch", deviceId: tv.id, entityId: tv.entityId,
+      command: "gym_tv_app", args: { app: FITNESS_APP_ID, ...(extra.skipped ? { skipped: extra.skipped } : {}) },
+      ok, durationMs: Date.now() - started, error: extra.error,
+    });
+  };
+  try {
+    while (Date.now() - started < FITNESS_WAIT_MS) {
+      await sleep(FITNESS_POLL_MS);
+      if (mine !== epoch) return;
+      // Lights off again, or paused: the moment has passed.
+      let st: GymwatchState;
+      try {
+        st = loadGymwatch();
+      } catch {
+        return;
+      }
+      if (!st.enabled || st.lastLightsOn !== true || (st.gen ?? 0) !== gen) {
+        record(true, { skipped: "lights off or paused before the TV woke" });
+        return;
+      }
+      let on: boolean | null = null;
+      try {
+        on = tvOnFromState((await getState(GYM_TV_ENTITY))?.state);
+      } catch {
+        on = null;
+      }
+      if (on !== true) continue;
+      // The stored state lags the lights by up to a tick: ask the lights
+      // themselves before opening anything. Only a real "off" stops it.
+      let lights: boolean | null = null;
+      try {
+        lights = lightsOnFromState((await getState(GYM_LIGHTS_ENTITY))?.state);
+      } catch {
+        lights = null;
+      }
+      if (mine !== epoch) return;
+      // …and the rule's state once more, right before the launch: a pause
+      // flipped during these reads wins.
+      let latest: GymwatchState;
+      try {
+        latest = loadGymwatch();
+      } catch {
+        return;
+      }
+      if (lights === false || !latest.enabled || latest.lastLightsOn !== true || (latest.gen ?? 0) !== gen) {
+        record(true, { skipped: "lights off or paused before the TV woke" });
+        return;
+      }
+      let error: string | undefined;
+      try {
+        await callService("media_player", "play_media", {
+          entity_id: tv.entityId, media_content_type: "app", media_content_id: FITNESS_APP_ID,
+        });
+      } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
+      }
+      record(!error, { error });
+      console.log(`[gymwatch] TV awake → Apple TV app` + (error ? ` FAILED: ${error}` : ""));
+      return;
+    }
+    record(false, { skipped: `TV not on within ${FITNESS_WAIT_MS / 1000}s`, error: "TV did not wake" });
+  } finally {
+    if (mine === epoch) launching = false;
+  }
 }

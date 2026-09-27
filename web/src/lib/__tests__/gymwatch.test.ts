@@ -61,10 +61,32 @@ describe("edge detection", () => {
     expect(evaluateGymFollow(false, ON)).toEqual({ action: "tv_off", next: OFF });
   });
 
-  it("no change, an unreadable light, or a first reading after a restart acts on nothing", () => {
+  it("no change, an unreadable light, or a first reading with no baseline acts on nothing", () => {
     expect(evaluateGymFollow(true, ON).action).toBeNull();
     expect(evaluateGymFollow(null, ON)).toEqual({ action: null, next: ON });
     expect(evaluateGymFollow(true, { enabled: true, lastLightsOn: null })).toEqual({ action: null, next: ON });
+  });
+});
+
+describe("the state file", () => {
+  it("missing: a fresh, enabled start", () => {
+    expect(loadGymwatch()).toEqual({ enabled: true, lastLightsOn: null });
+  });
+
+  it("corrupt: an error, not a silent re-enable, and nothing is sent", async () => {
+    fs.writeFileSync(process.env.GYMWATCH_PATH!, '{"enabled": fal');
+    expect(() => loadGymwatch()).toThrow(/not valid JSON/);
+    vi.mocked(getState).mockImplementation(states("on", "off"));
+    await expect(tickGymwatch()).rejects.toThrow();
+    expect(executeOnDevice).not.toHaveBeenCalled();
+    expect(fs.readFileSync(process.env.GYMWATCH_PATH!, "utf8")).toBe('{"enabled": fal');
+  });
+
+  it("the baseline survives a restart, so a change during a deploy is followed", async () => {
+    saveGymwatch(OFF); // written by the previous process
+    vi.mocked(getState).mockImplementation(states("on", "off"));
+    await tickGymwatch();
+    expect(executeOnDevice).toHaveBeenCalledWith(expect.objectContaining({ entityId: GYM_TV_ENTITY }), { command: "turn_on" });
   });
 });
 

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { writeJsonFile } from "./store";
+import { readJsonFile, writeJsonFile } from "./store";
 import { audit } from "./audit";
 import { executeOnDevice } from "./execute";
 import { getState } from "./ha";
@@ -22,8 +22,10 @@ import { registry, type Device } from "./registry";
  *   the lights on (or on with the lights off) is making a choice, and the
  *   rule never fights it.
  * - Unknown is not "off": an unreadable or unavailable light holds the last
- *   known state. After a restart the first readable state is a baseline,
- *   never an action.
+ *   known state. With no stored baseline (first run, or just re-enabled) the
+ *   first readable state is a baseline, never an action. The baseline is
+ *   kept on the volume across restarts, like the other followers', so a
+ *   lights change during a deploy is still followed.
  * - The off goes out only when the TV affirmatively reads on. Some TVs'
  *   network "off" is a power-key toggle, so sent at a set that is already off
  *   it could switch it ON. The on is sent regardless: a TV that is already
@@ -38,7 +40,7 @@ export const GYM_TV_ENTITY = "media_player.gym_gym_tv";
 
 export interface GymwatchState {
   enabled: boolean;
-  /** Last KNOWN lights state; null = no baseline yet. */
+  /** Last KNOWN lights state, kept across restarts; null = no baseline yet. */
   lastLightsOn: boolean | null;
 }
 
@@ -50,13 +52,10 @@ function storePath(): string {
   return path.join(process.cwd(), "gymwatch.json");
 }
 
+/** A missing file is a fresh start; a corrupt one is an error (lib/store),
+ *  so a damaged file never quietly turns a paused rule back on. */
 export function loadGymwatch(): GymwatchState {
-  try {
-    const raw = JSON.parse(fs.readFileSync(storePath(), "utf8")) as Partial<GymwatchState>;
-    return { ...DEFAULT_STATE, ...raw };
-  } catch {
-    return { ...DEFAULT_STATE };
-  }
+  return { ...DEFAULT_STATE, ...readJsonFile<Partial<GymwatchState>>(storePath(), {}) };
 }
 
 export function saveGymwatch(st: GymwatchState): void {

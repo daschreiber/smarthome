@@ -267,7 +267,15 @@ export async function openFitnessWhenAwake(tv: Device): Promise<void> {
         lights = null;
       }
       if (mine !== epoch) return;
-      if (lights === false) {
+      // …and the rule's state once more, right before the launch: a pause
+      // flipped during these reads wins.
+      let latest: GymwatchState;
+      try {
+        latest = loadGymwatch();
+      } catch {
+        return;
+      }
+      if (lights === false || !latest.enabled || latest.lastLightsOn !== true) {
         record(true, { skipped: "lights off or paused before the TV woke" });
         return;
       }

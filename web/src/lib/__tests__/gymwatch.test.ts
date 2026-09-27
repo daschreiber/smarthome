@@ -301,6 +301,20 @@ describe("Apple Fitness: the Apple TV app opens once the rule has woken the TV",
     expect(launches()).toHaveLength(0);
   });
 
+  it("paused while the launcher reads the TV and lights: nothing opens", async () => {
+    saveGymwatch(OFF);
+    let tvReads = 0;
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      if (id === GYM_LIGHTS_ENTITY) return { state: "on" } as never;
+      if (tvReads++ === 1) saveGymwatch({ enabled: false, lastLightsOn: true }); // paused mid-read
+      return { state: tvReads === 1 ? "off" : "on" } as never;
+    });
+    await tickGymwatch();
+    await vi.advanceTimersByTimeAsync(FITNESS_POLL_MS);
+    expect(launches()).toHaveLength(0);
+    expect(appAudit()).toMatchObject({ args: { skipped: expect.stringContaining("paused") } });
+  });
+
   it("paused meanwhile: given up", async () => {
     saveGymwatch(OFF);
     waking(100);

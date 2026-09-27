@@ -2369,3 +2369,44 @@ road for its off.)
   cleared.
 - Relay flips back to `off` with no second press → it is Control4 feedback.
   Remove the rule for good and record the Group monitor's source address.
+
+## 2026-09-27 — The Gym TV goes on and off with the gym lights
+
+Owner: "Can you make the TV in the gym go on and off with the lights?" The
+Gym TV was not in the map; the "Gym" media player is the Sonos Arc Ultra
+(playing its "TV" input). The TV's id was read from HA by the owner:
+**`media_player.gym_gym_tv`**, now a Gym media card, "Gym TV" (id
+`gym__gym_tv`; no `retry_power`, since its make is not yet known).
+
+### The rule (lib/gymwatch, scheduler tick, card "Gym TV follower")
+
+- **Edges of `light.knx_dimmer_gym_lights`:** off→on sends the TV
+  `turn_on`; on→off sends `turn_off`. Dimming is not an edge, and neither
+  is an unreadable light. The last lights state is kept on the volume, so
+  a change during a deploy is still followed; only with no stored state
+  (first run, or just re-enabled) is the first reading baseline-only.
+- **The off only at a TV that reads on.** Some TVs' network off is a
+  power-key toggle (the lesson of the Frames and the lift TV), so sent at a
+  set that is already off it could switch it on. The TV is read only once
+  the off edge is known, right before the send, so a set switched off by
+  hand a moment earlier isn't toggled back on from a stale reading. A
+  skipped off is audited with the TV's reading.
+- **A TV switched by hand is left alone**: off with the lights on stays
+  off, until the lights next go off and on.
+- Pause switch on the Automations page (`/api/gymwatch`); a pause flipped
+  mid-tick wins. State in `GYMWATCH_PATH` (default `/data/gymwatch.json`).
+- One pass at a time: the scheduler doesn't wait for a slow pass, so an
+  overlapping gym tick is skipped, and an off whose edge was overtaken while
+  the TV was being read (lights back on) is dropped rather than sent late.
+- Tests: `gymwatch.test.ts` (map row, state mapping, edges, tick incl. the
+  guarded off, hand-switched TV, failure, pause). `npm run typecheck`
+  clean; `npm test` 635/635.
+
+### Live check (with the lift lesson in mind)
+
+- [ ] Owner in the gym, lights off, TV off: switch the lights on. The TV
+  comes on within ~30 s (Activity `gym_tv_on`). Switch them off: the TV goes
+  off (`gym_tv_off`). Watch that the **lights** stay as switched. A TV
+  power command that Control4 reacts to (as feared for the lift) would show
+  as the lights changing on their own.
+

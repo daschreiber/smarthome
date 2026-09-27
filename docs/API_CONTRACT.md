@@ -178,6 +178,13 @@ Sauna follower (room A/C mirrors the sauna's power edges). GET:
 (canProgram): `{ enabled }` — re-enabling resets the baseline so it never
 acts on a stale edge.
 
+### `GET | POST /api/gymwatch`
+Gym TV follower (the Gym TV mirrors the gym lights' on/off edges: lights on
+→ TV on; lights off → TV off, sent only when the TV reads on). GET:
+`{ enabled, available, canToggle }`. POST (canProgram): `{ enabled }`;
+re-enabling resets the baseline so it never acts on a stale edge. Commands
+are audited as `gym_tv_on` / `gym_tv_off` (a skipped off carries `skipped`).
+
 ### `GET | POST /api/liftwatch`
 TV follower (the Master Bedroom TV mirrors its ceiling lift: lift down →
 TV on on the edge; lift up → TV off, one command per stow by default

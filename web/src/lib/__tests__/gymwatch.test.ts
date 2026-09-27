@@ -120,6 +120,34 @@ describe("tick", () => {
     },
   );
 
+  it("the TV is read only on an off edge, after the lights, so a TV switched off meanwhile is not toggled back on", async () => {
+    saveGymwatch(ON);
+    const order: string[] = [];
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      order.push(id);
+      return { state: "off" } as never;
+    });
+    await tickGymwatch();
+    expect(order).toEqual([GYM_LIGHTS_ENTITY, GYM_TV_ENTITY]);
+    expect(executeOnDevice).not.toHaveBeenCalled();
+
+    vi.mocked(getState).mockClear();
+    vi.mocked(getState).mockImplementation(states("off", "on"));
+    await tickGymwatch(); // no edge: the TV is not read at all
+    expect(vi.mocked(getState).mock.calls.map((c) => c[0])).toEqual([GYM_LIGHTS_ENTITY]);
+  });
+
+  it("an unreadable TV at the off edge is skipped, not guessed", async () => {
+    saveGymwatch(ON);
+    vi.mocked(getState).mockImplementation(async (id: string) => {
+      if (id === GYM_TV_ENTITY) throw new Error("HA timeout");
+      return { state: "off" } as never;
+    });
+    await tickGymwatch();
+    expect(executeOnDevice).not.toHaveBeenCalled();
+    expect(vi.mocked(audit).mock.calls[0][0]).toMatchObject({ command: "gym_tv_off", args: { skipped: "TV reads unreadable" } });
+  });
+
   it("dimming (lights stay on) and steady states send nothing", async () => {
     saveGymwatch(ON);
     vi.mocked(getState).mockImplementation(states("on", "on"));

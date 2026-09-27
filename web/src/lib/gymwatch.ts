@@ -26,7 +26,8 @@ import { registry, type Device } from "./registry";
  *   first readable state is a baseline, never an action. The baseline is
  *   kept on the volume across restarts, like the other followers', so a
  *   lights change during a deploy is still followed.
- * - The off goes out only when the TV affirmatively reads on. Some TVs'
+ * - The off goes out only when the TV affirmatively reads on, read after
+ *   the edge is known, just before the send. Some TVs'
  *   network "off" is a power-key toggle, so sent at a set that is already off
  *   it could switch it ON. The on is sent regardless: a TV that is already
  *   on ignores it.
@@ -105,11 +106,14 @@ export async function tickGymwatch(): Promise<void> {
   const tv = gymTvDevice();
   if (!tv) return;
 
-  const [lightsRes, tvRes] = await Promise.allSettled([getState(GYM_LIGHTS_ENTITY), getState(GYM_TV_ENTITY)]);
-  const lightsOn = lightsRes.status === "fulfilled" ? lightsOnFromState(lightsRes.value?.state) : null;
-  const tvOn = tvRes.status === "fulfilled" ? tvOnFromState(tvRes.value?.state) : null;
+  let lightsOn: boolean | null = null;
+  try {
+    lightsOn = lightsOnFromState((await getState(GYM_LIGHTS_ENTITY))?.state);
+  } catch {
+    // Unreadable proves nothing: hold the last known state.
+  }
 
-  // Re-read after the awaits: a pause flipped meanwhile wins.
+  // Re-read after the await: a pause flipped meanwhile wins.
   const st = loadGymwatch();
   if (!st.enabled) return;
   const { action, next } = evaluateGymFollow(lightsOn, st);
@@ -118,14 +122,26 @@ export async function tickGymwatch(): Promise<void> {
   if (next.lastLightsOn !== st.lastLightsOn) saveGymwatch(next);
   if (!action) return;
 
-  if (action === "tv_off" && tvOn !== true) {
-    audit({
-      ts: new Date().toISOString(), user: "gymwatch", deviceId: tv.id, entityId: tv.entityId,
-      command: "gym_tv_off", args: { lights: "off", skipped: `TV reads ${tvRes.status === "fulfilled" ? tvRes.value?.state ?? "missing" : "unreadable"}` },
-      ok: true, durationMs: 0,
-    });
-    console.log(`[gymwatch] lights off → TV already off or unreadable, nothing sent`);
-    return;
+  if (action === "tv_off") {
+    // The TV is read only now, right before the off: a reading taken
+    // alongside the lights could be stale by the time the edge is known,
+    // and a power-key off sent at a set just switched off turns it ON.
+    let tvState: string;
+    try {
+      tvState = (await getState(GYM_TV_ENTITY))?.state ?? "missing";
+    } catch {
+      tvState = "unreadable";
+    }
+    if (!loadGymwatch().enabled) return;
+    if (tvOnFromState(tvState) !== true) {
+      audit({
+        ts: new Date().toISOString(), user: "gymwatch", deviceId: tv.id, entityId: tv.entityId,
+        command: "gym_tv_off", args: { lights: "off", skipped: `TV reads ${tvState}` },
+        ok: true, durationMs: 0,
+      });
+      console.log(`[gymwatch] lights off → TV already off or unreadable, nothing sent`);
+      return;
+    }
   }
 
   const started = Date.now();

@@ -2382,11 +2382,15 @@ Gym TV was not in the map; the "Gym" media player is the Sonos Arc Ultra
 
 - **Edges of `light.knx_dimmer_gym_lights`:** off→on sends the TV
   `turn_on`; on→off sends `turn_off`. Dimming is not an edge, and neither
-  is an unreadable light or the first reading after a restart.
+  is an unreadable light. The last lights state is kept on the volume, so
+  a change during a deploy is still followed; only with no stored state
+  (first run, or just re-enabled) is the first reading baseline-only.
 - **The off only at a TV that reads on.** Some TVs' network off is a
   power-key toggle (the lesson of the Frames and the lift TV), so sent at a
-  set that is already off it could switch it on. A skipped off is audited
-  with the TV's reading.
+  set that is already off it could switch it on. The TV is read only once
+  the off edge is known, right before the send, so a set switched off by
+  hand a moment earlier isn't toggled back on from a stale reading. A
+  skipped off is audited with the TV's reading.
 - **A TV switched by hand is left alone**: off with the lights on stays
   off, until the lights next go off and on.
 - Pause switch on the Automations page (`/api/gymwatch`); a pause flipped

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SYSTEM_COMMANDS, executeOnDevice, executeSystemCommand, roomLights, stepHoldLights, systemDevices } from "../execute";
+import { SYSTEM_COMMANDS, executeOnDevice, executeSystemCommand, roomLights, stepHoldLights, systemDevices, systemTargets } from "../execute";
 import { registry } from "../registry";
 
 describe("systemDevices", () => {
@@ -24,6 +24,30 @@ describe("systemDevices", () => {
     const shades = systemDevices("shades");
     expect(shades.length).toBeGreaterThan(5);
     for (const d of shades) expect(d.kind).toBe("cover");
+  });
+
+  it("heating: Entrance and Kitchen share one valve relay, each with its own control", () => {
+    const heating = systemDevices("heating");
+    const entrance = heating.find((d) => d.room === "Entrance");
+    const kitchen = heating.find((d) => d.room === "Kitchen");
+    expect(entrance).toBeDefined();
+    expect(kitchen).toBeDefined();
+    expect(kitchen!.id).not.toBe(entrance!.id);
+    expect(kitchen!.entityId).toBe(entrance!.entityId);
+  });
+});
+
+describe("systemTargets", () => {
+  it("commands a relay shared by two rooms once in a whole-system sweep", () => {
+    const targets = systemTargets("heating", "turn_off");
+    const entities = targets.map((d) => d.entityId);
+    expect(new Set(entities).size).toBe(entities.length);
+    expect(targets.length).toBe(systemDevices("heating").length - 1);
+  });
+
+  it("still reaches the shared relay when only the second room is swept", () => {
+    const targets = systemTargets("heating", "turn_off", ["Kitchen"]);
+    expect(targets.map((d) => d.room)).toEqual(["Kitchen"]);
   });
 });
 

@@ -438,6 +438,15 @@ export function systemTargets(
   // Group dim only touches lights that can actually dim; plain switches
   // keep their current state rather than erroring.
   if (command === "set_brightness") targets = targets.filter((d) => d.capabilities.includes("brightness"));
+  // One relay can serve two rooms (the Entrance+Kitchen floor-heating valve
+  // is registered under both, so each room gets its own control). A sweep
+  // commands the entity once, under the first room's device.
+  const seenEntities = new Set<string>();
+  targets = targets.filter((d) => {
+    if (seenEntities.has(d.entityId)) return false;
+    seenEntities.add(d.entityId);
+    return true;
+  });
   return targets;
 }
 

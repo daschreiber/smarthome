@@ -2473,3 +2473,21 @@ drop this note's "suspected"; if it refutes it, revert this commit.
   the kitchen/entrance floor is not.
 - [ ] Turn it off, turn on **Entrance** underfloor heating: the kitchen /
   entrance floor warms, the master bathroom floor does not.
+
+### Same day — the Kitchen gets its own underfloor-heating control
+
+Owner, after the swap: the Kitchen had no underfloor-heating toggle. The
+panel in the electricity cupboard marks the kitchen and the corridor
+(entrance) as **one unit** — one valve relay, two rooms — and the map had
+filed that relay under Entrance only. A second registry row (appended at the
+end, as the map convention requires) now registers the same entity under
+Kitchen, so the room has its own "Underfloor heating" control
+(`kitchen__underfloor_heating`). It drives the same relay as
+`entrance__underfloor_heating` and shows the same state; the
+Underfloor-heating tile counts rooms, so it reads "2 rooms" when the pair is
+warm, which is true. A whole-system "All heating off" commands a shared
+relay once (`systemTargets` dedupes by entity).
+
+Two other relays also serve two rooms and are still filed under the first
+one only: "Lounge+Dining" (under Lounge) and "Guest Bathroom+Small Guest
+room" (under Guest Bathroom). Same fix applies if those rooms want a toggle.

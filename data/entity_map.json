@@ -533,7 +533,7 @@
   "domain": "light",
   "original_name": "KNX Switch 6th - FH - Entrance+Kitchen",
   "display_name": "Floor Heating",
-  "room": "Entrance",
+  "room": "Master Bathroom",
   "floor": 6,
   "category": "floor_heating",
   "group": "Climate & Comfort",
@@ -1197,7 +1197,7 @@
   "domain": "light",
   "original_name": "KNX Switch 6th - FH - Master Bathroom",
   "display_name": "Floor Heating",
-  "room": "Master Bathroom",
+  "room": "Entrance",
   "floor": 6,
   "category": "floor_heating",
   "group": "Climate & Comfort",
@@ -2228,5 +2228,16 @@
   "category": "media",
   "group": "Media",
   "visible": true
+ },
+ {
+  "entity_id": "light.knx_switch_6th_fh_master_bathroom",
+  "domain": "light",
+  "original_name": "KNX Switch 6th - FH - Master Bathroom",
+  "display_name": "Floor Heating",
+  "room": "Kitchen",
+  "floor": 6,
+  "category": "floor_heating",
+  "group": "Climate & Comfort",
+  "visible": false
  }
 ]

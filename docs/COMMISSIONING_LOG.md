@@ -2438,3 +2438,38 @@ TV app; whether it lands on Fitness depends on where the app last was.
   TV coming on. If the TV answers the launch with an error, the id is
   wrong for this model; read the right one off the TV before changing it.
 
+
+## 2026-11-23 — Master Bathroom and Entrance+Kitchen floor-heating relays swapped (test pending)
+
+Owner: the relay marked "Master Bathroom" on the panel (and in HA as
+`light.knx_switch_6th_fh_master_bathroom`) seems to warm the **kitchen**
+floor, not the master bathroom. Working assumption, to be confirmed by a
+live test: the two labels are crossed, so the "Entrance+Kitchen" relay
+(`light.knx_switch_6th_fh_entrance_kitchen`) is the master bathroom floor.
+
+What changed — app side only, in `data/entity_map.json` (and the identical
+`web/data/` copy): the two rows' `room` values were swapped.
+
+| HA entity (name on the panel) | Was filed under | Now filed under |
+| --- | --- | --- |
+| `light.knx_switch_6th_fh_master_bathroom` ("FH - Master Bathroom") | Master Bathroom | Entrance |
+| `light.knx_switch_6th_fh_entrance_kitchen` ("FH - Entrance+Kitchen") | Entrance | Master Bathroom |
+
+So the app's "Master Bathroom · Underfloor heating" control (device id
+`master_bathroom__underfloor_heating`) now fires the Entrance+Kitchen relay,
+and "Entrance · Underfloor heating" (`entrance__underfloor_heating`) fires the
+Master Bathroom relay. Device ids are room-derived, so they did not change.
+No automation or auto-off timer referenced either relay at the time.
+
+Not changed: the HA entity ids and friendly names, the KNX group addresses,
+and the panel labels all still carry the old (suspected wrong) names. If the
+test confirms the swap, rename the two switches in HA / on the panel and
+drop this note's "suspected"; if it refutes it, revert this commit.
+
+### Live check
+
+- [ ] Floors cold: turn on **Master Bathroom** underfloor heating in the app.
+  After the floor has had time to warm, the master bathroom floor is warm and
+  the kitchen/entrance floor is not.
+- [ ] Turn it off, turn on **Entrance** underfloor heating: the kitchen /
+  entrance floor warms, the master bathroom floor does not.
